@@ -21,6 +21,8 @@ The public Solana devnet RPC returned HTTP 410 with "The RPC faucet is closed on
 
 Required account-holder action if automated funding remains unavailable by Wednesday November 18 noon CST: sign in to `faucet.solana.com` with GitHub and send at least 8 devnet SOL to the treasury address above. The test-USDC mint cannot be created until the treasury has SOL for rent and fees.
 
+Collector persistence: `scripts/sol-collector.ts` is alive in the current executor session. It checks balances every 15 minutes and stores per-endpoint attempt timestamps in ignored `.state/sol-collector.json`; both successful and failed faucet attempts back off for eight hours. The state survives process restarts within this workspace, but the process itself will stop if the executor is torn down. Durable operation requires the requested Railway backend deployment, currently blocked by the missing Railway token. Allowed real-data/funding alternatives are limited to the public devnet RPC, the supplied QuickNode devnet endpoint when credentials are available, or an account holder using the official Solana faucet. No proxy, VPN, mainnet funds, or fabricated balance is used.
+
 ## Deployment identifiers
 
 - Solana program ID: pending
