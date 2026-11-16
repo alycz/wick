@@ -5,7 +5,8 @@ Last updated: 2026-11-16 (UTC)
 ## Progress
 
 - WP0: code complete and locally verified — monorepo, pinned toolchain, CI, shared API contracts and conservative devnet SOL collector created. Shared tests and strict TypeScript checks pass. Collector is running, but funding/mint creation is blocked as described below.
-- WP1–WP11: not started.
+- WP1–WP2 and WP4–WP11: not started on this branch.
+- WP3: complete on branch `wp3/gemini` — strict Gemini REST/WS schemas, BTC market classification/discovery, quotes, strike and settlement readers, resilient REST retries, WebSocket subscription with automatic 2-second REST fallback, real API fixtures and live verification. Package TypeScript validation and 8 unit/integration-fixture tests pass; live REST/WS check emitted a real BTC15M quote.
 
 ## Credentials and deployment blockers
 
