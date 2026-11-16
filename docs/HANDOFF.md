@@ -5,7 +5,8 @@ Last updated: 2026-11-16 (UTC)
 ## Progress
 
 - WP0: code complete and locally verified — monorepo, pinned toolchain, CI, shared API contracts and conservative devnet SOL collector created. Shared tests and strict TypeScript checks pass. Collector is running, but funding/mint creation is blocked as described below.
-- WP1–WP11: not started.
+- WP1–WP3 and WP5–WP11: not started on this branch.
+- WP4: complete on branch `wp4/vol` — `packages/vol` implements Deribit REST/WebSocket, Derive v3 REST polling, EWMA realized-vol fallback, cubic-smile and total-variance interpolation, strict five-second health checks, retry/timeouts, and priority auto-fallback with logged switches. Seven deterministic tests pass, including simulated Deribit startup failure → Derive selection. Repository-wide strict TypeScript validation passes. Live checks verified healthy Deribit and Derive surfaces; details are in `docs/FINDINGS.md`.
 
 ## Credentials and deployment blockers
 

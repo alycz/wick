@@ -47,6 +47,22 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/node@22.15.3)(tsx@4.20.6)
 
+  packages/vol:
+    dependencies:
+      '@wick/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
+      vitest:
+        specifier: 3.2.4
+        version: 3.2.4(@types/node@22.15.3)(tsx@4.20.6)
+
 packages:
 
   '@babel/runtime@7.29.14':
