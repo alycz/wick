@@ -7,8 +7,9 @@ Last updated: 2026-11-16 (UTC)
 - WP0: code complete and locally verified — monorepo, pinned toolchain, CI, shared API contracts and conservative devnet SOL collector created. Shared tests and strict TypeScript checks pass. Collector is running, but funding/mint creation is blocked as described below.
 - WP1: complete on branch `wp1/pricing` — pure TypeScript theo, smile/total-variance interpolation, binary-gamma leverage cap, liquidation distance, and exact fixed-point position/liability math. All four build-spec theo vectors, leverage-cap vectors, and a 1,000-position integer property test pass (17 WP1 tests).
 - WP2: implemented on `wp2/anchor` — Anchor accounts, instructions, checked fixed-point math, events, payout queue, emissions and staking. Native Rust compile/tests pass. Full Anchor local-validator tests, generated IDL and devnet deployment remain blocked pending the pinned Solana/Anchor CLI toolchain and funded devnet deploy authority.
+- WP3: complete on branch `wp3/gemini` — strict Gemini REST/WS schemas, BTC market classification/discovery, quotes, strike and settlement readers, resilient REST retries, WebSocket subscription with automatic 2-second REST fallback, real API fixtures and live verification. Package TypeScript validation and 9 unit/integration-fixture tests pass; live REST/WS check emitted a real BTC15M quote.
 - WP4: complete on branch `wp4/vol` — `packages/vol` implements Deribit REST/WebSocket, Derive v3 REST polling, EWMA realized-vol fallback, cubic-smile and total-variance interpolation, strict five-second health checks, retry/timeouts, and priority auto-fallback with logged switches. Seven deterministic tests pass, including simulated Deribit startup failure → Derive selection. Repository-wide strict TypeScript validation passes. Live checks verified healthy Deribit and Derive surfaces; details are in `docs/FINDINGS.md`.
-- WP3 and WP5–WP11: not yet merged into `main`.
+- WP5–WP11: not yet started.
 
 ## Credentials and deployment blockers
 
