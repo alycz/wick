@@ -6,8 +6,9 @@ Last updated: 2026-11-16 (UTC)
 
 - WP0: code complete and locally verified — monorepo, pinned toolchain, CI, shared API contracts and conservative devnet SOL collector created. Shared tests and strict TypeScript checks pass. Collector is running, but funding/mint creation is blocked as described below.
 - WP1: complete on branch `wp1/pricing` — pure TypeScript theo, smile/total-variance interpolation, binary-gamma leverage cap, liquidation distance, and exact fixed-point position/liability math. All four build-spec theo vectors, leverage-cap vectors, and a 1,000-position integer property test pass (17 WP1 tests).
+- WP2: implemented on `wp2/anchor` — Anchor accounts, instructions, checked fixed-point math, events, payout queue, emissions and staking. Native Rust compile/tests pass. Full Anchor local-validator tests, generated IDL and devnet deployment remain blocked pending the pinned Solana/Anchor CLI toolchain and funded devnet deploy authority.
 - WP4: complete on branch `wp4/vol` — `packages/vol` implements Deribit REST/WebSocket, Derive v3 REST polling, EWMA realized-vol fallback, cubic-smile and total-variance interpolation, strict five-second health checks, retry/timeouts, and priority auto-fallback with logged switches. Seven deterministic tests pass, including simulated Deribit startup failure → Derive selection. Repository-wide strict TypeScript validation passes. Live checks verified healthy Deribit and Derive surfaces; details are in `docs/FINDINGS.md`.
-- WP2–WP3 and WP5–WP11: not yet merged into `main`.
+- WP3 and WP5–WP11: not yet merged into `main`.
 
 ## Credentials and deployment blockers
 
@@ -33,6 +34,8 @@ Collector persistence: `scripts/sol-collector.ts` is alive in the current execut
 - Vercel frontend: pending
 - QuickNode Stream: pending
 - Public GitHub branch/commit: pending
+
+WP2 currently uses the build-time ID `EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi` so native compilation and clients have a non-system program identity. It is **not deployed**. Before deployment, generate the actual program keypair, run `anchor keys sync`, rebuild/export the generated IDL into `packages/shared`, deploy to devnet, and verify the executable account via RPC. The current environment has no funded deploy authority and no Solana/Anchor CLI, so no deployment claim is made.
 
 ## Account-holder actions at submission
 
