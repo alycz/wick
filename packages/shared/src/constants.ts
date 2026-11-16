@@ -1,0 +1,9 @@
+export const MICRO = 1_000_000n;
+export const PRICE_MICRO = 1_000_000;
+export const MIN_PRICE_E6 = 10_000;
+export const MAX_PRICE_E6 = 990_000;
+export const USDC_DECIMALS = 6;
+export const DEVNET_CLUSTER = "devnet" as const;
+export const PUBLIC_DEVNET_RPC = "https://api.devnet.solana.com";
+export const GLOBAL_MAX_LEVERAGE = 1_000;
+export const DEFAULT_STALE_AFTER_SECS = 6;
