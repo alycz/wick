@@ -14,6 +14,8 @@ dist/
 coverage/
 demo/*.webm
 demo/*.mp4
+demo/*.srt
+demo/raw/
 *.db
 *.db-shm
 *.db-wal

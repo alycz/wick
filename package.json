@@ -8,20 +8,28 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint && tsc -p tsconfig.json --noEmit",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --if-present test && vitest run scripts/tests",
     "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "collector": "node --import tsx scripts/sol-collector.ts",
     "create:mint": "node --import tsx scripts/create-mint.ts",
-    "create:stream": "node --import tsx scripts/create-stream.ts"
+    "create:stream": "node --import tsx scripts/create-stream.ts",
+    "deploy:program": "node --import tsx scripts/deploy.ts",
+    "init:config": "node --import tsx scripts/init-config.ts",
+    "airdrop": "node --import tsx scripts/airdrop.ts",
+    "bots": "node --import tsx scripts/bots.ts",
+    "demo:check": "node --import tsx scripts/demo-check.ts",
+    "demo:record": "node --import tsx scripts/record-demo.ts"
   },
   "devDependencies": {
     "@types/node": "22.15.3",
     "tsx": "4.20.6",
     "typescript": "5.8.3",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "playwright": "1.56.1"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "0.31.1",
     "@solana/spl-token": "0.4.14",
     "@solana/web3.js": "1.98.4",
     "bs58": "6.0.0",
