@@ -11,15 +11,19 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "0.31.1",
     "@fastify/websocket": "11.2.0",
     "@wick/gemini": "workspace:*",
     "@wick/pricing": "workspace:*",
     "@wick/shared": "workspace:*",
     "@wick/vol": "workspace:*",
+    "better-sqlite3": "12.4.1",
     "fastify": "5.6.1",
-    "pino": "9.11.0"
+    "pino": "9.11.0",
+    "zod": "3.25.76"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "22.15.3",
     "typescript": "5.8.3",
     "vitest": "3.2.4"

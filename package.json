@@ -12,7 +12,8 @@
     "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "collector": "node --import tsx scripts/sol-collector.ts",
-    "create:mint": "node --import tsx scripts/create-mint.ts"
+    "create:mint": "node --import tsx scripts/create-mint.ts",
+    "create:stream": "node --import tsx scripts/create-stream.ts"
   },
   "devDependencies": {
     "@types/node": "22.15.3",

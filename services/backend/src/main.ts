@@ -1,13 +1,14 @@
 import { GeminiClient, GeminiQuoteStream } from "@wick/gemini";
 import { AutoVolSource, DeribitVolSource, DeriveVolSource, RealizedVolSource } from "@wick/vol";
 import pino from "pino";
+import { IndexerService, registerIndexerRoutes } from "./indexer/index.js";
 import { PricerEngine, UnconfiguredChainPort } from "./pricer/index.js";
 import { buildServer } from "./server.js";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
   redact: {
-    paths: ["req.headers.authorization", "*.token", "*.secret", "*.keypair", "*.privateKey"],
+    paths: ["req.headers.authorization", "req.headers.x-wick-stream-secret", "*.token", "*.secret", "*.webhookSecret", "*.keypair", "*.privateKey"],
     censor: "[REDACTED]",
   },
 });
@@ -45,7 +46,20 @@ const engine = new PricerEngine({
   }),
 });
 
-const server = await buildServer({ engine, logger });
+const indexer = new IndexerService({
+  databasePath: process.env.SQLITE_PATH ?? "/data/wick.db",
+  ...(process.env.STREAMS_WEBHOOK_SECRET === undefined ? {} : { webhookSecret: process.env.STREAMS_WEBHOOK_SECRET }),
+  ...(process.env.PROGRAM_ID === undefined ? {} : { programId: process.env.PROGRAM_ID }),
+  rpcUrl: process.env.PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+  logger,
+});
+
+const server = await buildServer({
+  engine,
+  logger,
+  registerAdditionalRoutes: (instance) => registerIndexerRoutes(instance, indexer),
+  healthSupplement: () => indexer.health(),
+});
 const port = Number(process.env.PORT ?? 3_000);
 const host = process.env.HOST ?? "0.0.0.0";
 
