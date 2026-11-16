@@ -1,0 +1,70 @@
+import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddress, getMint } from "@solana/spl-token";
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import bs58 from "bs58";
+import { readFileSync } from "node:fs";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const requestSchema = z.object({ publicKey: z.string(), browserId: z.string().uuid() });
+const WINDOW_MS = 10 * 60_000;
+const MAX_WALLETS = 200;
+const GRANT_E6 = 1_000_000_000n;
+const MAX_FAUCET_SUPPLY_E6 = BigInt(MAX_WALLETS) * GRANT_E6;
+const state = globalThis as typeof globalThis & { wickFaucet?: { funded: Map<string, number>; inFlight: Set<string>; total: number } };
+state.wickFaucet ??= { funded: new Map(), inFlight: new Set(), total: 0 };
+
+function keypair(value: string | undefined, name: string): Keypair {
+  if (!value) throw new Error(`${name} is not configured`);
+  const trimmed = value.trim();
+  let bytes: Uint8Array;
+  if (trimmed.startsWith("[")) bytes = Uint8Array.from(JSON.parse(trimmed) as number[]);
+  else if (trimmed.includes("/") && !/^[1-9A-HJ-NP-Za-km-z]+$/.test(trimmed)) bytes = Uint8Array.from(JSON.parse(readFileSync(trimmed, "utf8")) as number[]);
+  else bytes = bs58.decode(trimmed);
+  return Keypair.fromSecretKey(bytes);
+}
+
+export async function POST(request: NextRequest) {
+  let rateKey = "";
+  try {
+    const body = requestSchema.parse(await request.json());
+    const recipient = new PublicKey(body.publicKey);
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    rateKey = `${body.browserId}:${ip}`;
+    const faucet = state.wickFaucet!;
+    const last = faucet.funded.get(rateKey);
+    if (last && Date.now() - last < WINDOW_MS) return NextResponse.json({ message: "This browser was funded less than 10 minutes ago." }, { status: 429 });
+    if (faucet.total >= MAX_WALLETS) return NextResponse.json({ message: "The 200-wallet demo faucet cap has been reached." }, { status: 429 });
+    if (faucet.inFlight.has(rateKey)) return NextResponse.json({ message: "A funding request is already in progress." }, { status: 409 });
+    faucet.inFlight.add(rateKey);
+
+    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+    const mintAddress = process.env.USDC_TEST_MINT ?? process.env.NEXT_PUBLIC_USDC_TEST_MINT;
+    if (!rpcUrl || !mintAddress) throw new Error("Devnet faucet is not configured");
+    const treasury = keypair(process.env.TREASURY_KEYPAIR, "TREASURY_KEYPAIR");
+    const authority = keypair(process.env.FAUCET_AUTHORITY_KEYPAIR, "FAUCET_AUTHORITY_KEYPAIR");
+    const mint = new PublicKey(mintAddress);
+    const connection = new Connection(rpcUrl, "confirmed");
+    const mintInfo = await getMint(connection, mint, "confirmed");
+    if (mintInfo.decimals !== 6 || !mintInfo.mintAuthority?.equals(authority.publicKey)) throw new Error("Configured faucet authority does not control the six-decimal test-USDC mint");
+    if (mintInfo.supply + GRANT_E6 > MAX_FAUCET_SUPPLY_E6) {
+      return NextResponse.json({ message: "The 200-wallet demo faucet cap has been reached." }, { status: 429 });
+    }
+    const ata = await getAssociatedTokenAddress(mint, recipient);
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({ fromPubkey: treasury.publicKey, toPubkey: recipient, lamports: Math.round(0.05 * LAMPORTS_PER_SOL) }),
+      createAssociatedTokenAccountIdempotentInstruction(treasury.publicKey, ata, recipient, mint),
+      createMintToInstruction(mint, ata, authority.publicKey, GRANT_E6),
+    );
+    const signers = authority.publicKey.equals(treasury.publicKey) ? [treasury] : [treasury, authority];
+    const signature = await sendAndConfirmTransaction(connection, transaction, signers, { commitment: "confirmed" });
+    faucet.funded.set(rateKey, Date.now()); faucet.total += 1;
+    return NextResponse.json({ signature, cluster: "devnet", sol: 0.05, testUsdc: 1_000 });
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Funding failed" }, { status: 503 });
+  } finally {
+    if (rateKey) state.wickFaucet!.inFlight.delete(rateKey);
+  }
+}
