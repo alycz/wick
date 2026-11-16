@@ -5,7 +5,8 @@ Last updated: 2026-11-16 (UTC)
 ## Progress
 
 - WP0: code complete and locally verified — monorepo, pinned toolchain, CI, shared API contracts and conservative devnet SOL collector created. Shared tests and strict TypeScript checks pass. Collector is running, but funding/mint creation is blocked as described below.
-- WP1–WP11: not started.
+- WP1: complete on branch `wp1/pricing` — pure TypeScript theo, smile/total-variance interpolation, binary-gamma leverage cap, liquidation distance, and exact fixed-point position/liability math. All four build-spec theo vectors, leverage-cap vectors, and a 1,000-position integer property test pass (17 WP1 tests).
+- WP2–WP11: not started on this branch.
 
 ## Credentials and deployment blockers
 
