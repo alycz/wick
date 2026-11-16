@@ -32,7 +32,8 @@ export const geminiContractSchema = z
     instrumentSymbol: z.string(),
     label: z.string(),
     status: z.string(),
-    marketState: z.enum(["open", "closed"]),
+    // Live Gemini returned `post_only` on active contracts on 2026-11-16.
+    marketState: z.enum(["open", "post_only", "closed"]),
     effectiveDate: z.string().datetime(),
     expiryDate: z.string().datetime(),
     strike: geminiStrikeSchema,
