@@ -1,0 +1,27 @@
+{
+  "name": "@wick/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --import tsx src/main.ts",
+    "start": "node dist/main.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/websocket": "11.2.0",
+    "@wick/gemini": "workspace:*",
+    "@wick/pricing": "workspace:*",
+    "@wick/shared": "workspace:*",
+    "@wick/vol": "workspace:*",
+    "fastify": "5.6.1",
+    "pino": "9.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "typescript": "5.8.3",
+    "vitest": "3.2.4"
+  }
+}

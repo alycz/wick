@@ -15,3 +15,8 @@
 - 2026-11-16 WP3 live verification: the public WebSocket emits subscription acknowledgement `{id,status:200}`, and `bookTicker.s` is lowercase even when the requested instrument symbol is uppercase. The stream recognizes that acknowledgement and matches symbols case-insensitively while emitting the canonical requested symbol.
 - 2026-11-16 WP3 live verification: a one-sided `bookTicker` used empty strings for `b` and `B`, rather than omitting them. The parser normalizes empty price/quantity strings to absent values. A near-expiry REST snapshot also briefly exposed a crossed fallback book (`sell.yes > bestAsk`); Wick preserves the raw sides but does not invent a midpoint for crossed data.
 - 2026-11-16 WP3 live verification: settled BTC15M pagination reported at least 1,000 results; the captured fixture keeps the newest 20. Official `resolutionSide` and repeating-decimal settlement values parse successfully and remain the only settlement authority.
+
+## WP5 live backend verification — 2026-11-16
+
+- Active BTC events included contracts with `marketState: "post_only"`, in addition to the documented `open|closed` states. The strict parser now accepts `open|post_only|closed`; discovery still relies on event status, strike type, asset, and expiry, and never treats `post_only` as a settlement signal.
+- After adapting the parser, the real read-only backend reached `ok: true` with Deribit active and healthy, returned 44 currently selected Gemini contracts across eight selected events, and exposed fresh marks through `/markets`. `/health` correctly reported `chainConfigured: false`; no on-chain mark or settlement was claimed.
