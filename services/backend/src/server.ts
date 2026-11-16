@@ -10,6 +10,7 @@ export interface BuildServerOptions {
   streamIntervalMs?: number;
   telemetryIntervalMs?: number;
   registerAdditionalRoutes?: (server: BackendFastifyInstance) => Promise<void> | void;
+  healthSupplement?: () => Record<string, unknown>;
 }
 
 export type BackendFastifyInstance = FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>;
@@ -40,6 +41,7 @@ export async function buildServer(options: BuildServerOptions): Promise<BackendF
       ...(snapshot.lastMarkAt === undefined ? {} : { markAgeMs: Math.max(0, now - snapshot.lastMarkAt) }),
       ...(snapshot.lastDiscoveryAt === undefined ? {} : { discoveryAgeMs: Math.max(0, now - snapshot.lastDiscoveryAt) }),
       ...(snapshot.lastError === undefined ? {} : { lastError: snapshot.lastError }),
+      ...options.healthSupplement?.(),
       version: process.env.npm_package_version ?? "0.0.0",
     };
   });

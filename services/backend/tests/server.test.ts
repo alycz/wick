@@ -5,6 +5,7 @@ import pino from "pino";
 import { describe, expect, it } from "vitest";
 import { PricerEngine } from "../src/pricer/engine.js";
 import { UnconfiguredChainPort } from "../src/pricer/chain.js";
+import { MarketStore } from "../src/pricer/store.js";
 import type { BackendLogger, GeminiGateway } from "../src/pricer/types.js";
 import { buildServer } from "../src/server.js";
 
@@ -42,6 +43,9 @@ describe("shared Fastify server", () => {
     const engine = new PricerEngine({
       gemini: new Gateway(), vol: new Vol(), chain: new UnconfiguredChainPort(),
       logger: backendLogger, now: () => now, timers: false,
+      // The fixture clock is intentionally fixed. Keep route-history assertions
+      // independent of the wall clock at which the suite is run.
+      store: new MarketStore(Number.MAX_SAFE_INTEGER),
     });
     const server = await buildServer({ engine, logger, telemetryIntervalMs: 60_000 });
     await server.ready();
