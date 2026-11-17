@@ -11,13 +11,65 @@ export interface BuildServerOptions {
   telemetryIntervalMs?: number;
   registerAdditionalRoutes?: (server: BackendFastifyInstance) => Promise<void> | void;
   healthSupplement?: () => Record<string, unknown>;
+  allowedOrigins?: string[];
+  allowLocalhostOrigins?: boolean;
 }
 
 export type BackendFastifyInstance = FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>;
 
+function canonicalOrigin(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(`Unsupported CORS origin protocol: ${url.protocol}`);
+  if (url.pathname !== "/" || url.search || url.hash) throw new Error(`CORS origin must not include a path, query, or fragment: ${value}`);
+  return url.origin;
+}
+
+export function configuredCorsOrigins(environment: NodeJS.ProcessEnv = process.env): string[] {
+  const configured = [environment.CORS_ALLOWED_ORIGINS, environment.FRONTEND_URL]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(canonicalOrigin);
+  return [...new Set(configured)];
+}
+
+function isLocalDevelopmentOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]");
+  } catch {
+    return false;
+  }
+}
+
 export async function buildServer(options: BuildServerOptions): Promise<BackendFastifyInstance> {
   const server = Fastify({ loggerInstance: options.logger });
   await server.register(websocket);
+  const allowedOrigins = new Set((options.allowedOrigins ?? configuredCorsOrigins()).map(canonicalOrigin));
+  const allowLocalhostOrigins = options.allowLocalhostOrigins ?? process.env.NODE_ENV !== "production";
+
+  server.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (!origin) return;
+    // QuickNode is a server-to-server caller and sends no browser Origin. Keep
+    // the secret-authenticated ingestion endpoint outside the browser surface.
+    if (request.url.split("?", 1)[0] === "/streams/webhook") {
+      return reply.code(403).send({ code: "BROWSER_WEBHOOK_FORBIDDEN", message: "Streams webhook does not accept browser-origin requests" });
+    }
+    let canonical: string;
+    try { canonical = canonicalOrigin(origin); }
+    catch { return reply.code(403).send({ code: "ORIGIN_NOT_ALLOWED", message: "Browser origin is not allowed" }); }
+    if (!allowedOrigins.has(canonical) && !(allowLocalhostOrigins && isLocalDevelopmentOrigin(canonical))) {
+      return reply.code(403).send({ code: "ORIGIN_NOT_ALLOWED", message: "Browser origin is not allowed" });
+    }
+    reply.raw.setHeader("Access-Control-Allow-Origin", canonical);
+    reply.raw.setHeader("Vary", "Origin");
+    reply.raw.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    reply.raw.setHeader("Access-Control-Allow-Headers", "Content-Type, Last-Event-ID");
+    reply.raw.setHeader("Access-Control-Max-Age", "600");
+    if (request.method === "OPTIONS") return reply.code(204).send();
+  });
 
   server.get("/markets", async () => options.engine.store.markets());
 

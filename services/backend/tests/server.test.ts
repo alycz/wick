@@ -87,4 +87,47 @@ describe("shared Fastify server", () => {
     expect(response.json()).toEqual({ code: "MARKET_NOT_FOUND", message: "Unknown Gemini market symbol" });
     await server.close();
   });
+
+  it("allows only configured browser origins without enabling credentials", async () => {
+    const engine = new PricerEngine({
+      gemini: new Gateway(), vol: new Vol(), chain: new UnconfiguredChainPort(),
+      logger: backendLogger, now: () => now, timers: false,
+    });
+    const server = await buildServer({
+      engine, logger, allowedOrigins: ["https://wick-markets.vercel.app"], allowLocalhostOrigins: false,
+    });
+    const allowed = await server.inject({ method: "GET", url: "/health", headers: { origin: "https://wick-markets.vercel.app" } });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.headers["access-control-allow-origin"]).toBe("https://wick-markets.vercel.app");
+    expect(allowed.headers["access-control-allow-credentials"]).toBeUndefined();
+    expect(allowed.headers.vary).toBe("Origin");
+
+    const preflight = await server.inject({ method: "OPTIONS", url: "/markets", headers: { origin: "https://wick-markets.vercel.app" } });
+    expect(preflight.statusCode).toBe(204);
+    expect(preflight.headers["access-control-allow-methods"]).toBe("GET, OPTIONS");
+
+    const denied = await server.inject({ method: "GET", url: "/health", headers: { origin: "https://evil.example" } });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.headers["access-control-allow-origin"]).toBeUndefined();
+    await server.close();
+  });
+
+  it("keeps the Streams webhook outside the browser CORS surface", async () => {
+    const engine = new PricerEngine({
+      gemini: new Gateway(), vol: new Vol(), chain: new UnconfiguredChainPort(),
+      logger: backendLogger, now: () => now, timers: false,
+    });
+    const server = await buildServer({
+      engine, logger, allowedOrigins: ["https://wick-markets.vercel.app"], allowLocalhostOrigins: false,
+      registerAdditionalRoutes: (instance) => { instance.post("/streams/webhook", async () => ({ accepted: true })); },
+    });
+    const browser = await server.inject({
+      method: "POST", url: "/streams/webhook", headers: { origin: "https://wick-markets.vercel.app" }, payload: {},
+    });
+    expect(browser.statusCode).toBe(403);
+    expect(browser.json()).toEqual({ code: "BROWSER_WEBHOOK_FORBIDDEN", message: "Streams webhook does not accept browser-origin requests" });
+    const serverToServer = await server.inject({ method: "POST", url: "/streams/webhook", payload: {} });
+    expect(serverToServer.statusCode).toBe(200);
+    await server.close();
+  });
 });

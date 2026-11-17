@@ -1,9 +1,9 @@
-import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddress, getMint } from "@solana/spl-token";
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { readFileSync } from "node:fs";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { sendFaucetGrant } from "@/lib/faucet";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +11,6 @@ export const dynamic = "force-dynamic";
 const requestSchema = z.object({ publicKey: z.string(), browserId: z.string().uuid() });
 const WINDOW_MS = 10 * 60_000;
 const MAX_WALLETS = 200;
-const GRANT_E6 = 1_000_000_000n;
-const MAX_FAUCET_SUPPLY_E6 = BigInt(MAX_WALLETS) * GRANT_E6;
 const state = globalThis as typeof globalThis & { wickFaucet?: { funded: Map<string, number>; inFlight: Set<string>; total: number } };
 state.wickFaucet ??= { funded: new Map(), inFlight: new Set(), total: 0 };
 
@@ -47,19 +45,7 @@ export async function POST(request: NextRequest) {
     const authority = keypair(process.env.FAUCET_AUTHORITY_KEYPAIR, "FAUCET_AUTHORITY_KEYPAIR");
     const mint = new PublicKey(mintAddress);
     const connection = new Connection(rpcUrl, "confirmed");
-    const mintInfo = await getMint(connection, mint, "confirmed");
-    if (mintInfo.decimals !== 6 || !mintInfo.mintAuthority?.equals(authority.publicKey)) throw new Error("Configured faucet authority does not control the six-decimal test-USDC mint");
-    if (mintInfo.supply + GRANT_E6 > MAX_FAUCET_SUPPLY_E6) {
-      return NextResponse.json({ message: "The 200-wallet demo faucet cap has been reached." }, { status: 429 });
-    }
-    const ata = await getAssociatedTokenAddress(mint, recipient);
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({ fromPubkey: treasury.publicKey, toPubkey: recipient, lamports: Math.round(0.05 * LAMPORTS_PER_SOL) }),
-      createAssociatedTokenAccountIdempotentInstruction(treasury.publicKey, ata, recipient, mint),
-      createMintToInstruction(mint, ata, authority.publicKey, GRANT_E6),
-    );
-    const signers = authority.publicKey.equals(treasury.publicKey) ? [treasury] : [treasury, authority];
-    const signature = await sendAndConfirmTransaction(connection, transaction, signers, { commitment: "confirmed" });
+    const signature = await sendFaucetGrant({ connection, mint, recipient, treasury, authority });
     faucet.funded.set(rateKey, Date.now()); faucet.total += 1;
     return NextResponse.json({ signature, cluster: "devnet", sol: 0.05, testUsdc: 1_000 });
   } catch (error) {
