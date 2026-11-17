@@ -3,16 +3,17 @@ import bs58 from "bs58";
 import { readFileSync } from "node:fs";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { sendFaucetGrant } from "@/lib/faucet";
+import { FaucetInventoryDepletedError, sendFaucetGrant } from "@/lib/faucet";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const requestSchema = z.object({ publicKey: z.string(), browserId: z.string().uuid() });
 const WINDOW_MS = 10 * 60_000;
-const MAX_WALLETS = 200;
-const state = globalThis as typeof globalThis & { wickFaucet?: { funded: Map<string, number>; inFlight: Set<string>; total: number } };
-state.wickFaucet ??= { funded: new Map(), inFlight: new Set(), total: 0 };
+// These controls reduce accidental repeat requests within one warm instance.
+// The cryptographic 200-grant cap is the authority-revoked on-chain inventory.
+const state = globalThis as typeof globalThis & { wickFaucet?: { funded: Map<string, number>; inFlight: Set<string> } };
+state.wickFaucet ??= { funded: new Map(), inFlight: new Set() };
 
 function keypair(value: string | undefined, name: string): Keypair {
   if (!value) throw new Error(`${name} is not configured`);
@@ -34,7 +35,6 @@ export async function POST(request: NextRequest) {
     const faucet = state.wickFaucet!;
     const last = faucet.funded.get(rateKey);
     if (last && Date.now() - last < WINDOW_MS) return NextResponse.json({ message: "This browser was funded less than 10 minutes ago." }, { status: 429 });
-    if (faucet.total >= MAX_WALLETS) return NextResponse.json({ message: "The 200-wallet demo faucet cap has been reached." }, { status: 429 });
     if (faucet.inFlight.has(rateKey)) return NextResponse.json({ message: "A funding request is already in progress." }, { status: 409 });
     faucet.inFlight.add(rateKey);
 
@@ -42,14 +42,15 @@ export async function POST(request: NextRequest) {
     const mintAddress = process.env.USDC_TEST_MINT ?? process.env.NEXT_PUBLIC_USDC_TEST_MINT;
     if (!rpcUrl || !mintAddress) throw new Error("Devnet faucet is not configured");
     const treasury = keypair(process.env.TREASURY_KEYPAIR, "TREASURY_KEYPAIR");
-    const authority = keypair(process.env.FAUCET_AUTHORITY_KEYPAIR, "FAUCET_AUTHORITY_KEYPAIR");
     const mint = new PublicKey(mintAddress);
     const connection = new Connection(rpcUrl, "confirmed");
-    const signature = await sendFaucetGrant({ connection, mint, recipient, treasury, authority });
-    faucet.funded.set(rateKey, Date.now()); faucet.total += 1;
+    const signature = await sendFaucetGrant({ connection, mint, recipient, treasury });
+    faucet.funded.set(rateKey, Date.now());
     return NextResponse.json({ signature, cluster: "devnet", sol: 0.05, testUsdc: 1_000 });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "Funding failed" }, { status: 503 });
+    if (error instanceof FaucetInventoryDepletedError) return NextResponse.json({ message: error.message }, { status: 429 });
+    // Configuration, key parsing, RPC and transaction details stay server-side.
+    return NextResponse.json({ message: "Demo faucet is temporarily unavailable." }, { status: 503 });
   } finally {
     if (rateKey) state.wickFaucet!.inFlight.delete(rateKey);
   }

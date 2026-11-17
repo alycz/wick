@@ -65,7 +65,6 @@ export function evaluateDeploymentReadiness(input: DeploymentInputs): Deployment
     !hasFrontendProgramId && "NEXT_PUBLIC_PROGRAM_ID/PROGRAM_ID is missing",
     !hasFrontendMint && "NEXT_PUBLIC_USDC_TEST_MINT/USDC_TEST_MINT is missing",
     !present(input.environment, "TREASURY_KEYPAIR") && "TREASURY_KEYPAIR is missing for the demo faucet",
-    !present(input.environment, "FAUCET_AUTHORITY_KEYPAIR") && "FAUCET_AUTHORITY_KEYPAIR is missing",
   ]);
   const quicknodeStream = target([
     !present(input.environment, "QUICKNODE_API_KEY") && "QUICKNODE_API_KEY is missing",

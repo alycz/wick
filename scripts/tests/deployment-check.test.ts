@@ -23,7 +23,7 @@ describe("deployment readiness", () => {
       ]),
       environment: {
         PROGRAM_ID: "program", USDC_TEST_MINT: "mint", ADMIN_KEYPAIR: "admin", KEEPER_KEYPAIR: "keeper",
-        TREASURY_KEYPAIR: "treasury", FAUCET_AUTHORITY_KEYPAIR: "faucet", RAILWAY_TOKEN: "railway",
+        TREASURY_KEYPAIR: "treasury", RAILWAY_TOKEN: "railway",
         VERCEL_TOKEN: "vercel", NEXT_PUBLIC_BACKEND_URL: "https://api.example", STREAMS_WEBHOOK_SECRET: "secret",
         QUICKNODE_API_KEY: "quicknode", QUICKNODE_RPC_URL: "https://rpc.example", STREAMS_TEST_BLOCK: "123",
       },

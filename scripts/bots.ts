@@ -1,6 +1,7 @@
 import { AnchorProvider, BN, Program, Wallet, type Idl } from "@coral-xyz/anchor";
-import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddress, getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { FAUCET_INVENTORY_E6, USDC_DECIMALS } from "../packages/shared/src/constants.js";
 import { marketsResponseSchema } from "../packages/shared/src/schemas.js";
 import { WICK_IDL } from "../packages/shared/src/idl.js";
 import { createHash } from "node:crypto";
@@ -23,12 +24,12 @@ class DevnetBotTransport implements BotTransport {
   private readonly mint: PublicKey;
   private readonly backendUrl: string;
   private readonly treasury: Keypair;
-  private readonly mintAuthority: Keypair;
+  private readonly treasuryTokenAccount: PublicKey;
   private readonly wallets = new Map<string, Keypair>();
 
-  private constructor(options: { connection: Connection; programId: PublicKey; mint: PublicKey; backendUrl: string; treasury: Keypair; mintAuthority: Keypair }) {
+  private constructor(options: { connection: Connection; programId: PublicKey; mint: PublicKey; backendUrl: string; treasury: Keypair; treasuryTokenAccount: PublicKey }) {
     this.connection = options.connection; this.programId = options.programId; this.mint = options.mint;
-    this.backendUrl = options.backendUrl; this.treasury = options.treasury; this.mintAuthority = options.mintAuthority;
+    this.backendUrl = options.backendUrl; this.treasury = options.treasury; this.treasuryTokenAccount = options.treasuryTokenAccount;
   }
 
   static async create(): Promise<DevnetBotTransport> {
@@ -44,10 +45,16 @@ class DevnetBotTransport implements BotTransport {
     if (!deployed?.executable) throw new Error("Wick program is not executable on devnet");
     const mint = new PublicKey(requiredEnv("USDC_TEST_MINT"));
     const treasury = await loadKeypair(requiredEnv("TREASURY_KEYPAIR"), "TREASURY_KEYPAIR");
-    const mintAuthority = await loadKeypair(requiredEnv("FAUCET_AUTHORITY_KEYPAIR"), "FAUCET_AUTHORITY_KEYPAIR");
     const mintInfo = await getMint(connection, mint, "confirmed");
-    if (mintInfo.decimals !== 6 || !mintInfo.mintAuthority?.equals(mintAuthority.publicKey)) throw new Error("Configured test-USDC mint is not controlled by FAUCET_AUTHORITY_KEYPAIR");
-    return new DevnetBotTransport({ connection, programId, mint, backendUrl, treasury, mintAuthority });
+    if (!mintInfo.isInitialized || mintInfo.decimals !== USDC_DECIMALS || mintInfo.supply !== FAUCET_INVENTORY_E6 || mintInfo.mintAuthority !== null || mintInfo.freezeAuthority !== null) {
+      throw new Error("Configured test-USDC mint is not the finite authority-revoked faucet mint");
+    }
+    const treasuryTokenAccount = await getAssociatedTokenAddress(mint, treasury.publicKey);
+    const inventory = await getAccount(connection, treasuryTokenAccount, "confirmed");
+    if (!inventory.isInitialized || inventory.isFrozen || !inventory.mint.equals(mint) || !inventory.owner.equals(treasury.publicKey)) {
+      throw new Error("Treasury test-USDC inventory account is invalid");
+    }
+    return new DevnetBotTransport({ connection, programId, mint, backendUrl, treasury, treasuryTokenAccount });
   }
 
   async prepareWallet(index: number): Promise<BotWallet> {
@@ -63,13 +70,12 @@ class DevnetBotTransport implements BotTransport {
     if (solBalance < 100_000_000) transaction.add(SystemProgram.transfer({ fromPubkey: this.treasury.publicKey, toPubkey: keypair.publicKey, lamports: 100_000_000 - solBalance }));
     if (tokenBalance < 500_000_000n) transaction.add(
       createAssociatedTokenAccountIdempotentInstruction(this.treasury.publicKey, ata, keypair.publicKey, this.mint),
-      createMintToInstruction(this.mint, ata, this.mintAuthority.publicKey, 500_000_000n - tokenBalance),
+      createTransferCheckedInstruction(this.treasuryTokenAccount, this.mint, ata, this.treasury.publicKey, 500_000_000n - tokenBalance, USDC_DECIMALS),
     );
     if (transaction.instructions.length > 0) {
       const treasuryBalance = await this.connection.getBalance(this.treasury.publicKey, "confirmed");
       if (treasuryBalance < LAMPORTS_PER_SOL) throw new Error("Treasury has less than 1 devnet SOL; bot funding stopped");
-      const signers = this.mintAuthority.publicKey.equals(this.treasury.publicKey) ? [this.treasury] : [this.treasury, this.mintAuthority];
-      await sendAndConfirmTransaction(this.connection, transaction, signers, { commitment: "confirmed" });
+      await sendAndConfirmTransaction(this.connection, transaction, [this.treasury], { commitment: "confirmed" });
     }
     return { id };
   }
