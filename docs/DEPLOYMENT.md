@@ -35,7 +35,7 @@ commit; Dockerfile path; `/data` volume mount; public HTTPS domain; and terminal
 evidence only after the connector is authenticated; it never replaces those
 service and deployment checks.
 
-Current blocker: the existing Wick project and wick-backend service are reachable through the authenticated Railway connector, and patch `3e01a998-da05-4e26-9613-4c483e8b6eff` stages public source commit `a5ca18ae8b645b3ca3c6c2ad14f660674e664a7c`, Docker/runtime settings, safe public variables and an unprovisioned 1 GB `/data` volume. The patch remains unapplied because the deployed program/mint, funded keeper, webhook secret, final CORS origin and QuickNode inputs are absent, and the applicable spending cap has not been resolved. There is no deployment or public domain.
+Current blocker: the existing Wick project and wick-backend service are reachable through the authenticated Railway connector, and patch `3e01a998-da05-4e26-9613-4c483e8b6eff` stages public source commit `f4bb82a31cc6868e2c730d07f58d603c6c2e38cf`, Docker/runtime settings, safe public variables and an unprovisioned 1 GB `/data` volume. The patch remains unapplied because the deployed program/mint, funded keeper, webhook secret, final CORS origin and QuickNode inputs are absent, and project-specific isolation of Austin's $20 limit has not been resolved. There is no backend deployment or public backend domain.
 
 ## 3. Vercel frontend
 
@@ -48,7 +48,7 @@ the readiness gate will not infer project context from a CLI installation.
 
 The ten-minute browser/IP cooldown and in-flight set are best-effort controls scoped to one warm Vercel instance; they are not a distributed identity or abuse boundary. The hard global bound is the finite treasury token inventory: no runtime key can mint or freeze more test USDC, and concurrent functions race on the same on-chain balance, so an overdraw transaction fails atomically without sending its paired SOL transfer.
 
-Current blocker: Vercel CLI/token/project context, public backend URL, program/mint, and funded faucet keypairs are absent. No Vercel project or URL was created.
+Current state: deployment `ab2ecb61773a167a3937dc06b906e138d69feb44` is Ready at `https://wick-markets-phi.vercel.app/`; `/`, `/portfolio` and `/pool` return HTTP 200. Missing local Vercel CLI/token context does not invalidate that deployment. The shell is not yet an integrated working demo: the public backend URL, deployed program/mint, funded faucet keypair, final `NEXT_PUBLIC_*` values and fresh-browser lifecycle evidence remain absent. Authorized Vercel project access is needed only when those final values are ready for a controlled redeploy; do not create a duplicate deployment.
 
 ## 4. QuickNode Stream (only after 1–3)
 

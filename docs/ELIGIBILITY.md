@@ -1,6 +1,6 @@
 # UBC 2026 eligibility checklist
 
-This checklist is conditional deployment evidence, not an eligibility claim. As of November 17, Wick has no public deployment, executable devnet program, QuickNode Stream, or public demo URL, so the live-data and working-demo items are incomplete.
+This checklist is conditional deployment evidence, not an eligibility claim. As of November 17, the public repository is available at verified `main` `ab2ecb61773a167a3937dc06b906e138d69feb44`, and the frontend shell is reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/). Wick still has no executable devnet program, test mint, public backend, active QuickNode Stream, verified trading lifecycle, or demo video, so the live-data and working-demo items remain incomplete.
 
 Official references:
 
@@ -23,7 +23,8 @@ Wick must not claim the QuickNode bounty until every box is checked with a Strea
 - [ ] Track 02 DeFi & Onchain Apps: public deployed demo interacts with Wick's smart contract; README documents the economic design and risk assumptions.
 - [ ] Solana award: core logic is deployed via Anchor on Solana devnet; README records every program address and explorer link.
 - [x] Gemini Prediction Markets: code uses Gemini's public prediction-market events, strike, settlement, and quote APIs; a deployed working integration remains pending.
-- [ ] Public source repository with setup instructions, technical documentation, and architecture overview.
+- [x] Public source repository with setup instructions, technical documentation, and architecture overview; current `main` is `ab2ecb61773a167a3937dc06b906e138d69feb44`.
+- [x] Public frontend shell responds at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) on `/`, `/trade`, `/portfolio`, and `/pool`; this availability check is not a working-demo claim.
 - [ ] Working public deployed demo.
 - [ ] Accessible 2–3 minute demo video.
 - [x] Submission answers cover what was built, the problem, how it works, differentiation, and next steps; final deployment evidence and account-holder review remain pending.

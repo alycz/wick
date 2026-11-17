@@ -22,6 +22,16 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 
 Expected final duration is between `150` and `180` seconds. The recorder itself runs the real bots and `demo-check` again before opening Chromium. It captures the browser's exact `sendTransaction` signature, reads that transaction's market and position accounts back from devnet RPC, and accepts only Stream events correlated to that evidence. If any prerequisite, transaction, alert, live cap, correlation, liquidation, settlement, timeline, video, caption or encoding step fails, stop and fix the system; do not make an alternate simulated video.
 
+Synchronize the recording start with the earliest real open 15-minute market: it must remain outside the program's 60-second pre-expiry cutoff when the trade is submitted around `1:00`, yet expire and receive Gemini's real settlement early enough for the raw recording to remain within `150`–`180` seconds. The recorder selects that earliest market and fails if the actual liquidation or settlement arrives too late. Do not extend the capture and trim away the wait, substitute another position's event, or stage a settlement.
+
+### UI refactor compatibility
+
+The sequence below is a functional acceptance contract, not merely a storyboard. A visual redesign may move controls, but it must preserve a keyboard-accessible path through the live terminal, Weekly ladder, local test-wallet creation, Faucet, live trade ticket, leverage control, activity evidence, Portfolio and Pool. Route or accessible-name changes require a matching `scripts/record-demo.ts` update and recorder test in the same reviewed change; they do not permit removing an evidence step.
+
+Current public Git `main` `ab2ecb61773a167a3937dc06b906e138d69feb44` introduces a marketing page at `/`, moves the terminal to `/trade`, consolidates wallet creation under **Wallet → Create test wallet**, and labels the submit action **Open YES · N×**. The guarded recorder still starts at `/` and looks for **Try it now** and **Open YES at N×**, so this compatibility gap must be fixed before recording. Do not claim the current frontend-only shell passes this runbook.
+
+Bot transactions generated before capture are seeded test activity. They may capitalize and exercise the pool, but the video and submission must never describe them as organic users or organic volume. The recorded wallet transaction and every highlighted Stream event must remain real, devnet-only and correlated exactly as described below.
+
 ## Exact storyboard
 
 | Time | Shot and action | Evidence visible |
