@@ -9,6 +9,7 @@
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint && tsc -p tsconfig.json --noEmit",
     "test": "pnpm -r --if-present test && vitest run scripts/tests",
+    "test:anchor:local": "node --import tsx --test --test-concurrency=1 tests/anchor/*.anchor.test.ts",
     "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "collector": "node --import tsx scripts/sol-collector.ts",

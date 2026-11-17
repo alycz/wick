@@ -119,3 +119,11 @@ pub struct LpUpdated {
     pub balance: i128,
     pub queue_owed: u64,
 }
+
+/// Cross-language conformance proof emitted by the read-only vector verifier.
+#[event]
+pub struct MathVectorsVerified {
+    pub seed: u64,
+    pub count: u16,
+    pub accumulators: [u64; 4],
+}
