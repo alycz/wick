@@ -17,8 +17,8 @@ export function Shell({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="chrome-shell site-shell">
-      <header className="chrome-topbar topbar">
+    <div className="chrome-shell">
+      <header className="chrome-topbar">
         <Link className="chrome-brand" href="/" aria-label="Wick markets home">
           <span className="chrome-brand-mark" aria-hidden="true">W</span>
           <span className="chrome-brand-name">{BRAND.name}</span>
@@ -48,7 +48,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </Link>
         <span className="chrome-network-chip"><i /> Solana devnet</span>
       </div>
-      <div className={`chrome-app-grid app-grid ${showActivity ? "chrome-app-grid--rail" : "chrome-app-grid--wide"}`}>
+      <div className={`chrome-app-grid ${showActivity ? "chrome-app-grid--rail" : "chrome-app-grid--wide"}`}>
         <main className="chrome-main">{children}</main>
         {showActivity && <ActivityRail />}
       </div>

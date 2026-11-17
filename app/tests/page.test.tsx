@@ -10,6 +10,7 @@ describe("LandingPage", () => {
     render(<LandingPage />);
 
     expect(screen.getByRole("heading", { name: /Every strike.*One fair surface/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /A prediction market risk engine/i }).querySelector("br")).toBeNull();
     expect(screen.getByText(/Live values appear only when the backend is healthy and fresh/i)).toBeInTheDocument();
     expect(screen.getByText(/No invented liquidity/i)).toBeInTheDocument();
     expect(screen.queryByText(/Live BTC/i)).not.toBeInTheDocument();

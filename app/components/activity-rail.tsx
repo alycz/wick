@@ -30,15 +30,15 @@ export function ActivityRail() {
           ? "QuickNode Stream unverified · indexer unavailable"
           : "QuickNode Stream unverified · reconnecting";
   return (
-    <aside className="chrome-activity activity-rail" aria-label="Market activity">
-      <div className="chrome-activity-head section-heading">
+    <aside className="chrome-activity" aria-label="Market activity">
+      <div className="chrome-activity-head">
         <span className="chrome-activity-eyebrow">Network activity</span>
-        <div className="chrome-activity-status"><span className={`chrome-live-dot live-dot ${connected && recentQuickNodeEvent ? "connected" : ""}`} /> {status}</div>
+        <div className="chrome-activity-status"><span className={`chrome-live-dot ${connected && recentQuickNodeEvent ? "connected" : ""}`} /> {status}</div>
       </div>
-      <div className="chrome-activity-list activity-list">
-        {events.length === 0 && <div className="chrome-activity-empty empty compact">{loading ? "Loading indexed devnet events…" : error ? "Indexer feed unavailable." : "No indexed devnet events yet."}</div>}
+      <div className="chrome-activity-list">
+        {events.length === 0 && <div className="chrome-activity-empty">{loading ? "Loading indexed devnet events…" : error ? "Indexer feed unavailable." : "No indexed devnet events yet."}</div>}
         {events.map((event) => (
-          <a className="chrome-activity-item activity-item" key={`${event.signature}-${event.eventIndex}`}
+          <a className="chrome-activity-item" key={`${event.signature}-${event.eventIndex}`}
             href={`https://explorer.solana.com/tx/${event.signature}?cluster=devnet`} target="_blank" rel="noreferrer">
             <span className="chrome-activity-title">{names[event.name] ?? event.name}</span>
             <small className="chrome-activity-meta">{new Date(event.blockTime * 1_000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {compactAddress(event.signature)} · {event.provenance === "quicknode_stream" ? "Stream" : "RPC reconciled"}</small>

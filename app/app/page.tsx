@@ -88,7 +88,7 @@ export default function LandingPage() {
 
     <section className="landing-principles" aria-labelledby="landing-principles-title">
       <div className="landing-principles-head">
-        <div><p className="landing-kicker"><span /> BUILT FOR THE TAILS</p><h2 id="landing-principles-title">A prediction market risk engine,<br />visible at every step.</h2></div>
+        <div><p className="landing-kicker"><span /> BUILT FOR THE TAILS</p><h2 id="landing-principles-title">A prediction market risk engine, visible at every step.</h2></div>
         <p>From the first quote to official settlement, Wick keeps the source, model, cap, and current system state in view.</p>
       </div>
       <div className="landing-principle-grid">
@@ -104,7 +104,7 @@ export default function LandingPage() {
     <section className="landing-faq" aria-labelledby="landing-faq-title">
       <div className="landing-faq-head">
         <p className="landing-kicker"><span /> QUESTIONS, ANSWERED</p>
-        <h2 id="landing-faq-title">What Wick shows.<br />And what it never invents.</h2>
+        <h2 id="landing-faq-title">What Wick shows. And what it never invents.</h2>
       </div>
       <div className="landing-faq-list">
         <details open>

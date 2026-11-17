@@ -18,11 +18,14 @@ afterEach(() => {
 describe("Shell navigation", () => {
   it("links the brand home and Trade to the terminal without showing the activity rail on the landing page", () => {
     pathnameMock.mockReturnValue("/");
-    render(<Shell><div>Landing</div></Shell>);
+    const { container } = render(<Shell><div>Landing</div></Shell>);
 
     expect(screen.getByRole("link", { name: "Wick markets home" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Trade" })).toHaveAttribute("href", "/trade");
     expect(screen.queryByText("Activity feed")).not.toBeInTheDocument();
+    expect(container.querySelector(".chrome-shell")).not.toHaveClass("site-shell");
+    expect(container.querySelector(".chrome-topbar")).not.toHaveClass("topbar");
+    expect(container.querySelector(".chrome-app-grid")).not.toHaveClass("app-grid");
   });
 
   it("marks the terminal active and retains honest activity provenance on platform routes", () => {
