@@ -11,8 +11,8 @@ const market = {
 describe("evaluateDemoSnapshot", () => {
   it("accepts only a fully live, funded demo", () => {
     expect(evaluateDemoSnapshot({
-      health: { ok: true, chainConfigured: true, indexerConfigured: true, markAgeMs: 1_000, indexerEventAgeMs: 2_000 },
-      markets: [market], feed: [{ blockTime: (now - 2_000) / 1_000 }], vaultAmountE6: 1n,
+      health: { ok: true, chainConfigured: true, indexerConfigured: true, streamEvidencePresent: true, markAgeMs: 1_000, indexerEventAgeMs: 2_000, streamEventAgeMs: 2_000 },
+      markets: [market], feed: [{ blockTime: (now - 2_000) / 1_000, provenance: "quicknode_stream" }], vaultAmountE6: 1n,
       keeperLamports: 500_000_000, treasuryLamports: 2_000_000_000, nowMs: now,
     })).toMatchObject({ ok: true, liveMarket: market.symbol, vaultBalanceE6: "1" });
   });

@@ -3,6 +3,7 @@ export type MarketStatus = "open" | "halted" | "expired" | "settled" | "invalid"
 export type PositionSide = "yes" | "no";
 export type PositionStatus = "open" | "closed" | "liquidated" | "settled";
 export type VolSourceName = "deribit" | "derive" | "realized";
+export type EventProvenance = "quicknode_stream" | "rpc_reconcile";
 
 export interface GeminiQuote {
   bid?: number;
@@ -44,6 +45,9 @@ export interface HealthResponse {
   volHealthy: boolean;
   markAgeMs?: number;
   indexerEventAgeMs?: number;
+  streamEventAgeMs?: number;
+  streamEvidencePresent?: boolean;
+  pendingStreamDeliveries?: number;
   version: string;
 }
 
@@ -59,6 +63,7 @@ export interface IndexedEvent {
   blockTime: number;
   name: string;
   data: Record<string, unknown>;
+  provenance: EventProvenance;
 }
 
 export interface PositionView {

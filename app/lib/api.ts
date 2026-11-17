@@ -33,7 +33,7 @@ const lpPointSchema = z.object({
 
 const eventSchema = z.object({
   signature: z.string(), eventIndex: z.number(), slot: z.number(), blockTime: z.number(),
-  name: z.string(), data: z.record(z.unknown()),
+  name: z.string(), data: z.record(z.unknown()), provenance: z.enum(["quicknode_stream", "rpc_reconcile"]),
 });
 
 const healthSchema = z.object({

@@ -38,7 +38,7 @@ export class GapReconciler {
         if (!transaction?.meta?.logMessages) continue;
         transactions.push({ signature: item.signature, slot: transaction.slot, blockTime: transaction.blockTime ?? item.blockTime ?? 0, logs: transaction.meta.logMessages });
       }
-      const inserted = this.options.store.processTransactions(transactions);
+      const inserted = this.options.store.processTransactions(transactions, "rpc_reconcile");
       if (missing.length > 0) this.options.logger.info({ signatures: missing.length, inserted }, "label=gap-filler reconciled Wick signatures");
       return inserted;
     } catch (error) {

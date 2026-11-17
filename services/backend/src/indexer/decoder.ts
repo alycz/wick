@@ -105,11 +105,31 @@ export class WickEventDecoder {
     }
   }
 
-  decodeLogs(logs: readonly string[]): DecodedProgramEvent[] {
-    return logs.flatMap((log) => {
+  decodeLogs(logs: readonly string[], programId?: string): DecodedProgramEvent[] {
+    if (!programId) return logs.flatMap((log) => {
       const event = this.decodeLog(log);
       return event ? [event] : [];
     });
+
+    const invocationStack: string[] = [];
+    const events: DecodedProgramEvent[] = [];
+    for (const log of logs) {
+      const invoked = /^Program (\S+) invoke \[\d+\]$/.exec(log);
+      if (invoked?.[1]) {
+        invocationStack.push(invoked[1]);
+        continue;
+      }
+      const completed = /^Program (\S+) (?:success|failed:.*)$/.exec(log);
+      if (completed?.[1]) {
+        const match = invocationStack.lastIndexOf(completed[1]);
+        if (match >= 0) invocationStack.splice(match);
+        continue;
+      }
+      if (invocationStack.at(-1) !== programId) continue;
+      const event = this.decodeLog(log);
+      if (event) events.push(event);
+    }
+    return events;
   }
 }
 
