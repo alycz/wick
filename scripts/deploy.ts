@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { assertDevnet, requiredEnv } from "./lib/runtime.js";
 import { loadKeypair } from "./keypairs.js";
+import { syncIdl } from "./sync-idl.js";
 
 export interface DeploymentPlan {
   programId: string;
@@ -42,6 +43,7 @@ export async function deployProgram(options: { dryRun?: boolean } = {}): Promise
   const connection = new Connection(plan.rpcUrl, "confirmed");
   await assertDevnet(connection);
   await run("anchor", ["build"]);
+  await syncIdl();
   await Promise.all([access(plan.programSo), access(plan.programKeypair)]);
   const programSecret = JSON.parse(await readFile(plan.programKeypair, "utf8")) as number[];
   const keypairId = Keypair.fromSecretKey(Uint8Array.from(programSecret)).publicKey;
