@@ -44,4 +44,6 @@ pub enum WickError {
     MathOverflow,
     #[msg("Nothing to claim")]
     NothingToClaim,
+    #[msg("Staking is locked while rewards await the payout queue")]
+    DeferredRewardsPending,
 }

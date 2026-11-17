@@ -249,14 +249,83 @@ describe("Wick Anchor lifecycle", { concurrency: false }, () => {
     assert.equal(wickedAfter - wickedBefore, (owed + 1_000_000n * E6) * 100n);
     wickedHolder = loser;
 
+    // Fee shares keep payout claims behind the FIFO queue, but must be
+    // assigned exactly once to the staking cohort when that queue clears.
+    const deferredStake = 100n * E6;
+    const deferredStakeAccount = stakePda(loser.keypair.publicKey);
+    await method("stake")(new BN(deferredStake.toString())).accountsStrict({
+      owner: loser.keypair.publicKey,
+      lp,
+      loserMint,
+      ownerWicked: getAssociatedTokenAddressSync(loserMint, loser.keypair.publicKey),
+      stakingVault,
+      stakeAccount: deferredStakeAccount,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: web3.SystemProgram.programId,
+    }).signers([loser.keypair]).rpc();
+
+    const feeTrader = await createTrader(1_000n * E6);
+    const feeMarket = await createMarket({ markE6: 500_000, spreadE6: 0 });
+    const feePosition = await openPosition(feeTrader, feeMarket, "yes", 100n * E6, 2);
+    const feeOpened = await program.account.position.fetch(feePosition.address);
+    const beforeDeferredFee = await program.account.lpState.fetch(lp);
+    await updateMark(feeMarket, 600_000, 10);
+    const deferredResult = closeResult(
+      100n * E6,
+      asBigInt(feeOpened.contractsE6),
+      Number(asBigInt(feeOpened.entryE6)),
+      600_000,
+      currentParams.profitFeeBps,
+    );
+    await closePosition(feePosition, 600_000);
+    const deferredShare = deferredResult.feeE6 / 2n;
+    const afterDeferredFee = await program.account.lpState.fetch(lp);
+    assert.equal(
+      asBigInt(afterDeferredFee.undistributedStakerRewards)
+        - asBigInt(beforeDeferredFee.undistributedStakerRewards),
+      deferredShare,
+    );
+    assert.equal(
+      asBigInt(afterDeferredFee.rewardPerTokenE12),
+      asBigInt(beforeDeferredFee.rewardPerTokenE12),
+    );
+
     for (let crank = 0; crank < 20; crank += 1) {
       const state = await program.account.lpState.fetch(lp);
       if (asBigInt(state.queueOwed) === 0n) break;
       await claimQueue(claim, winner);
     }
-    const paid = await program.account.payoutClaim.fetch(claim);
-    assert.equal(asBigInt(paid.paid), asBigInt(paid.amount));
-    assert.equal(asBigInt((await program.account.lpState.fetch(lp)).queueOwed), 0n);
+    const afterQueue = await program.account.lpState.fetch(lp);
+    assert.equal(asBigInt(afterQueue.queueOwed), 0n);
+    assert.equal(await provider.connection.getAccountInfo(claim), null);
+    assert.equal(asBigInt(afterQueue.undistributedStakerRewards), 0n);
+    assert.equal(
+      asBigInt(afterQueue.rewardPerTokenE12) - asBigInt(beforeDeferredFee.rewardPerTokenE12),
+      deferredShare * 1_000_000_000_000n / deferredStake,
+    );
+
+    const beforeDeferredClaim = await tokenBalance(loser.usdc);
+    await method("claimRewards")().accountsStrict({
+      owner: loser.keypair.publicKey,
+      lp,
+      vault,
+      usdcMint,
+      ownerUsdc: loser.usdc,
+      stakeAccount: deferredStakeAccount,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    }).signers([loser.keypair]).rpc();
+    assert.equal(await tokenBalance(loser.usdc) - beforeDeferredClaim, deferredShare);
+
+    await method("unstake")(new BN(deferredStake.toString())).accountsStrict({
+      owner: loser.keypair.publicKey,
+      lp,
+      loserMint,
+      ownerWicked: getAssociatedTokenAddressSync(loserMint, loser.keypair.publicKey),
+      stakingVault,
+      stakeAccount: deferredStakeAccount,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: web3.SystemProgram.programId,
+    }).signers([loser.keypair]).rpc();
   });
 
   it("voids a market and refunds margin exactly", async () => {
