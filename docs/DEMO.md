@@ -4,7 +4,7 @@
 
 No demo MP4 exists. Wick has no verified public deployment, so generating footage now would misrepresent a local/read-only interface as a working product. `scripts/record-demo.ts` is deliberately fail-closed: it runs real devnet bots and `demo-check`, records a configured deployment only, waits for real open/liquidation/settlement events, and emits `demo/wick-demo.mp4` only after Playwright and ffmpeg succeed.
 
-Target runtime is **2:45 (165 seconds)**, inside the required 2–3 minute window. Every shot below must use the final public deployment and real devnet/test assets. Do not splice in fixture data, edit browser state, or seed fake feed entries.
+Target runtime is **2–3 minutes**. Every shot below must use the final public deployment and real devnet/test assets. Do not splice in fixture data, edit browser state, seed fake feed entries, or alter playback speed.
 
 ## Recording gate and command
 
@@ -20,7 +20,7 @@ DEMO_URL="$FRONTEND_URL" DEMO_BOT_MINUTES=2 pnpm demo:record
 ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 demo/wick-demo.mp4
 ```
 
-Expected final duration is `165` seconds. The recorder itself runs the real bots and `demo-check` again before opening Chromium. If any prerequisite, transaction, alert, live cap, liquidation, settlement, video, caption or encoding step fails, stop and fix the system; do not make an alternate simulated video.
+Expected final duration is between `150` and `180` seconds. The recorder itself runs the real bots and `demo-check` again before opening Chromium. It captures the browser's exact `sendTransaction` signature, reads that transaction's market and position accounts back from devnet RPC, and accepts only Stream events correlated to that evidence. If any prerequisite, transaction, alert, live cap, correlation, liquidation, settlement, timeline, video, caption or encoding step fails, stop and fix the system; do not make an alternate simulated video.
 
 ## Exact storyboard
 
@@ -29,17 +29,17 @@ Expected final duration is `165` seconds. The recorder itself runs the real bots
 | 0:00–0:18 | Open the deployed markets page on the current BTC 15-minute hero. Frame spot, strike, countdown, Wick theo, Gemini bid/ask, edge and live cap. | Production HTTPS URL; current contract; live values rather than placeholders. |
 | 0:18–0:38 | Switch Tail ladder to Weekly and scan strikes from near money into a thin tail. Pause on missing/one-sided Gemini liquidity beside Wick theo. | Multiple real Gemini strikes, tails, vol-source badge and per-row cap. |
 | 0:38–1:00 | Click **Try it now**, show the “Demo wallet, devnet only” banner, then request the faucet grant. | Fresh browser-local address and one confirmed grant of 0.05 devnet SOL + 1,000 test USDC. Never expose authority keys. |
-| 1:00–1:24 | Enter the live 15-minute trade screen. Drag leverage toward 1000x so the UI clamps it to the live cap; review entry, contracts, max payout and liquidation distance; open YES at the cap. | Cap enforcement in UI and a confirmed real Wick program transaction. |
-| 1:24–1:48 | Keep the right activity rail visible until **Position opened** appears. Show the transaction link/feed item. | The same real transaction delivered by the verified QuickNode Stream, with observed latency near two seconds. |
-| 1:48–2:12 | Let bot/live activity continue until **Liquidation** appears; briefly show current mark/cap and portfolio status. | Confirmed on-chain liquidation, not a scripted DOM injection. |
-| 2:12–2:32 | Wait for the 15-minute window to resolve and **Market settled** to appear. Open the settled position/result. | Gemini official outcome and corresponding Wick settlement event. |
+| 1:00–1:24 | Enter the live 15-minute trade screen. Request exactly 1000x and show both the slider's capped value and visible live-cap text; review entry, contracts, max payout and liquidation distance; open YES at the cap. | An asserted clamp in the real UI and a confirmed Wick transaction whose full signature is captured from browser RPC. |
+| 1:24–1:48 | Keep the right activity rail visible until **Position opened** appears. Show the transaction link/feed item. | A `PositionOpened` Stream event whose signature, market and position exactly match the submitted transaction. |
+| 1:48–2:12 | Let bot/live activity continue until **Liquidation** appears; briefly show current mark/cap and portfolio status. | A `PositionLiquidated` Stream event for that exact position, not a similarly named unrelated feed item. |
+| 2:12–2:32 | Wait for the 15-minute window to resolve and **Market settled** to appear. Open the settled position/result. | A `MarketSettled` Stream event for that exact market and Gemini official outcome. |
 | 2:32–2:45 | Navigate to Pool. Frame LP balance, queue owed, fees and $WICKED staking/emissions. End on the devnet safety footer. | Stream-backed pool projection and “Devnet demo. Test USDC only. Not a real-money product.” |
 
 The automated recorder performs the same sequence: weekly ladder → demo wallet → faucet → trade → 1000x clamp → open at cap → real Stream event → liquidation → settlement → pool. The bot seeding window may run before capture; it must not be presented as organic user volume.
 
 ## Burn-in captions
 
-`scripts/record-demo.ts` extracts this block, stretches the truthful raw capture to exactly 165 seconds, and burns the captions with ffmpeg.
+`scripts/record-demo.ts` holds each real browser shot until its reference boundary when the evidence arrives early, extracts the text from this block, replaces cue boundaries with the observed transition time, and burns those captions without changing playback speed. Late evidence shifts its own boundary truthfully; the raw capture must still be 150–180 seconds with eight ordered transitions or the recorder fails.
 
 ```srt
 1
