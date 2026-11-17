@@ -1,6 +1,6 @@
 import { Connection } from "@solana/web3.js";
 
-export const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+export const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 
 export function requiredEnv(name: string, environment: NodeJS.ProcessEnv = process.env): string {
   const value = environment[name]?.trim();

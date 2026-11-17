@@ -19,7 +19,7 @@ Current blocker: Solana, Anchor, and SPL Token CLIs, deploy artifacts, funded ke
 
 ## 2. Railway backend
 
-Required inputs are an authorized existing Railway project token, the deployed program/mint, keeper keypair, webhook secret, and a real chain adapter. The backend currently instantiates `UnconfiguredChainPort`; do not deploy it as a working trading service.
+Required inputs are an authorized existing Railway project token, the deployed program/mint, keeper keypair, webhook secret, and a real chain adapter. The backend selects a real Anchor transport only after validating the generated IDL, executable devnet program and configured keeper. With those inputs absent it uses `UnconfiguredChainPort`; do not present that read-only state as a working trading service.
 
 1. Use the repository root as build context; `services/backend/railway.json` selects `services/backend/Dockerfile`. Do not set a restrictive monorepo root directory.
 2. Attach one 1 GB persistent volume at `/data`. Set `SQLITE_PATH=/data/wick.db`.
@@ -28,7 +28,7 @@ Required inputs are an authorized existing Railway project token, the deployed p
 5. Deploy using an authorized Railway token. A detached upload is only queued: poll deployment status until it is terminal `SUCCESS`. Treat `FAILED`, `CRASHED`, `REMOVED`, or a timeout as failure.
 6. Verify `/health` reports `ok`, `cluster: devnet`, healthy volatility, and `chainConfigured: true`; then record the public URL and Railway CPU/RAM/credit usage in `docs/HANDOFF.md`.
 
-Current blocker: Railway CLI/token/project context are absent, and the chain adapter is deliberately unconfigured. No Railway service or domain was created.
+Current blocker: Railway CLI/token/project context are absent, and deployed chain inputs are absent. Railway connector authentication has been verified, but no Wick service was created while source publication remains approval-blocked. No Railway service or domain was created.
 
 ## 3. Vercel frontend
 

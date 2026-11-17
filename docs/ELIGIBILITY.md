@@ -26,7 +26,7 @@ Wick must not claim the QuickNode bounty until every box is checked with a Strea
 - [ ] Public source repository with setup instructions, technical documentation, and architecture overview.
 - [ ] Working public deployed demo.
 - [ ] Accessible 2–3 minute demo video.
-- [ ] Submission answers cover what was built, the problem, how it works, differentiation, and next steps.
+- [x] Submission answers cover what was built, the problem, how it works, differentiation, and next steps; final deployment evidence and account-holder review remain pending.
 - [ ] Submit by Friday, November 20, 2026 at 12:00 PM CST. The internal deployment/verification cutoff is Thursday, November 19 at 11:59 PM CST.
 - [ ] Finalists can present in person in Austin on Saturday, November 21. The official rules require in-person presence to qualify for prizes.
 

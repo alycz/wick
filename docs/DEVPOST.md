@@ -20,7 +20,7 @@ We built Wick, a devnet trading interface and Anchor program for leveraged synth
 
 The Solana program implements opening and closing YES/NO positions, liquidation, official-outcome settlement, market/vault exposure limits, FIFO payout claims, a self-bootstrapping pool, $WICKED emissions, and staking. A single Node backend runs market discovery, pricing, keeper/liquidator/settler loops, the QuickNode Streams webhook, SQLite projections, and read APIs. The Next.js interface includes markets, trade previews, portfolio, pool analytics, live activity, browser-local demo wallets, and Phantom/Solflare support.
 
-Current evidence boundary: the code and local checks are complete, and public Gemini/volatility integrations were exercised with real data, but the public program/services/Stream and final video are still pending. We will not present a build-time program ID or local UI as a deployed product.
+Current evidence boundary: local TypeScript/native checks and real public Gemini/volatility reads pass. WP11 still has open implementation and validation blockers; the public program/services/Stream and final video are pending. We will not present a build-time program ID or local UI as a deployed product.
 
 ## 2. What problem does it solve?
 
@@ -97,7 +97,7 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 ## Safety and limitations
 
-Wick is an unaudited Solana devnet demo using self-minted test USDC. No real funds and no mainnet are supported. The pool can queue profitable payouts; leverage and liability caps reduce risk but do not guarantee solvency. The keeper and external market-data providers are trusted components. Current source uses an explicitly unconfigured backend chain adapter until a real program and generated IDL are deployed.
+Wick is an unaudited Solana devnet demo using self-minted test USDC. No real funds and no mainnet are supported. The pool can queue profitable payouts; leverage and liability caps reduce risk but do not guarantee solvency. The keeper and external market-data providers are trusted components. Current source has real transaction adapters that fail closed until a real program, matching generated IDL and funded authorities are configured. See `docs/WP11_REPORT.md` for open limits.
 
 ## Submission timing and attendance
 
