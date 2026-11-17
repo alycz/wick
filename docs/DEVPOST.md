@@ -1,6 +1,6 @@
 # Wick — Devpost submission copy
 
-> **Submission operator note:** the prose below describes the implemented project, but Wick is not yet publicly deployed. Do not submit it as a working demo until `pnpm deploy:verify` passes, the final URLs and video are accessible, and the evidence selections below are satisfied. As of November 17, QuickNode must **not** be selected.
+> **Submission operator note:** the public source repository and Vercel frontend shell are available, but Wick is not yet a working public trading demo. Do not submit the shell as end-to-end completion until `pnpm deploy:verify` passes, the program/backend/Stream integration and final video are verified, and the evidence selections below are satisfied. As of November 17, QuickNode must **not** be selected.
 
 ## Project name
 
@@ -20,7 +20,7 @@ We built Wick, a devnet trading interface and Anchor program for leveraged synth
 
 The Solana program implements opening and closing YES/NO positions, liquidation, official-outcome settlement, market/vault exposure limits, FIFO payout claims, a self-bootstrapping pool, $WICKED emissions, and staking. A single Node backend runs market discovery, pricing, keeper/liquidator/settler loops, the QuickNode Streams webhook, SQLite projections, and read APIs. The Next.js interface includes markets, trade previews, portfolio, pool analytics, live activity, browser-local demo wallets, and Phantom/Solflare support.
 
-Current evidence boundary: local TypeScript/native checks and real public Gemini/volatility reads pass. WP11 still has open implementation and validation blockers; the public program/services/Stream and final video are pending. We will not present a build-time program ID or local UI as a deployed product.
+Current evidence boundary: public source `main` is verified at `ab2ecb61773a167a3937dc06b906e138d69feb44`, and the Vercel frontend shell is reachable. Local TypeScript/native checks and real public Gemini/volatility reads pass. The executable devnet program, test mint, public backend, active Stream, working faucet/trade lifecycle and final video are still pending. We will not present a build-time program ID or a reachable frontend shell as a completed deployed product.
 
 ## 2. What problem does it solve?
 
@@ -64,7 +64,7 @@ On the product side, we would add richer portfolio risk, historical model calibr
 - Gemini Prediction Markets public REST and WebSocket APIs
 - Deribit public REST/WebSocket, Derive v3, EWMA realized-vol fallback
 - QuickNode Streams REST/filter/webhook implementation; live Stream evidence pending
-- Railway and Vercel deployment definitions; public deployments pending
+- Railway backend and Vercel deployment definitions; the Vercel frontend shell is public, while backend/on-chain integration remains pending
 - Vitest, Cargo tests, Playwright, ffmpeg
 
 ## Sponsor-tool details
@@ -79,6 +79,8 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 ## Form selections and evidence gate
 
+Official selection boundary: the [organizer page](https://www.universityblockchain.org/programs/hackathon) lists Best use of Solana as a $1,500 award in each main track, accepts devnet, and lists a $500 QuickNode bounty whose core data source must be Streams. The [Devpost submission page](https://ubc-hackathon-2026.devpost.com/) permits exactly one main track, optionally one chain award (Solana or Arc, not both), and eligible sponsor bounties. Selecting a field does not guarantee qualification or an award. Wick's generated Solana program is built but not deployed, and its locally verified Stream webhook/indexer/REST/SSE path has no active public Stream or real transaction delivery yet. Keep Track 02, Solana, and QuickNode eligibility conditional on a working devnet deployment and real evidence. Our conclusion that ordinary RPC use alone cannot prove Streams is the core source is an implementation-evidence inference; the additional latency, fixture, and usage checks in `docs/ELIGIBILITY.md` are Wick's stricter internal gates, not asserted official contest rules.
+
 | Devpost field | Selection | Evidence condition |
 |---|---|---|
 | Track | **Track 02 — DeFi & Onchain Apps** | Intended selection. Submit only after the public demo interacts with the deployed Wick smart contract and the economic/risk documentation remains in README. |
@@ -88,8 +90,8 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 ## Links to enter only after verification
 
-- Public source repository: pending public URL/commit in `docs/HANDOFF.md`
-- Working application: pending Vercel production URL
+- Public source repository: [github.com/alycz/wick](https://github.com/alycz/wick) at independently verified current `main` `ab2ecb61773a167a3937dc06b906e138d69feb44` (frontend UI baseline; working deployment evidence remains pending)
+- Frontend shell: [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) (Ready and publicly reachable; not yet a working-demo claim because backend/program/mint/Stream integration is pending)
 - Backend health/API: pending Railway HTTPS URL
 - Solana program: pending actual devnet program ID and explorer link
 - Demo video: pending accessible 2–3 minute upload
