@@ -6,6 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useHealth } from "@/hooks/use-markets";
 import { compactAddress } from "@/lib/format";
 
 const WalletMultiButton = dynamic(
@@ -85,6 +86,8 @@ function browserId(): string {
 export function WalletPanel() {
   const wallet = useDemoWallet();
   const connected = useWallet();
+  const { health } = useHealth();
+  const fundingAvailable = health?.chainConfigured === true;
   const [funding, setFunding] = useState(false);
   const [message, setMessage] = useState<string>();
   const fund = async () => {
@@ -106,18 +109,17 @@ export function WalletPanel() {
   return (
     <div className="chrome-wallet">
       {wallet.publicKey ? (
-        <div className="chrome-wallet-demo" role="status">
-          <span className="chrome-wallet-status"><i /> Demo · devnet</span>
+        <div className="chrome-wallet-demo" role="status" aria-label="Local test wallet">
           <strong className="chrome-wallet-address">{compactAddress(wallet.publicKey)}</strong>
           <div className="chrome-wallet-actions">
-            <button className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>
+            {fundingAvailable && <button className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}
             <button className="chrome-wallet-link" type="button" onClick={wallet.exportKey}>Export</button>
             <button className="chrome-wallet-link chrome-wallet-link--danger" type="button" onClick={wallet.reset}>Reset</button>
           </div>
         </div>
       ) : (
-        <><button className="chrome-primary" type="button" onClick={wallet.create}>Demo wallet</button>
-        {connected.publicKey && <button className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}</>
+        <><button className="chrome-primary" type="button" onClick={wallet.create}>Create test wallet</button>
+        {fundingAvailable && connected.publicKey && <button className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}</>
       )}
       <WalletMultiButton />
       {message && <p className="chrome-wallet-message" aria-live="polite">{message}</p>}

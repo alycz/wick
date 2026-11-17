@@ -128,7 +128,7 @@ export function MarketBoard() {
       </> : <div className="markets-empty">No verified live BTC 15-minute market is available yet.</div>}
     </section>
 
-    <section className="markets-ladder" aria-labelledby="markets-ladder-title">
+    <section className="markets-ladder" id="tail-ladder" aria-labelledby="markets-ladder-title">
       <div className="markets-ladder-head">
         <div><p className="markets-eyebrow">OPTIONS-IMPLIED SURFACE</p><h2 id="markets-ladder-title">Tail ladder</h2></div>
         <span>Supported strikes within ±10% of spot</span>
