@@ -4,6 +4,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["scripts/**/*.ts", "packages/**/*.ts", "services/**/*.ts"],
+  "include": ["scripts/**/*.ts", "packages/**/*.ts", "services/**/*.ts", "tests/anchor/**/*.ts"],
   "exclude": ["node_modules", "app", "target"]
 }

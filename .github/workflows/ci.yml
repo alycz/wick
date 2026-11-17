@@ -30,5 +30,9 @@ jobs:
         with: { solana-cli-version: 2.2.20 }
       - run: cargo install --locked anchor-cli --version 0.31.1
       - run: pnpm install --frozen-lockfile
+      - run: mkdir -p ~/.config/solana target/deploy
+      - run: solana-keygen new --no-bip39-passphrase --silent --force --outfile ~/.config/solana/id.json
+      - run: solana-keygen new --no-bip39-passphrase --silent --force --outfile target/deploy/wick-keypair.json
+      - run: anchor keys sync
       - run: anchor build
       - run: anchor test --skip-build

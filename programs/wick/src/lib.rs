@@ -685,7 +685,58 @@ pub mod wick {
         emit!(KeeperUpdated { keeper });
         Ok(())
     }
+
+    /// Checks deterministic TypeScript pricing vectors inside the deployed
+    /// program. This mutates no accounts and is compute-bounded per call.
+    pub fn verify_math_vectors(
+        _ctx: Context<VerifyMathVectors>,
+        seed: u64,
+        count: u16,
+        expected: [u64; 4],
+    ) -> Result<()> {
+        require!(count > 0 && count <= 100, WickError::InvalidParameter);
+        let mut state = seed;
+        let mut actual = [0_u64; 4];
+        for _ in 0..count {
+            state = xorshift64(state);
+            let margin = 1_000_000 + state % 1_000_000_000;
+            state = xorshift64(state);
+            let leverage = 1 + (state % 1_000) as u16;
+            state = xorshift64(state);
+            let entry = 10_000 + (state % 980_001) as u32;
+            state = xorshift64(state);
+            let maintenance_bps = (state % 1_001) as u16;
+            state = xorshift64(state);
+            let mark = 10_000 + (state % 980_001) as u32;
+
+            let contracts = contracts_e6(margin, leverage, entry)?;
+            let liquidation = liq_mark_e6(entry, leverage, maintenance_bps)?;
+            let pnl = pnl_e6(contracts, mark, entry)?;
+            let payout = max_payout_e6(contracts, entry)?;
+            actual[0] = actual[0].wrapping_add(contracts);
+            actual[1] = actual[1].wrapping_add(u64::from(liquidation));
+            actual[2] = actual[2].wrapping_add(pnl as u64);
+            actual[3] = actual[3].wrapping_add(payout);
+        }
+        require!(actual == expected, WickError::InvalidParameter);
+        emit!(MathVectorsVerified {
+            seed,
+            count,
+            accumulators: actual,
+        });
+        Ok(())
+    }
 }
+
+fn xorshift64(mut value: u64) -> u64 {
+    value ^= value.wrapping_shl(13);
+    value ^= value.wrapping_shr(7);
+    value ^= value.wrapping_shl(17);
+    value
+}
+
+#[derive(Accounts)]
+pub struct VerifyMathVectors {}
 
 #[derive(Accounts)]
 pub struct InitConfig<'info> {

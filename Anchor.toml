@@ -14,7 +14,7 @@ wick = "EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi"
 
 [provider]
 cluster = "Localnet"
-wallet = ".keys/admin.json"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "pnpm exec vitest run tests"
+test = "pnpm run test:anchor:local"
