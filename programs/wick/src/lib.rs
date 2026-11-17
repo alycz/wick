@@ -318,6 +318,10 @@ pub mod wick {
             ctx.accounts.position.status == PositionStatus::Open,
             WickError::PositionNotOpen
         );
+        require!(
+            market_allows_liquidation(ctx.accounts.market.status),
+            WickError::MarketNotOpen
+        );
         let mark = side_mark(
             ctx.accounts.market.mark_yes_e6,
             ctx.accounts.position.side == Side::Yes,
@@ -342,6 +346,7 @@ pub mod wick {
             .checked_add(margin)
             .ok_or(WickError::MathOverflow)?;
         update_high_watermark(&mut ctx.accounts.lp);
+        distribute_staker_surplus(&mut ctx.accounts.lp, ctx.accounts.config.staker_cap)?;
         let emission = wicked_emission_e6(
             margin,
             ctx.accounts.lp.balance,
@@ -433,14 +438,20 @@ pub mod wick {
                 || (ctx.accounts.position.side == Side::No
                     && ctx.accounts.market.outcome == Outcome::No);
             let mark = if won { PRICE_E6 as u32 } else { 0 };
-            let pnl = pnl_e6(
+            let raw_pnl = pnl_e6(
                 ctx.accounts.position.contracts_e6,
                 mark,
                 ctx.accounts.position.entry_e6,
             )?;
+            let pnl = cap_loss_to_margin(raw_pnl, ctx.accounts.position.margin)?;
             let fee = fee_on_profit(pnl, ctx.accounts.config.profit_fee_bps)?;
             let owed = nonnegative_owed(ctx.accounts.position.margin, pnl, fee)?;
-            apply_lp_pnl(&mut ctx.accounts.lp, pnl, fee)?;
+            apply_lp_pnl(
+                &mut ctx.accounts.lp,
+                pnl,
+                fee,
+                ctx.accounts.config.staker_cap,
+            )?;
             if pnl < 0 {
                 let loss = u64::try_from(-pnl).map_err(|_| error!(WickError::MathOverflow))?;
                 let emission = wicked_emission_e6(
@@ -506,6 +517,7 @@ pub mod wick {
                 .checked_add(1)
                 .ok_or(WickError::MathOverflow)?;
         }
+        distribute_staker_surplus(&mut ctx.accounts.lp, ctx.accounts.config.staker_cap)?;
         emit!(ClaimPaid {
             claim: ctx.accounts.claim.key(),
             index: ctx.accounts.claim.index,
@@ -834,6 +846,8 @@ pub struct SettlePosition<'info> {
 pub struct ClaimQueue<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
     #[account(mut, seeds = [b"lp"], bump = lp.bump)]
     pub lp: Account<'info, LpState>,
     #[account(mut, seeds = [b"vault"], bump, token::mint = usdc_mint, token::authority = vault)]
@@ -1000,19 +1014,12 @@ fn mint_wicked<'info>(
     )
 }
 
-fn add_fee(lp: &mut LpState, fee: u64) -> Result<()> {
-    let stakers = fee / 2;
-    let treasury = fee.saturating_sub(stakers);
-    lp.fees_stakers = lp
-        .fees_stakers
-        .checked_add(stakers)
-        .ok_or(WickError::MathOverflow)?;
-    lp.fees_treasury = lp
-        .fees_treasury
-        .checked_add(treasury)
-        .ok_or(WickError::MathOverflow)?;
-    if lp.total_staked > 0 && lp.queue_owed == 0 {
-        let increment = (stakers as u128)
+fn increment_reward_per_token(lp: &mut LpState, amount: u64) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    if lp.total_staked > 0 {
+        let increment = (amount as u128)
             .checked_mul(REWARD_SCALE)
             .ok_or(WickError::MathOverflow)?
             / lp.total_staked as u128;
@@ -1024,7 +1031,29 @@ fn add_fee(lp: &mut LpState, fee: u64) -> Result<()> {
     Ok(())
 }
 
-fn apply_lp_pnl(lp: &mut LpState, pnl: i128, fee: u64) -> Result<()> {
+fn add_fee(lp: &mut LpState, fee: u64) -> Result<()> {
+    let stakers = fee / 2;
+    let treasury = fee.saturating_sub(stakers);
+    lp.fees_stakers = lp
+        .fees_stakers
+        .checked_add(stakers)
+        .ok_or(WickError::MathOverflow)?;
+    lp.fees_treasury = lp
+        .fees_treasury
+        .checked_add(treasury)
+        .ok_or(WickError::MathOverflow)?;
+    if lp.queue_owed == 0 {
+        increment_reward_per_token(lp, stakers)?;
+    }
+    // If fees arrive while claims are queued, their share remains reserved in
+    // fees_stakers but is not assigned in the accumulator. The specified
+    // LpState has no separate undistributed-reward cursor, so assigning that
+    // reserve after the queue clears could double-credit earlier, unclaimed
+    // rewards. A future account migration can add such a cursor safely.
+    Ok(())
+}
+
+fn apply_lp_pnl(lp: &mut LpState, pnl: i128, fee: u64, staker_cap: u64) -> Result<()> {
     add_fee(lp, fee)?;
     let economic = pnl
         .checked_sub(i128::from(fee))
@@ -1040,7 +1069,29 @@ fn apply_lp_pnl(lp: &mut LpState, pnl: i128, fee: u64) -> Result<()> {
             .ok_or(WickError::MathOverflow)?;
     }
     update_high_watermark(lp);
+    distribute_staker_surplus(lp, staker_cap)?;
     Ok(())
+}
+
+fn distribute_staker_surplus(lp: &mut LpState, staker_cap: u64) -> Result<u64> {
+    let surplus = staker_surplus_e6(lp.balance, staker_cap, lp.queue_owed, lp.total_staked)?;
+    if surplus == 0 {
+        return Ok(0);
+    }
+    lp.balance = lp
+        .balance
+        .checked_sub(i128::from(surplus))
+        .ok_or(WickError::MathOverflow)?;
+    lp.fees_stakers = lp
+        .fees_stakers
+        .checked_add(surplus)
+        .ok_or(WickError::MathOverflow)?;
+    increment_reward_per_token(lp, surplus)?;
+    Ok(surplus)
+}
+
+fn market_allows_liquidation(status: MarketStatus) -> bool {
+    status == MarketStatus::Open
 }
 
 fn update_high_watermark(lp: &mut LpState) {
@@ -1126,14 +1177,20 @@ fn settle_open_position(
     claim_index: u64,
     _settlement: bool,
 ) -> Result<()> {
-    let pnl = pnl_e6(
+    let raw_pnl = pnl_e6(
         ctx.accounts.position.contracts_e6,
         exit,
         ctx.accounts.position.entry_e6,
     )?;
+    let pnl = cap_loss_to_margin(raw_pnl, ctx.accounts.position.margin)?;
     let fee = fee_on_profit(pnl, ctx.accounts.config.profit_fee_bps)?;
     let owed = nonnegative_owed(ctx.accounts.position.margin, pnl, fee)?;
-    apply_lp_pnl(&mut ctx.accounts.lp, pnl, fee)?;
+    apply_lp_pnl(
+        &mut ctx.accounts.lp,
+        pnl,
+        fee,
+        ctx.accounts.config.staker_cap,
+    )?;
     let free = ctx
         .accounts
         .vault
@@ -1200,6 +1257,80 @@ fn settle_open_position(
     }
     emit_lp(&ctx.accounts.lp);
     Ok(())
+}
+
+#[cfg(test)]
+mod economic_regression_tests {
+    use super::*;
+
+    fn lp(balance: i128, queue_owed: u64, total_staked: u64) -> LpState {
+        LpState {
+            balance,
+            high_watermark: balance.max(0) as u64,
+            cumulative_losses: 0,
+            fees_stakers: 0,
+            fees_treasury: 0,
+            queue_head: 0,
+            queue_tail: 0,
+            queue_owed,
+            reward_per_token_e12: 0,
+            total_staked,
+            loser_mint: Pubkey::default(),
+            bump: 0,
+        }
+    }
+
+    #[test]
+    fn lp_never_receives_more_than_margin_on_extreme_loss() {
+        let margin = 100_000_000;
+        let pnl = cap_loss_to_margin(-1_000_000_000, margin).unwrap();
+        let mut state = lp(0, 0, 0);
+        apply_lp_pnl(&mut state, pnl, 0, u64::MAX).unwrap();
+        assert_eq!(state.balance, i128::from(margin));
+        assert_eq!(state.cumulative_losses, margin);
+    }
+
+    #[test]
+    fn liquidations_are_for_open_markets_only() {
+        assert!(market_allows_liquidation(MarketStatus::Open));
+        assert!(!market_allows_liquidation(MarketStatus::Halted));
+        assert!(!market_allows_liquidation(MarketStatus::Expired));
+        assert!(!market_allows_liquidation(MarketStatus::Settled));
+        assert!(!market_allows_liquidation(MarketStatus::Invalid));
+    }
+
+    #[test]
+    fn surplus_moves_to_staker_reserve_only_after_queue_clears() {
+        let mut state = lp(150_000_000, 25_000_000, 10_000_000);
+        assert_eq!(
+            distribute_staker_surplus(&mut state, 100_000_000).unwrap(),
+            0
+        );
+        assert_eq!(state.balance, 150_000_000);
+        state.queue_owed = 0;
+        assert_eq!(
+            distribute_staker_surplus(&mut state, 100_000_000).unwrap(),
+            50_000_000
+        );
+        assert_eq!(state.balance, 100_000_000);
+        assert_eq!(state.fees_stakers, 50_000_000);
+        assert_eq!(state.reward_per_token_e12, 5 * REWARD_SCALE);
+    }
+
+    #[test]
+    fn fee_accumulator_does_not_advance_while_queue_is_outstanding() {
+        let mut state = lp(0, 1, 10_000_000);
+        add_fee(&mut state, 2_000_000).unwrap();
+        assert_eq!(state.fees_stakers, 1_000_000);
+        assert_eq!(state.fees_treasury, 1_000_000);
+        assert_eq!(state.reward_per_token_e12, 0);
+
+        state.queue_owed = 0;
+        add_fee(&mut state, 2_000_000).unwrap();
+        assert_eq!(state.fees_stakers, 2_000_000);
+        assert_eq!(state.fees_treasury, 2_000_000);
+        assert_eq!(state.reward_per_token_e12, REWARD_SCALE / 10);
+    }
 }
 
 fn pay_or_queue_settlement(
