@@ -1,13 +1,15 @@
 "use client";
 
 import type { IndexedEvent } from "@wick/shared";
-import { useEffect, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 import { backendConfigured, backendUrl, getFeed, parseIndexedEvent } from "@/lib/api";
 import { mergeIndexedEvents } from "@/lib/feed";
 
 export interface FeedState { events: IndexedEvent[]; connected: boolean; loading: boolean; error?: string }
 
-export function useFeed(): FeedState {
+const FeedContext = createContext<FeedState | undefined>(undefined);
+
+function useFeedSource(): FeedState {
   const configured = backendConfigured();
   const [events, setEvents] = useState<IndexedEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -53,4 +55,14 @@ export function useFeed(): FeedState {
     return () => { controller.abort(); source?.close(); };
   }, [configured]);
   return { events, connected, loading, ...(error === undefined ? {} : { error }) };
+}
+
+export function FeedProvider({ children }: { children: ReactNode }) {
+  return createElement(FeedContext.Provider, { value: useFeedSource() }, children);
+}
+
+export function useFeed(): FeedState {
+  const context = useContext(FeedContext);
+  if (!context) throw new Error("FeedProvider is missing");
+  return context;
 }

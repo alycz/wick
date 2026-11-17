@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PoolChart } from "@/components/line-chart";
+import { useFeed } from "@/hooks/use-feed";
 import { useWickActions } from "@/hooks/use-wick-actions";
 import { backendConfigured, getLpHistory, type LpPoint } from "@/lib/api";
+import { latestIndexerEventKey } from "@/lib/feed";
 import { compactAddress, dollars, e6 } from "@/lib/format";
+
+const POOL_EVENTS = new Set(["LpUpdated", "Staked", "Unstaked", "RewardsClaimed", "ClaimPaid"]);
 
 export default function PoolPage() {
   const [history, setHistory] = useState<LpPoint[]>([]);
@@ -12,23 +16,28 @@ export default function PoolPage() {
   const [amount, setAmount] = useState(100);
   const [busy, setBusy] = useState<string>();
   const [signature, setSignature] = useState<string>();
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const actions = useWickActions();
+  const feed = useFeed();
   const backendReady = backendConfigured();
+  const refreshKey = latestIndexerEventKey(feed.events, POOL_EVENTS);
   useEffect(() => {
     const controller = new AbortController();
     if (!backendReady) {
       setError("Backend is not configured. No pool data can be verified.");
       return () => controller.abort();
     }
-    void getLpHistory(controller.signal).then(setHistory).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
+    void getLpHistory(controller.signal)
+      .then((nextHistory) => { setHistory(nextHistory); setError(undefined); })
+      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => controller.abort();
-  }, [backendReady]);
+  }, [backendReady, refreshKey, refreshNonce]);
   const latest = history.at(-1);
   const metrics = useMemo(() => latest ? ({ balance: e6(latest.balanceE6), queue: e6(latest.queueOwedE6), fees: e6(latest.feesE6) }) : undefined, [latest]);
   const action = async (name: string, operation: () => Promise<string>) => {
     if (!actions.client) { setError(actions.error ?? "Staking is not configured."); return; }
     setBusy(name); setError(undefined); setSignature(undefined);
-    try { setSignature(await operation()); }
+    try { setSignature(await operation()); setRefreshNonce((value) => value + 1); }
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(undefined); }
   };

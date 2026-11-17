@@ -4,6 +4,7 @@ import "./globals.css";
 import { BRAND } from "@wick/shared";
 import { Providers } from "@/components/providers";
 import { Shell } from "@/components/shell";
+import { FeedProvider } from "@/hooks/use-feed";
 
 export const metadata: Metadata = {
   title: `${BRAND.name} — ${BRAND.tagline}`,
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><Providers><Shell>{children}</Shell></Providers></body></html>;
+  return <html lang="en"><body><Providers><FeedProvider><Shell>{children}</Shell></FeedProvider></Providers></body></html>;
 }

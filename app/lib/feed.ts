@@ -25,3 +25,8 @@ export function mergeIndexedEvents(
       || left.signature.localeCompare(right.signature))
     .slice(0, 50);
 }
+
+export function latestIndexerEventKey(events: readonly IndexedEvent[], names: ReadonlySet<string>): string {
+  const event = events.find((candidate) => names.has(candidate.name));
+  return event ? eventKey(event) : "";
+}
