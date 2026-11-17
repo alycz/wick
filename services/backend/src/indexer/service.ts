@@ -25,9 +25,12 @@ export class IndexerService {
   private readonly programId?: PublicKey;
   private readonly reconciler?: GapReconciler;
   private readonly inboxRetryIntervalMs: number;
-  private inboxTimer?: ReturnType<typeof setInterval>;
+  private inboxTimer: ReturnType<typeof setInterval> | undefined;
+  private inboxImmediate: ReturnType<typeof setImmediate> | undefined;
+  private inboxProcessing: Promise<number> | undefined;
+  private closePromise?: Promise<void>;
   private started = false;
-  private processingInbox = false;
+  private closing = false;
 
   constructor(options: IndexerServiceOptions) {
     this.webhookSecret = options.webhookSecret;
@@ -50,10 +53,10 @@ export class IndexerService {
   }
 
   async start(): Promise<void> {
-    if (this.started) return;
+    if (this.started || this.closing) return;
     this.started = true;
     await this.processPendingDeliveries();
-    this.inboxTimer = setInterval(() => { void this.processPendingDeliveries(); }, this.inboxRetryIntervalMs);
+    this.inboxTimer = setInterval(() => { this.schedulePendingDeliveries(); }, this.inboxRetryIntervalMs);
     this.inboxTimer.unref();
     if (!this.connection || !this.programId) {
       this.logger.warn({}, "indexer chain reconciliation disabled because PROGRAM_ID is not configured");
@@ -77,34 +80,76 @@ export class IndexerService {
     };
   }
 
-  async processPendingDeliveries(): Promise<number> {
-    if (this.processingInbox) return 0;
-    this.processingInbox = true;
-    let inserted = 0;
-    try {
-      for (const item of this.store.pendingStreamDeliveries()) {
-        this.store.beginStreamDelivery(item.deliveryId);
-        try {
-          const count = this.store.processTransactions(item.delivery.matchedTransactions, "quicknode_stream");
-          inserted += count;
-          this.store.completeStreamDelivery(item.deliveryId);
-          this.logger.info({ deliveryId: item.deliveryId, transactions: item.delivery.matchedTransactions.length, events: count }, "processed durable QuickNode Streams delivery");
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          this.store.failStreamDelivery(item.deliveryId, message);
-          this.logger.error({ deliveryId: item.deliveryId, error: message }, "failed to process durable QuickNode Streams delivery; retained for retry");
-        }
-      }
-      return inserted;
-    } finally {
-      this.processingInbox = false;
-    }
+  schedulePendingDeliveries(): void {
+    if (this.closing || this.inboxImmediate) return;
+    this.inboxImmediate = setImmediate(() => {
+      this.inboxImmediate = undefined;
+      if (this.closing) return;
+      void this.processPendingDeliveries().catch((error: unknown) => {
+        this.logger.error(
+          { error: error instanceof Error ? error.message : String(error) },
+          "failed to process durable QuickNode Streams inbox",
+        );
+      });
+    });
+    this.inboxImmediate.unref();
   }
 
-  async close(): Promise<void> {
+  processPendingDeliveries(): Promise<number> {
+    if (this.closing) return Promise.resolve(0);
+    if (this.inboxProcessing) return this.inboxProcessing;
+    const processing = this.processPendingDeliveriesNow().finally(() => {
+      if (this.inboxProcessing === processing) this.inboxProcessing = undefined;
+    });
+    this.inboxProcessing = processing;
+    return processing;
+  }
+
+  private async processPendingDeliveriesNow(): Promise<number> {
+    let inserted = 0;
+    for (const item of this.store.pendingStreamDeliveries()) {
+      this.store.beginStreamDelivery(item.deliveryId);
+      try {
+        const count = this.store.processTransactions(item.delivery.matchedTransactions, "quicknode_stream");
+        inserted += count;
+        this.store.completeStreamDelivery(item.deliveryId);
+        this.logger.info({ deliveryId: item.deliveryId, transactions: item.delivery.matchedTransactions.length, events: count }, "processed durable QuickNode Streams delivery");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.store.failStreamDelivery(item.deliveryId, message);
+        this.logger.error({ deliveryId: item.deliveryId, error: message }, "failed to process durable QuickNode Streams delivery; retained for retry");
+      }
+    }
+    return inserted;
+  }
+
+  close(): Promise<void> {
+    this.closePromise ??= this.drainAndClose();
+    return this.closePromise;
+  }
+
+  private async drainAndClose(): Promise<void> {
+    this.closing = true;
     if (this.inboxTimer) clearInterval(this.inboxTimer);
+    this.inboxTimer = undefined;
+    const deliveryWasScheduled = this.inboxImmediate !== undefined;
+    if (this.inboxImmediate) clearImmediate(this.inboxImmediate);
+    this.inboxImmediate = undefined;
     this.reconciler?.stop();
-    this.store.database.pragma("wal_checkpoint(TRUNCATE)");
-    this.store.database.close();
+    try {
+      if (this.inboxProcessing) await this.inboxProcessing;
+      if (deliveryWasScheduled) await this.processPendingDeliveriesNow();
+    } catch (error) {
+      this.logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        "failed to drain durable QuickNode Streams inbox during shutdown",
+      );
+    } finally {
+      try {
+        this.store.database.pragma("wal_checkpoint(TRUNCATE)");
+      } finally {
+        this.store.database.close();
+      }
+    }
   }
 }

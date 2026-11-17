@@ -1,4 +1,4 @@
-import { validateQuickNodeFilterEvidence } from "./quicknode-evidence.js";
+import { validateQuickNodeActiveStreamEvidence, validateQuickNodeFilterEvidence } from "./quicknode-evidence.js";
 
 export interface DeploymentInputs {
   commands: ReadonlySet<string>;
@@ -8,6 +8,8 @@ export interface DeploymentInputs {
   idlInstructionCount: number;
   backendChainAdapterConfigured: boolean;
   quicknodeFilterEvidence: unknown;
+  quicknodeActiveStreamEvidence: unknown;
+  expectedStreamFilterSha256?: string;
 }
 
 export interface DeploymentTargetCheck {
@@ -68,6 +70,18 @@ export function evaluateDeploymentReadiness(input: DeploymentInputs): Deployment
       ...(input.environment.STREAMS_TEST_BLOCK?.trim() ? { block: input.environment.STREAMS_TEST_BLOCK.trim() } : {}),
     })
     : ["saved verified QuickNode filter-test evidence is missing"];
+  const streamId = input.environment.QUICKNODE_STREAM_ID?.trim();
+  const destinationUrl = hasBackendUrl
+    ? `${(input.environment.NEXT_PUBLIC_BACKEND_URL ?? input.environment.BACKEND_URL)!.trim().replace(/\/$/u, "")}/streams/webhook`
+    : undefined;
+  const quicknodeActiveStreamBlockers = input.files.has("services/backend/fixtures/quicknode-stream-active.json")
+    ? validateQuickNodeActiveStreamEvidence(input.quicknodeActiveStreamEvidence, {
+      ...(streamId ? { streamId } : {}),
+      ...(input.environment.PROGRAM_ID?.trim() ? { programId: input.environment.PROGRAM_ID.trim() } : {}),
+      ...(destinationUrl ? { destinationUrl } : {}),
+      ...(input.expectedStreamFilterSha256 ? { filterSha256: input.expectedStreamFilterSha256 } : {}),
+    })
+    : ["saved verified QuickNode active-Stream evidence is missing"];
   const program = target([
     versionBlocker(input, "anchor", "0.31.1", "Anchor CLI"),
     versionBlocker(input, "solana", "2.2.20", "Solana CLI"),
@@ -118,7 +132,9 @@ export function evaluateDeploymentReadiness(input: DeploymentInputs): Deployment
     !hasBackendUrl && "public HTTPS backend URL is missing",
     !present(input.environment, "STREAMS_WEBHOOK_SECRET") && "STREAMS_WEBHOOK_SECRET is missing",
     !present(input.environment, "STREAMS_TEST_BLOCK") && "verified devnet program transaction block is missing",
+    !streamId && "QUICKNODE_STREAM_ID is missing",
     ...quicknodeEvidenceBlockers,
+    ...quicknodeActiveStreamBlockers,
   ]);
   return {
     program,

@@ -31,9 +31,9 @@ const lpPointSchema = z.object({
   feesE6: z.union([z.string(), z.number()]).transform(String), signature: z.string(),
 });
 
-const eventSchema = z.object({
-  signature: z.string(), eventIndex: z.number(), slot: z.number(), blockTime: z.number(),
-  name: z.string(), data: z.record(z.unknown()), provenance: z.enum(["quicknode_stream", "rpc_reconcile"]),
+export const indexedEventSchema = z.object({
+  signature: z.string().min(1), eventIndex: z.number().int().nonnegative(), slot: z.number().int().nonnegative(), blockTime: z.number().int().nonnegative(),
+  name: z.string().min(1), data: z.record(z.unknown()), provenance: z.enum(["quicknode_stream", "rpc_reconcile"]),
 });
 
 const healthSchema = z.object({
@@ -77,8 +77,9 @@ export async function getLpHistory(signal?: AbortSignal): Promise<LpPoint[]> {
   return z.array(lpPointSchema).parse(await json("/lp/history", signal));
 }
 export async function getFeed(signal?: AbortSignal): Promise<IndexedEvent[]> {
-  return z.array(eventSchema).parse(await json("/feed?limit=50", signal));
+  return z.array(indexedEventSchema).parse(await json("/feed?limit=50", signal));
 }
+export function parseIndexedEvent(value: unknown): IndexedEvent { return indexedEventSchema.parse(value); }
 export async function getHealth(signal?: AbortSignal): Promise<HealthView> {
   return healthSchema.parse(await json("/health", signal));
 }

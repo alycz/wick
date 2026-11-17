@@ -1,17 +1,20 @@
 import { Connection, PublicKey } from "@solana/web3.js";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { isIP } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   QUICKNODE_DATASET,
   QUICKNODE_NETWORK,
+  QUICKNODE_STREAM_EXTERNAL_ID,
   type QuickNodeFilterEvidence,
   type RpcTransactionEvidence,
+  verifyActiveStreamConfig,
   verifyFilterTestResult,
 } from "./lib/quicknode-evidence.js";
 
 const STREAMS_API = "https://api.quicknode.com/streams/rest/v1";
-const EXTERNAL_ID = "wick-solana-devnet-program-events-v1";
 
 export interface StreamEnvironment {
   apiKey: string;
@@ -28,17 +31,45 @@ function required(environment: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
+function isPublicHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+  if (normalized === "localhost" || normalized.endsWith(".localhost") || normalized.endsWith(".local")) return false;
+  const ipVersion = isIP(normalized);
+  if (ipVersion === 4) {
+    const [a, b] = normalized.split(".").map(Number);
+    if (a === undefined || b === undefined) return false;
+    return !(a === 0 || a === 10 || a === 127 || (a === 169 && b === 254)
+      || (a === 100 && b >= 64 && b <= 127) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && (b === 0 || b === 168)) || (a === 198 && (b === 18 || b === 19))
+      || a >= 224);
+  }
+  if (ipVersion === 6) {
+    if (normalized.startsWith("::ffff:")) return isPublicHostname(normalized.slice("::ffff:".length));
+    return normalized !== "::" && normalized !== "::1" && !normalized.startsWith("fc") && !normalized.startsWith("fd")
+      && !normalized.startsWith("fe8") && !normalized.startsWith("fe9")
+      && !normalized.startsWith("fea") && !normalized.startsWith("feb") && !normalized.startsWith("2001:db8");
+  }
+  return normalized.includes(".");
+}
+
+export function requirePublicBackendOrigin(value: string): string {
+  const parsed = new URL(value);
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.pathname !== "/"
+    || parsed.search || parsed.hash || !isPublicHostname(parsed.hostname)) {
+    throw new Error("The Streams webhook backend must be a public origin-only HTTPS URL");
+  }
+  return parsed.origin;
+}
+
 export function readEnvironment(environment: NodeJS.ProcessEnv = process.env): StreamEnvironment {
   const programId = required(environment, "PROGRAM_ID");
   new PublicKey(programId);
   const backendUrl = (environment.NEXT_PUBLIC_BACKEND_URL ?? environment.BACKEND_URL)?.trim();
   if (!backendUrl) throw new Error("NEXT_PUBLIC_BACKEND_URL or BACKEND_URL is required");
-  const parsedBackend = new URL(backendUrl);
-  if (parsedBackend.protocol !== "https:") throw new Error("The Streams webhook backend must use HTTPS");
   return {
     apiKey: required(environment, "QUICKNODE_API_KEY"),
     programId,
-    backendUrl: parsedBackend.toString().replace(/\/$/, ""),
+    backendUrl: requirePublicBackendOrigin(backendUrl),
     webhookSecret: required(environment, "STREAMS_WEBHOOK_SECRET"),
     rpcUrl: required(environment, "QUICKNODE_RPC_URL"),
     ...(environment.STREAMS_TEST_BLOCK?.trim() ? { testBlock: environment.STREAMS_TEST_BLOCK.trim() } : {}),
@@ -143,6 +174,8 @@ export async function createStream(options: { testOnly?: boolean } = {}): Promis
   const filterSource = await readFile(resolve(root, "streams/filter.js"), "utf8");
   const filter = substituteProgramId(filterSource, environment.programId);
   const filterFunction = Buffer.from(filter).toString("base64");
+  const filterSha256 = createHash("sha256").update(filterFunction).digest("hex");
+  const destinationUrl = `${environment.backendUrl}/streams/webhook`;
   const block = environment.testBlock ?? await findRecentProgramBlock(environment.rpcUrl, environment.programId);
   const connection = new Connection(environment.rpcUrl, "confirmed");
 
@@ -168,7 +201,7 @@ export async function createStream(options: { testOnly?: boolean } = {}): Promis
 
   const result = await request(environment.apiKey, "/streams", {
     name: "wick-solana-devnet",
-    external_id: EXTERNAL_ID,
+    external_id: QUICKNODE_STREAM_EXTERNAL_ID,
     network: QUICKNODE_NETWORK,
     dataset: QUICKNODE_DATASET,
     region: "usa_east",
@@ -176,7 +209,7 @@ export async function createStream(options: { testOnly?: boolean } = {}): Promis
     elastic_batch_enabled: true,
     destination: "webhook",
     destination_attributes: {
-      url: `${environment.backendUrl}/streams/webhook`,
+      url: destinationUrl,
       compression: "none",
       headers: { "Content-Type": "application/json", "x-wick-stream-secret": environment.webhookSecret },
       max_retry: 5,
@@ -190,10 +223,20 @@ export async function createStream(options: { testOnly?: boolean } = {}): Promis
     keep_distance_from_tip: 0,
   });
   const created = requireStreamIdentity(result);
-  const active = created.status === "active"
-    ? result as Record<string, unknown>
-    : await waitForActiveStream(created.id, () => request(environment.apiKey, `/streams/${created.id}`));
-  if (active.status !== "active") throw new Error(`QuickNode Stream ${created.id} is not active`);
+  const active = await waitForActiveStream(created.id, () => request(environment.apiKey, `/streams/${created.id}`));
+  const activeEvidence = verifyActiveStreamConfig({
+    providerStream: active,
+    streamId: created.id,
+    programId: environment.programId,
+    destinationUrl,
+    filterFunction,
+    filterSha256,
+  });
+  await writeFile(
+    resolve(root, "services/backend/fixtures/quicknode-stream-active.json"),
+    `${JSON.stringify(activeEvidence, null, 2)}\n`,
+    "utf8",
+  );
   console.log(`QuickNode Stream ${created.id} verified active`);
 }
 

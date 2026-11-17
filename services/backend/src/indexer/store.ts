@@ -6,6 +6,10 @@ import { WickEventDecoder } from "./decoder.js";
 
 const text = (value: unknown): string => String(value ?? "");
 const number = (value: unknown): number => Number(value ?? 0);
+const bytes32Hex = (value: unknown): string => Array.isArray(value) && value.length === 32
+  && value.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+  ? Buffer.from(value).toString("hex")
+  : text(value);
 
 export interface ChainPositionRow {
   address: string; owner: string; market: string; side: string; marginE6: string; leverage: number;
@@ -177,7 +181,8 @@ export class IndexerStore {
           VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?) ON CONFLICT(address) DO UPDATE SET
           symbol_hash=excluded.symbol_hash, kind=excluded.kind, strike_usd_e6=excluded.strike_usd_e6,
           open_ts=excluded.open_ts, expiry_ts=excluded.expiry_ts, status='open', updated_block_time=excluded.updated_block_time,
-          signature=excluded.signature`).run(text(data.market), text(data.symbolHash), text(data.kind), text(data.strikeUsdE6), number(data.openTs), number(data.expiryTs), event.blockTime, event.signature);
+          signature=excluded.signature`).run(text(data.market), bytes32Hex(data.symbolHash), text(data.kind), text(data.strikeUsdE6), number(data.openTs), number(data.expiryTs), event.blockTime, event.signature);
+        this.replayLaterMarketTerminal(event);
         break;
       case "MarketSettled":
         this.database.prepare("UPDATE markets SET status='settled', outcome=?, settlement_value_e6=?, updated_block_time=?, signature=? WHERE address=?")
@@ -197,6 +202,7 @@ export class IndexerStore {
           opened_block_time=excluded.opened_block_time, updated_block_time=excluded.updated_block_time,
           signature=excluded.signature`)
           .run(text(data.position), text(data.owner), text(data.market), text(data.side), text(data.margin), number(data.leverage), number(data.entryE6), text(data.contractsE6), number(data.liqMarkE6), event.blockTime, event.blockTime, event.signature);
+        this.replayLaterPositionTerminal(event);
         break;
       case "PositionClosed":
         this.updatePosition(event, "closed", data.pnlE6, data.paidE6);
@@ -234,6 +240,39 @@ export class IndexerStore {
   private updatePosition(event: StoredEvent, status: string, pnl: unknown, paid: unknown): void {
     this.database.prepare(`UPDATE positions SET status=?, realized_pnl_e6=?, paid_e6=?, updated_block_time=?, signature=? WHERE address=?`)
       .run(status, text(pnl), text(paid), event.blockTime, event.signature, text(event.data.position));
+  }
+
+  private replayLaterMarketTerminal(created: StoredEvent): void {
+    const terminal = this.latestLaterEvent(created, ["MarketSettled", "MarketVoided"], "market", text(created.data.market));
+    if (!terminal) return;
+    if (terminal.name === "MarketSettled") {
+      this.database.prepare("UPDATE markets SET status='settled', outcome=?, settlement_value_e6=?, updated_block_time=?, signature=? WHERE address=?")
+        .run(text(terminal.data.outcome), text(terminal.data.settlementValueE6), terminal.blockTime, terminal.signature, text(terminal.data.market));
+    } else {
+      this.database.prepare("UPDATE markets SET status='invalid', outcome='none', updated_block_time=?, signature=? WHERE address=?")
+        .run(terminal.blockTime, terminal.signature, text(terminal.data.market));
+    }
+  }
+
+  private replayLaterPositionTerminal(opened: StoredEvent): void {
+    const terminal = this.latestLaterEvent(opened, ["PositionClosed", "PositionLiquidated", "PositionSettled"], "position", text(opened.data.position));
+    if (!terminal) return;
+    if (terminal.name === "PositionClosed") this.updatePosition(terminal, "closed", terminal.data.pnlE6, terminal.data.paidE6);
+    else if (terminal.name === "PositionLiquidated") this.updatePosition(terminal, "liquidated", `-${text(terminal.data.marginE6)}`, "0");
+    else this.updatePosition(terminal, "settled", terminal.data.pnlE6, terminal.data.paidE6);
+  }
+
+  private latestLaterEvent(origin: StoredEvent, names: readonly string[], addressField: string, address: string): StoredEvent | undefined {
+    const placeholders = names.map(() => "?").join(", ");
+    const rows = this.database.prepare(`SELECT signature, event_index AS eventIndex, slot, block_time AS blockTime,
+      name, data, provenance FROM events WHERE name IN (${placeholders})
+      AND (slot > ? OR (slot = ? AND event_index > ?)) ORDER BY slot DESC, event_index DESC`)
+      .all(...names, origin.slot, origin.slot, origin.eventIndex) as Array<Omit<StoredEvent, "data"> & { data: string }>;
+    for (const row of rows) {
+      const data = JSON.parse(row.data) as Record<string, unknown>;
+      if (text(data[addressField]) === address) return { ...row, data };
+    }
+    return undefined;
   }
 
   private addFees(value: unknown): void {

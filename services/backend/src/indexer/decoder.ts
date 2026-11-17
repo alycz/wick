@@ -73,7 +73,7 @@ function normalize(value: unknown): unknown {
     if ("toString" in value && value.constructor?.name === "BN") return value.toString();
     if (Array.isArray(value)) return value.map(normalize);
     const entries = Object.entries(value);
-    if (entries.length === 1 && isEmptyVariant(entries[0]![1])) return camelCase(entries[0]![0]);
+    if (entries.length === 1 && isEmptyVariant(entries[0]![1])) return lowerSnakeCase(entries[0]![0]);
     return Object.fromEntries(entries.map(([key, item]) => [camelCase(key), normalize(item)]));
   }
   return value;
@@ -81,6 +81,13 @@ function normalize(value: unknown): unknown {
 
 function camelCase(value: string): string {
   return value.replace(/_([a-z0-9])/gu, (_, character: string) => character.toUpperCase());
+}
+
+function lowerSnakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .replace(/[\s-]+/gu, "_")
+    .toLowerCase();
 }
 
 function isEmptyVariant(value: unknown): boolean {

@@ -1,18 +1,12 @@
 import { GeminiClient, GeminiQuoteStream } from "@wick/gemini";
 import { AutoVolSource, DeribitVolSource, DeriveVolSource, RealizedVolSource } from "@wick/vol";
-import pino from "pino";
 import { createCollectorWorkerFromEnvironment } from "./collector/service.js";
 import { IndexerService, registerIndexerRoutes } from "./indexer/index.js";
+import { createBackendLogger } from "./logging.js";
 import { createChainPort, PricerEngine } from "./pricer/index.js";
 import { buildServer } from "./server.js";
 
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  redact: {
-    paths: ["req.headers.authorization", "req.headers['x-wick-stream-secret']", "*.token", "*.secret", "*.webhookSecret", "*.keypair", "*.privateKey"],
-    censor: "[REDACTED]",
-  },
-});
+const logger = createBackendLogger();
 
 const collector = await createCollectorWorkerFromEnvironment({ environment: process.env, logger });
 if (collector) logger.info({}, "Solana collector enabled");

@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { readEnvironment, requireStreamIdentity, verifyAndSaveFilterTestResult, waitForActiveStream } from "../create-stream.js";
+import {
+  readEnvironment,
+  requirePublicBackendOrigin,
+  requireStreamIdentity,
+  verifyAndSaveFilterTestResult,
+  waitForActiveStream,
+} from "../create-stream.js";
+import { verifyActiveStreamConfig } from "../lib/quicknode-evidence.js";
 
 const id = "f6ad6459-b5ad-4183-b370-1c1388e47e83";
 const signature = "1".repeat(88);
@@ -23,6 +30,74 @@ describe("QuickNode Stream terminal verification", () => {
   it("rejects paused or mismatched Streams", async () => {
     await expect(waitForActiveStream(id, async () => ({ id, status: "paused" }))).rejects.toThrow(/paused/);
     await expect(waitForActiveStream(id, async () => ({ id: "00000000-0000-4000-8000-000000000000", status: "active" }))).rejects.toThrow(/did not match/);
+  });
+
+  it("requires a public origin-only HTTPS backend", () => {
+    expect(requirePublicBackendOrigin("https://wick.example/")).toBe("https://wick.example");
+    for (const value of [
+      "http://wick.example", "https://localhost", "https://127.0.0.1", "https://10.0.0.1",
+      "https://100.64.0.1", "https://[::1]", "https://[::ffff:127.0.0.1]",
+      "https://user:pass@wick.example", "https://wick.example/api", "https://wick.example?token=secret",
+    ]) expect(() => requirePublicBackendOrigin(value)).toThrow(/public origin-only HTTPS/);
+  });
+
+  it("verifies the active provider config and returns sanitized evidence", () => {
+    const filterFunction = Buffer.from("function main() {}").toString("base64");
+    const evidence = verifyActiveStreamConfig({
+      providerStream: {
+        id,
+        status: "active",
+        network: "solana-devnet",
+        dataset: "block",
+        external_id: "wick-solana-devnet-program-events-v1",
+        destination: "webhook",
+        destination_attributes: { url: "https://wick.example/streams/webhook", headers: { "x-wick-stream-secret": "never-save" } },
+        filter_function: filterFunction,
+      },
+      streamId: id,
+      programId,
+      destinationUrl: "https://wick.example/streams/webhook",
+      filterFunction,
+      filterSha256: "a".repeat(64),
+      now: () => new Date("2026-11-17T12:00:00.000Z"),
+    });
+    expect(evidence).toEqual({
+      schemaVersion: 1,
+      streamId: id,
+      externalId: "wick-solana-devnet-program-events-v1",
+      status: "active",
+      network: "solana-devnet",
+      dataset: "block",
+      destinationUrl: "https://wick.example/streams/webhook",
+      filterSha256: "a".repeat(64),
+      programId,
+      verifiedAt: "2026-11-17T12:00:00.000Z",
+    });
+    expect(JSON.stringify(evidence)).not.toContain("never-save");
+  });
+
+  it("rejects active Streams whose provider config differs from the reviewed request", () => {
+    const base = {
+      id,
+      status: "active",
+      network: "solana-devnet",
+      dataset: "block",
+      external_id: "wick-solana-devnet-program-events-v1",
+      destination: "webhook",
+      destination_attributes: { url: "https://wick.example/streams/webhook" },
+      filter_function: "expected-filter",
+    };
+    const verify = (providerStream: unknown) => verifyActiveStreamConfig({
+      providerStream,
+      streamId: id,
+      programId,
+      destinationUrl: "https://wick.example/streams/webhook",
+      filterFunction: "expected-filter",
+      filterSha256: "a".repeat(64),
+    });
+    expect(() => verify({ ...base, dataset: "transactions" })).toThrow(/block dataset/);
+    expect(() => verify({ ...base, destination_attributes: { url: "https://other.example/streams/webhook" } })).toThrow(/webhook destination/);
+    expect(() => verify({ ...base, filter_function: "different" })).toThrow(/reviewed Wick filter/);
   });
 });
 

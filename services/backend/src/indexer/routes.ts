@@ -19,7 +19,7 @@ export async function registerIndexerRoutes(server: BackendFastifyInstance, inde
     const delivery = streamsDeliverySchema.safeParse(request.body);
     if (!delivery.success) return reply.code(400).send({ code: "INVALID_STREAMS_PAYLOAD", message: "Invalid QuickNode Streams delivery" });
     const queued = indexer.store.enqueueStreamDelivery(delivery.data);
-    setImmediate(() => { void indexer.processPendingDeliveries(); });
+    indexer.schedulePendingDeliveries();
     return reply.code(200).send({ accepted: true, deliveryId: queued.deliveryId, duplicate: !queued.inserted });
   });
 

@@ -3,6 +3,8 @@ import { evaluateDeploymentReadiness, type DeploymentInputs } from "../lib/deplo
 import { renderIdlModule } from "../sync-idl.js";
 
 const signature = "1".repeat(88);
+const streamId = "f6ad6459-b5ad-4183-b370-1c1388e47e83";
+const filterSha256 = "a".repeat(64);
 
 function completeInput(overrides: Partial<DeploymentInputs> = {}): DeploymentInputs {
   const environment: NodeJS.ProcessEnv = {
@@ -14,7 +16,7 @@ function completeInput(overrides: Partial<DeploymentInputs> = {}): DeploymentInp
     RAILWAY_DEPLOYMENT_STATUS: "SUCCESS", VERCEL_TOKEN: "vercel", VERCEL_PROJECT_ID: "vercel-project",
     VERCEL_ORG_ID: "vercel-org", NEXT_PUBLIC_BACKEND_URL: "https://api.example",
     STREAMS_WEBHOOK_SECRET: "secret", QUICKNODE_API_KEY: "quicknode",
-    QUICKNODE_RPC_URL: "https://rpc.example", STREAMS_TEST_BLOCK: "123",
+    QUICKNODE_RPC_URL: "https://rpc.example", STREAMS_TEST_BLOCK: "123", QUICKNODE_STREAM_ID: streamId,
   };
   return {
     commands: new Set(["anchor", "solana", "rustc", "pnpm", "spl-token", "railway", "vercel"]),
@@ -24,7 +26,8 @@ function completeInput(overrides: Partial<DeploymentInputs> = {}): DeploymentInp
     ]),
     files: new Set([
       "target/deploy/wick-keypair.json", "target/deploy/wick.so", "services/backend/Dockerfile",
-      "services/backend/railway.json", "services/backend/fixtures/quicknode-filter-test.json", "vercel.json",
+      "services/backend/railway.json", "services/backend/fixtures/quicknode-filter-test.json",
+      "services/backend/fixtures/quicknode-stream-active.json", "vercel.json",
     ]),
     environment,
     idlInstructionCount: 1,
@@ -34,6 +37,12 @@ function completeInput(overrides: Partial<DeploymentInputs> = {}): DeploymentInp
       matchedTransaction: { signature, slot: 123 }, verifiedAt: "2026-11-17T12:00:00.000Z",
       testResult: { matchedTransactions: [{ signature, slot: 123 }] },
     },
+    quicknodeActiveStreamEvidence: {
+      schemaVersion: 1, streamId, externalId: "wick-solana-devnet-program-events-v1", status: "active",
+      network: "solana-devnet", dataset: "block", destinationUrl: "https://api.example/streams/webhook",
+      filterSha256, programId: "program", verifiedAt: "2026-11-17T12:00:00.000Z",
+    },
+    expectedStreamFilterSha256: filterSha256,
     ...overrides,
   };
 }
@@ -42,7 +51,7 @@ describe("deployment readiness", () => {
   it("fails closed without credentials, generated artifacts and a chain adapter", () => {
     const result = evaluateDeploymentReadiness({
       commands: new Set(), commandVersions: new Map(), files: new Set(), environment: {}, idlInstructionCount: 0,
-      backendChainAdapterConfigured: false, quicknodeFilterEvidence: undefined,
+      backendChainAdapterConfigured: false, quicknodeFilterEvidence: undefined, quicknodeActiveStreamEvidence: undefined,
     });
     expect(result.allReady).toBe(false);
     expect(result.program.blockers).toContain("generated Anchor IDL is empty");
@@ -79,6 +88,15 @@ describe("deployment readiness", () => {
     const result = evaluateDeploymentReadiness(completeInput({ quicknodeFilterEvidence: { matchedTransactions: [{ signature, slot: 123 }] } }));
     expect(result.quicknodeStream.ready).toBe(false);
     expect(result.quicknodeStream.blockers).toContain("saved QuickNode filter-test evidence has an unsupported schema version");
+  });
+
+  it("requires matching sanitized active-Stream evidence, not only a filter fixture", () => {
+    const input = completeInput({
+      quicknodeActiveStreamEvidence: { ...completeInput().quicknodeActiveStreamEvidence as object, streamId: "00000000-0000-4000-8000-000000000000" },
+    });
+    const result = evaluateDeploymentReadiness(input);
+    expect(result.quicknodeStream.ready).toBe(false);
+    expect(result.quicknodeStream.blockers).toContain("saved QuickNode active-Stream evidence does not match QUICKNODE_STREAM_ID");
   });
 
   it("requires the full ordered deployment evidence before reporting ready", () => {

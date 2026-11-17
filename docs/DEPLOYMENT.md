@@ -15,7 +15,7 @@ Required tooling is Anchor 0.31.1, Solana 2.2.20, SPL Token CLI, and Rust 1.85.1
 5. Run `pnpm create:mint`. It creates or migrates the six-decimal `USDC_TEST_MINT`, mints the remaining amount up to exactly 200 grants (200,000 test USDC) into the treasury ATA, and permanently revokes both mint and freeze authorities in the final provisioning transaction. Confirm the read-back reports `remainingGrants`, `mintAuthorityRevoked: true`, and `freezeAuthorityRevoked: true`. Keep `FAUCET_AUTHORITY_KEYPAIR` only until this succeeds; remove it from deployment environments afterward. Re-running the command verifies the finite inventory and cannot refill it.
 6. Run `pnpm init:config`, then verify config, vault, LP state, keeper, and mint accounts through RPC. A build-time ID is not a deployed-program claim.
 
-Current blocker: Solana, Anchor, and SPL Token CLIs, deploy artifacts, funded keypairs, program ID, mint, and devnet SOL are absent. The build-time ID in `Anchor.toml` is not deployed.
+Current blocker: the pinned Solana, Anchor and SPL Token toolchain, SBF/IDL artifacts and synchronized program keypair are present locally, but the deploy/admin/keeper authorities are unfunded, the test-USDC mint is absent and the program is not deployed. The ID in `Anchor.toml` is a build-time identity only until its executable devnet account is verified.
 
 ## 2. Railway backend
 
@@ -35,7 +35,7 @@ commit; Dockerfile path; `/data` volume mount; public HTTPS domain; and terminal
 evidence only after the connector is authenticated; it never replaces those
 service and deployment checks.
 
-Current blocker: Railway CLI/token/project context are absent, and deployed chain inputs are absent. Railway connector authentication has been verified, but no Wick service was created while source publication remains approval-blocked. No Railway service or domain was created.
+Current blocker: the existing Wick project and wick-backend service are reachable through the authenticated Railway connector, and patch `3e01a998-da05-4e26-9613-4c483e8b6eff` stages public source commit `a5ca18ae8b645b3ca3c6c2ad14f660674e664a7c`, Docker/runtime settings, safe public variables and an unprovisioned 1 GB `/data` volume. The patch remains unapplied because the deployed program/mint, funded keeper, webhook secret, final CORS origin and QuickNode inputs are absent, and the applicable spending cap has not been resolved. There is no deployment or public domain.
 
 ## 3. Vercel frontend
 
@@ -56,7 +56,7 @@ Creating a Stream before a real Wick transaction would spend credits without qua
 
 1. Set `QUICKNODE_API_KEY`, `QUICKNODE_RPC_URL`, `PROGRAM_ID`, `NEXT_PUBLIC_BACKEND_URL`, `STREAMS_WEBHOOK_SECRET`, and the real transaction block as `STREAMS_TEST_BLOCK`.
 2. Run `pnpm create:stream -- --test-only`. It substitutes the deployed program ID, tests the filter against that real block, and resolves the matched signature through `QUICKNODE_RPC_URL`. It saves an evidence envelope only after the RPC transaction is successful, is in that same block, and actually invokes Wick. The readiness gate parses and cross-checks this evidence against `PROGRAM_ID` and `STREAMS_TEST_BLOCK`; file existence alone never passes.
-3. Run `pnpm create:stream` once. Record the returned Stream ID. Confirm it is active, network `solana-devnet`, dataset `block`, filter matches Wick and skips failed transactions, and destination is the authenticated backend webhook.
+3. Run `pnpm create:stream` once. The fixed `external_id` makes provider creation idempotent. The script always reads the created or reused Stream back and refuses to save evidence unless it is active on `solana-devnet`/`block` with the reviewed filter and authenticated backend destination. Set the returned ID as `QUICKNODE_STREAM_ID`; readiness requires that ID plus the matching sanitized `quicknode-stream-active.json`, which never contains destination headers or secrets.
 4. Submit a real program transaction and require it at `/feed` within roughly two seconds. Only then may the README/HANDOFF checklist be marked complete.
 5. One hour later, read QuickNode usage and project burn through Saturday, November 21 at 11:59 PM CST. If projected usage exceeds 8M credits, enable the specification's on-demand pause/resume policy and record the measurement and decision.
 
