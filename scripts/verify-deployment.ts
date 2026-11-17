@@ -10,7 +10,7 @@ interface Health {
   volHealthy: boolean;
 }
 
-interface FeedEvent { blockTime: number }
+interface FeedEvent { blockTime: number; provenance?: string }
 
 const rpcUrl = process.env.PUBLIC_SOLANA_RPC_URL?.trim() || "https://api.devnet.solana.com";
 const programId = new PublicKey(requiredEnv("PROGRAM_ID"));
@@ -35,7 +35,9 @@ if (!health.ok || health.cluster !== "devnet" || !health.chainConfigured || !hea
   throw new Error("Backend health is not fully ready for the devnet lifecycle");
 }
 if (!markets.some((market) => market.duration === "15m" && market.status === "open")) throw new Error("No live BTC 15-minute market is available");
-if (!feed.some((event) => Date.now() - event.blockTime * 1_000 <= 60_000)) throw new Error("QuickNode-backed feed has no event from the last 60 seconds");
+if (!feed.some((event) => event.provenance === "quicknode_stream" && Date.now() - event.blockTime * 1_000 <= 60_000)) {
+  throw new Error("QuickNode-backed feed has no proven Stream event from the last 60 seconds");
+}
 if (!frontend.ok || !(await frontend.text()).includes("Wick")) throw new Error("Frontend is not serving Wick successfully");
 
 console.info(JSON.stringify({

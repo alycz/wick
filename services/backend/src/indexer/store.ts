@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import type { WickDatabase } from "./database.js";
-import type { DecodedProgramEvent, MatchedTransaction, StoredEvent } from "./types.js";
+import type { EventProvenance, MatchedTransaction, StoredEvent, StreamsDelivery } from "./types.js";
 import { WickEventDecoder } from "./decoder.js";
 
 const text = (value: unknown): string => String(value ?? "");
@@ -20,16 +21,20 @@ export class IndexerStore {
   private readonly insertEvent;
   private readonly ingestTransaction;
 
-  constructor(readonly database: WickDatabase, readonly decoder = new WickEventDecoder()) {
+  constructor(readonly database: WickDatabase, readonly decoder = new WickEventDecoder(), readonly programId?: string) {
     this.insertEvent = database.prepare(`INSERT OR IGNORE INTO events
-      (signature, event_index, slot, block_time, name, data) VALUES (?, ?, ?, ?, ?, ?)`);
-    this.ingestTransaction = database.transaction((transaction: MatchedTransaction) => {
-      const decoded = this.decoder.decodeLogs(transaction.logs);
+      (signature, event_index, slot, block_time, name, data, provenance) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    this.ingestTransaction = database.transaction((transaction: MatchedTransaction, provenance: EventProvenance) => {
+      const decoded = this.decoder.decodeLogs(transaction.logs, this.programId);
       const inserted: StoredEvent[] = [];
       for (const [eventIndex, event] of decoded.entries()) {
-        const result = this.insertEvent.run(transaction.signature, eventIndex, transaction.slot, transaction.blockTime, event.name, JSON.stringify(event.data));
-        if (result.changes === 0) continue;
-        const stored: StoredEvent = { ...event, signature: transaction.signature, eventIndex, slot: transaction.slot, blockTime: transaction.blockTime };
+        const result = this.insertEvent.run(transaction.signature, eventIndex, transaction.slot, transaction.blockTime, event.name, JSON.stringify(event.data), provenance);
+        if (result.changes === 0) {
+          if (provenance === "quicknode_stream") this.database.prepare(`UPDATE events SET provenance='quicknode_stream'
+            WHERE signature=? AND event_index=? AND provenance!='quicknode_stream'`).run(transaction.signature, eventIndex);
+          continue;
+        }
+        const stored: StoredEvent = { ...event, signature: transaction.signature, eventIndex, slot: transaction.slot, blockTime: transaction.blockTime, provenance };
         this.applyProjection(stored);
         inserted.push(stored);
       }
@@ -37,14 +42,46 @@ export class IndexerStore {
     });
   }
 
-  processTransactions(transactions: readonly MatchedTransaction[]): number {
+  processTransactions(transactions: readonly MatchedTransaction[], provenance: EventProvenance): number {
     let inserted = 0;
     for (const transaction of transactions) {
-      const events = this.ingestTransaction(transaction);
+      const events = this.ingestTransaction(transaction, provenance);
       inserted += events.length;
       for (const event of events) this.emitter.emit("event", event);
     }
     return inserted;
+  }
+
+  enqueueStreamDelivery(delivery: StreamsDelivery, receivedAt = Date.now()): { deliveryId: string; inserted: boolean } {
+    const payload = JSON.stringify(delivery);
+    const deliveryId = createHash("sha256").update(payload).digest("hex");
+    const result = this.database.prepare(`INSERT OR IGNORE INTO stream_delivery_inbox
+      (delivery_id, payload, received_at) VALUES (?, ?, ?)`).run(deliveryId, payload, receivedAt);
+    return { deliveryId, inserted: result.changes > 0 };
+  }
+
+  pendingStreamDeliveries(limit = 100): Array<{ deliveryId: string; delivery: StreamsDelivery }> {
+    const rows = this.database.prepare(`SELECT delivery_id AS deliveryId, payload FROM stream_delivery_inbox
+      WHERE status IN ('pending', 'processing') ORDER BY received_at ASC LIMIT ?`).all(limit) as Array<{ deliveryId: string; payload: string }>;
+    return rows.map((row) => ({ deliveryId: row.deliveryId, delivery: JSON.parse(row.payload) as StreamsDelivery }));
+  }
+
+  beginStreamDelivery(deliveryId: string): void {
+    this.database.prepare(`UPDATE stream_delivery_inbox SET status='processing', attempts=attempts+1,
+      last_error=NULL WHERE delivery_id=? AND status!='complete'`).run(deliveryId);
+  }
+
+  completeStreamDelivery(deliveryId: string, processedAt = Date.now()): void {
+    this.database.prepare(`UPDATE stream_delivery_inbox SET status='complete', processed_at=?, last_error=NULL
+      WHERE delivery_id=?`).run(processedAt, deliveryId);
+  }
+
+  failStreamDelivery(deliveryId: string, error: string): void {
+    this.database.prepare(`UPDATE stream_delivery_inbox SET status='pending', last_error=? WHERE delivery_id=?`).run(error.slice(0, 2_000), deliveryId);
+  }
+
+  pendingStreamDeliveryCount(): number {
+    return (this.database.prepare("SELECT COUNT(*) AS count FROM stream_delivery_inbox WHERE status!='complete'").get() as { count: number }).count;
   }
 
   onEvent(listener: (event: StoredEvent) => void): () => void {
@@ -61,13 +98,15 @@ export class IndexerStore {
     return row.count === 0;
   }
 
-  lastEventBlockTime(): number | undefined {
-    const row = this.database.prepare("SELECT MAX(block_time) AS blockTime FROM events").get() as { blockTime: number | null };
+  lastEventBlockTime(provenance?: EventProvenance): number | undefined {
+    const row = (provenance
+      ? this.database.prepare("SELECT MAX(block_time) AS blockTime FROM events WHERE provenance=?").get(provenance)
+      : this.database.prepare("SELECT MAX(block_time) AS blockTime FROM events").get()) as { blockTime: number | null };
     return row.blockTime ?? undefined;
   }
 
   feed(limit: number): StoredEvent[] {
-    return this.database.prepare(`SELECT signature, event_index AS eventIndex, slot, block_time AS blockTime, name, data
+    return this.database.prepare(`SELECT signature, event_index AS eventIndex, slot, block_time AS blockTime, name, data, provenance
       FROM events ORDER BY block_time DESC, slot DESC, event_index DESC LIMIT ?`).all(limit).map((row) => {
         const value = row as Omit<StoredEvent, "data"> & { data: string };
         return { ...value, data: JSON.parse(value.data) as Record<string, unknown> };

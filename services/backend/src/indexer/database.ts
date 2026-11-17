@@ -77,6 +77,23 @@ const MIGRATIONS = [
     value TEXT NOT NULL
   );
   `,
+  `
+  ALTER TABLE events ADD COLUMN provenance TEXT NOT NULL DEFAULT 'rpc_reconcile'
+    CHECK (provenance IN ('quicknode_stream', 'rpc_reconcile'));
+  CREATE INDEX IF NOT EXISTS events_provenance_time_idx ON events(provenance, block_time DESC);
+
+  CREATE TABLE IF NOT EXISTS stream_delivery_inbox (
+    delivery_id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'complete')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    received_at INTEGER NOT NULL,
+    processed_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS stream_delivery_inbox_status_idx
+    ON stream_delivery_inbox(status, received_at ASC);
+  `,
 ];
 
 export type WickDatabase = Database.Database;
@@ -85,7 +102,7 @@ export function openWickDatabase(path: string): WickDatabase {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const database = new Database(path);
   database.pragma("journal_mode = WAL");
-  database.pragma("synchronous = NORMAL");
+  database.pragma("synchronous = FULL");
   database.pragma("foreign_keys = ON");
   database.pragma("busy_timeout = 5000");
   database.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)");

@@ -14,6 +14,8 @@ export const streamsDeliverySchema = z.object({
 export type MatchedTransaction = z.infer<typeof matchedTransactionSchema>;
 export type StreamsDelivery = z.infer<typeof streamsDeliverySchema>;
 
+export type EventProvenance = "quicknode_stream" | "rpc_reconcile";
+
 export interface DecodedProgramEvent {
   name: string;
   data: Record<string, unknown>;
@@ -24,6 +26,7 @@ export interface StoredEvent extends DecodedProgramEvent {
   eventIndex: number;
   slot: number;
   blockTime: number;
+  provenance: EventProvenance;
 }
 
 export interface IndexerLogger {

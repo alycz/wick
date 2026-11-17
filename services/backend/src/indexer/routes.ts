@@ -18,15 +18,9 @@ export async function registerIndexerRoutes(server: BackendFastifyInstance, inde
     }
     const delivery = streamsDeliverySchema.safeParse(request.body);
     if (!delivery.success) return reply.code(400).send({ code: "INVALID_STREAMS_PAYLOAD", message: "Invalid QuickNode Streams delivery" });
-    setImmediate(() => {
-      try {
-        const inserted = indexer.store.processTransactions(delivery.data.matchedTransactions);
-        indexer.logger.info({ transactions: delivery.data.matchedTransactions.length, events: inserted }, "processed QuickNode Streams delivery");
-      } catch (error) {
-        indexer.logger.error({ error: error instanceof Error ? error.message : String(error) }, "failed to process accepted QuickNode Streams delivery");
-      }
-    });
-    return reply.code(200).send({ accepted: true });
+    const queued = indexer.store.enqueueStreamDelivery(delivery.data);
+    setImmediate(() => { void indexer.processPendingDeliveries(); });
+    return reply.code(200).send({ accepted: true, deliveryId: queued.deliveryId, duplicate: !queued.inserted });
   });
 
   server.get<{ Querystring: { limit?: string } }>("/feed", async (request) => {
