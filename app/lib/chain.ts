@@ -17,9 +17,9 @@ const STAKING_VAULT_SEED = encode("staking_vault");
 
 export interface ChainEnvironment { programId: PublicKey; usdcMint: PublicKey; rpcUrl: string }
 export interface ChainEnvironmentVariables {
-  NEXT_PUBLIC_PROGRAM_ID?: string;
-  NEXT_PUBLIC_USDC_TEST_MINT?: string;
-  NEXT_PUBLIC_RPC_URL?: string;
+  NEXT_PUBLIC_PROGRAM_ID?: string | undefined;
+  NEXT_PUBLIC_USDC_TEST_MINT?: string | undefined;
+  NEXT_PUBLIC_RPC_URL?: string | undefined;
 }
 export interface ProgramMethodBuilder { accounts(accounts: Record<string, PublicKey>): { rpc(options?: { commitment?: Commitment }): Promise<TransactionSignature> } }
 export interface ProgramFacade {
