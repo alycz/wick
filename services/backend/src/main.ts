@@ -2,13 +2,13 @@ import { GeminiClient, GeminiQuoteStream } from "@wick/gemini";
 import { AutoVolSource, DeribitVolSource, DeriveVolSource, RealizedVolSource } from "@wick/vol";
 import pino from "pino";
 import { IndexerService, registerIndexerRoutes } from "./indexer/index.js";
-import { PricerEngine, UnconfiguredChainPort } from "./pricer/index.js";
+import { createChainPort, PricerEngine } from "./pricer/index.js";
 import { buildServer } from "./server.js";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
   redact: {
-    paths: ["req.headers.authorization", "req.headers.x-wick-stream-secret", "*.token", "*.secret", "*.webhookSecret", "*.keypair", "*.privateKey"],
+    paths: ["req.headers.authorization", "req.headers['x-wick-stream-secret']", "*.token", "*.secret", "*.webhookSecret", "*.keypair", "*.privateKey"],
     censor: "[REDACTED]",
   },
 });
@@ -23,11 +23,9 @@ const derive = new DeriveVolSource({ logger: volLogger });
 const realized = new RealizedVolSource();
 const vol = new AutoVolSource({ sources: [deribit, derive, realized], logger: volLogger });
 
-// WP2 could not export a generated deployed IDL or deploy the program because
-// the environment lacks a funded authority/toolchain. Keep chain writes
-// explicitly disabled rather than acknowledging transactions that never ran.
-const chain = new UnconfiguredChainPort();
-logger.warn({ programId: process.env.PROGRAM_ID ?? null }, "Wick Anchor chain adapter unavailable; pricing APIs will run read-only");
+const chain = await createChainPort();
+if (chain.configured()) logger.info({ programId: process.env.PROGRAM_ID }, "Wick Anchor chain adapter verified on Solana devnet");
+else logger.warn({ programId: null }, "Wick Anchor chain adapter unconfigured; pricing APIs will run read-only");
 
 const engine = new PricerEngine({
   gemini,
