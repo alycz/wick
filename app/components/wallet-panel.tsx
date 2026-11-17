@@ -104,21 +104,23 @@ export function WalletPanel() {
   };
 
   return (
-    <div className="wallet-cluster">
+    <div className="chrome-wallet wallet-cluster">
       {wallet.publicKey ? (
-        <div className="demo-wallet" role="status">
-          <span><i /> Demo wallet, devnet only</span>
-          <strong>{compactAddress(wallet.publicKey)}</strong>
-          <button className="text-button" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>
-          <button className="text-button" type="button" onClick={wallet.exportKey}>Export</button>
-          <button className="text-button danger" type="button" onClick={wallet.reset}>Reset</button>
+        <div className="chrome-wallet-demo demo-wallet" role="status">
+          <span className="chrome-wallet-status"><i /> Demo · devnet</span>
+          <strong className="chrome-wallet-address">{compactAddress(wallet.publicKey)}</strong>
+          <div className="chrome-wallet-actions">
+            <button className="chrome-wallet-link text-button" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>
+            <button className="chrome-wallet-link text-button" type="button" onClick={wallet.exportKey}>Export</button>
+            <button className="chrome-wallet-link chrome-wallet-link--danger text-button danger" type="button" onClick={wallet.reset}>Reset</button>
+          </div>
         </div>
       ) : (
-        <><button className="primary-button" type="button" onClick={wallet.create}>Try it now</button>
-        {connected.publicKey && <button className="text-button" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}</>
+        <><button className="chrome-primary primary-button" type="button" onClick={wallet.create}>Demo wallet</button>
+        {connected.publicKey && <button className="chrome-wallet-link text-button" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}</>
       )}
       <WalletMultiButton />
-      {message && <p className="wallet-message" aria-live="polite">{message}</p>}
+      {message && <p className="chrome-wallet-message wallet-message" aria-live="polite">{message}</p>}
     </div>
   );
 }

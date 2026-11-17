@@ -1,0 +1,664 @@
+.account-page,
+.pool-page {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  color: var(--text, #f4f7f8);
+}
+
+.account-page {
+  display: grid;
+  gap: 18px;
+}
+
+.account-hero,
+.pool-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+  border-radius: var(--radius, 16px);
+  background:
+    linear-gradient(122deg, rgba(114, 222, 217, 0.08), transparent 42%),
+    var(--panel, #0b171b);
+}
+
+.account-hero::after,
+.pool-hero::after {
+  position: absolute;
+  right: -110px;
+  bottom: -150px;
+  width: 360px;
+  height: 300px;
+  border-radius: 50%;
+  background: rgba(114, 222, 217, 0.06);
+  filter: blur(24px);
+  content: "";
+  pointer-events: none;
+}
+
+.account-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 30px 34px;
+}
+
+.account-hero h1,
+.pool-hero h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.account-hero > div > p:last-child,
+.pool-hero > p:last-child {
+  max-width: 660px;
+  margin: 0;
+  color: var(--muted, #8a999d);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.account-eyebrow,
+.pool-eyebrow,
+.account-section-kicker,
+.pool-section-heading p {
+  margin: 0;
+  color: var(--aqua, #7cddda);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.account-wallet {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 190px;
+  gap: 7px;
+  padding: 13px 16px;
+  border: 1px solid var(--line-strong, rgba(127, 225, 222, 0.35));
+  border-radius: 11px;
+  background: var(--panel-2, rgba(16, 36, 41, 0.9));
+  text-align: right;
+}
+
+.account-wallet span {
+  color: var(--muted, #8a999d);
+  font-size: 0.67rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-wallet strong {
+  color: var(--aqua, #7cddda);
+  font-size: 0.86rem;
+}
+
+.account-alerts,
+.pool-alerts {
+  display: grid;
+  gap: 8px;
+}
+
+.account-notice,
+.pool-notice {
+  padding: 11px 14px;
+  border: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+  border-radius: 10px;
+  background: var(--panel-2, #102429);
+  color: var(--muted, #a5b0b3);
+  font-size: 0.82rem;
+}
+
+.account-notice-error,
+.pool-notice-error {
+  border-color: color-mix(in srgb, var(--red, #ff6688) 42%, transparent);
+  color: var(--red, #ff6688);
+}
+
+.account-notice-success,
+.pool-notice-success {
+  border-color: color-mix(in srgb, var(--green, #00dda2) 36%, transparent);
+  color: var(--green, #00dda2);
+}
+
+.account-surface,
+.pool-surface {
+  overflow: hidden;
+  border: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+  border-radius: var(--radius, 16px);
+  background:
+    linear-gradient(135deg, rgba(123, 222, 219, 0.035), transparent 55%),
+    var(--panel, #0b171b);
+}
+
+.account-section-heading,
+.pool-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 68px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+}
+
+.account-section-heading h2,
+.pool-section-heading h2 {
+  margin: 3px 0 0;
+  font-size: 1rem;
+  letter-spacing: -0.015em;
+}
+
+.account-section-heading > span,
+.pool-section-heading > span {
+  color: var(--muted, #8a999d);
+  font-size: 0.72rem;
+}
+
+.account-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.account-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  font-size: 0.77rem;
+}
+
+.account-table th {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+  color: var(--muted, #8a999d);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.account-table td {
+  height: 64px;
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line, rgba(127, 225, 222, 0.18)) 70%, transparent);
+  color: color-mix(in srgb, var(--text, #f4f7f8) 78%, var(--muted, #8a999d));
+  white-space: nowrap;
+}
+
+.account-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.account-table tbody tr {
+  transition: background 150ms ease;
+}
+
+.account-table tbody tr:hover {
+  background: color-mix(in srgb, var(--aqua, #7cddda) 4%, transparent);
+}
+
+.account-market {
+  display: grid;
+  min-width: 130px;
+  gap: 4px;
+}
+
+.account-market strong {
+  color: var(--text, #f4f7f8);
+  font-size: 0.78rem;
+}
+
+.account-market span,
+.account-complete {
+  color: var(--muted, #8a999d);
+  font-size: 0.65rem;
+  text-transform: capitalize;
+}
+
+.account-side,
+.account-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.account-side-long,
+.account-side-yes {
+  background: color-mix(in srgb, var(--green, #00dda2) 11%, transparent);
+  color: var(--green, #00dda2);
+}
+
+.account-side-short,
+.account-side-no {
+  background: color-mix(in srgb, var(--red, #ff6688) 11%, transparent);
+  color: var(--red, #ff6688);
+}
+
+.account-status {
+  background: var(--panel-3, #122a30);
+  color: var(--aqua, #7cddda);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.account-pnl {
+  color: var(--muted, #8a999d);
+  font-variant-numeric: tabular-nums;
+}
+
+.account-pnl-positive {
+  color: var(--green, #00dda2);
+}
+
+.account-pnl-negative {
+  color: var(--red, #ff6688);
+}
+
+.account-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.account-button,
+.pool-button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong, rgba(127, 225, 222, 0.35));
+  border-radius: 8px;
+  background: var(--panel-3, #122a30);
+  color: var(--text, #f4f7f8);
+  font: inherit;
+  font-size: 0.71rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.account-button:hover:not(:disabled),
+.pool-button:hover:not(:disabled) {
+  border-color: var(--aqua, #7cddda);
+  color: var(--aqua, #7cddda);
+}
+
+.account-button:focus-visible,
+.pool-button:focus-visible,
+.pool-controls input:focus-visible {
+  outline: 2px solid var(--aqua, #7cddda);
+  outline-offset: 2px;
+}
+
+.account-button:disabled,
+.pool-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.account-button-text {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted, #8a999d);
+}
+
+.account-empty {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  padding: 28px;
+  color: var(--muted, #8a999d);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.account-claims-table {
+  min-width: 660px;
+}
+
+.account-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pool-page {
+  display: grid;
+  gap: 18px;
+}
+
+.pool-hero {
+  min-height: 210px;
+  padding: 40px;
+}
+
+.pool-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.pool-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pool-metric {
+  display: grid;
+  min-height: 128px;
+  align-content: space-between;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+  border-radius: 13px;
+  background:
+    linear-gradient(140deg, rgba(124, 221, 218, 0.08), transparent 58%),
+    var(--panel-2, #102429);
+}
+
+.pool-metric > span,
+.pool-metric small {
+  color: var(--muted, #8a999d);
+  font-size: 0.67rem;
+}
+
+.pool-metric > span {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pool-metric b {
+  color: var(--text, #f4f7f8);
+  font-size: clamp(1.25rem, 2.4vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.pool-metric-token b {
+  color: var(--aqua, #7cddda);
+}
+
+.pool-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.75fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.pool-chart-frame {
+  min-height: 390px;
+  padding: 20px;
+}
+
+.pool-staking {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 28px;
+  border-color: var(--line-strong, rgba(127, 225, 222, 0.35));
+  background:
+    linear-gradient(145deg, rgba(124, 221, 218, 0.13), rgba(124, 221, 218, 0.025) 52%, transparent),
+    var(--panel-2, #102429);
+}
+
+.pool-staking-copy h2 {
+  margin: 7px 0 10px;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  letter-spacing: -0.045em;
+}
+
+.pool-staking-copy > p:last-child {
+  margin: 0;
+  color: var(--muted, #8a999d);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.pool-controls {
+  display: grid;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 36px;
+}
+
+.pool-controls label {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  color: var(--muted, #8a999d);
+  font-size: 0.69rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pool-controls input {
+  width: 100%;
+  height: 58px;
+  padding: 0 82px 0 16px;
+  border: 1px solid var(--line-strong, rgba(127, 225, 222, 0.35));
+  border-radius: 10px;
+  outline: 0;
+  background: color-mix(in srgb, var(--bg, #061014) 72%, transparent);
+  color: var(--text, #f4f7f8);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+
+.pool-controls label small {
+  position: absolute;
+  right: 16px;
+  bottom: 20px;
+  color: var(--aqua, #7cddda);
+  font-size: 0.69rem;
+}
+
+.pool-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pool-button {
+  min-height: 46px;
+}
+
+.pool-button-primary {
+  border-color: var(--aqua, #7cddda);
+  background: var(--aqua, #7cddda);
+  color: var(--bg, #061014);
+}
+
+.pool-button-primary:hover:not(:disabled) {
+  border-color: var(--aqua-strong, #9ff3ef);
+  background: var(--aqua-strong, #9ff3ef);
+  color: var(--bg, #061014);
+}
+
+.pool-button-wide {
+  grid-column: 1 / -1;
+}
+
+.pool-action-state {
+  margin: 0;
+  color: var(--muted, #8a999d);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 980px) {
+  .pool-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pool-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-staking {
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 720px) {
+  .account-page,
+  .pool-page {
+    gap: 12px;
+  }
+
+  .account-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 24px 20px;
+  }
+
+  .account-wallet {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .account-section-heading,
+  .pool-section-heading {
+    min-height: 62px;
+    padding: 12px 16px;
+  }
+
+  .account-table-wrap {
+    overflow: visible;
+  }
+
+  .account-table,
+  .account-table tbody,
+  .account-table tr,
+  .account-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .account-table {
+    min-width: 0;
+  }
+
+  .account-table thead {
+    display: none;
+  }
+
+  .account-table tbody {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .account-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid var(--line, rgba(127, 225, 222, 0.18));
+    border-radius: 11px;
+    background: var(--panel-2, #102429);
+  }
+
+  .account-table td {
+    display: grid;
+    min-height: 57px;
+    height: auto;
+    align-content: center;
+    gap: 5px;
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--line, rgba(127, 225, 222, 0.18)) 65%, transparent);
+    white-space: normal;
+  }
+
+  .account-table td::before {
+    color: var(--muted, #8a999d);
+    content: attr(data-label);
+    font-size: 0.58rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .account-table td:first-child,
+  .account-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .account-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .account-row-actions {
+    justify-content: stretch;
+  }
+
+  .account-row-actions .account-button,
+  .account-table td:last-child > .account-button {
+    flex: 1;
+    width: 100%;
+  }
+
+  .account-claims-table tbody tr {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .account-claims-table td:first-child,
+  .account-claims-table td:last-child {
+    grid-column: auto;
+  }
+
+  .pool-hero {
+    min-height: 0;
+    padding: 28px 20px;
+  }
+
+  .pool-metrics {
+    gap: 8px;
+  }
+
+  .pool-metric {
+    min-height: 112px;
+    padding: 14px;
+  }
+
+  .pool-chart-frame {
+    min-height: 280px;
+    padding: 8px;
+  }
+
+  .pool-staking {
+    min-height: 480px;
+    padding: 22px 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .pool-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-metric {
+    min-height: 100px;
+  }
+
+  .pool-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-button-wide {
+    grid-column: auto;
+  }
+}

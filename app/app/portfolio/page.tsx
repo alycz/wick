@@ -11,6 +11,7 @@ import { backendConfigured, getClaims, getPositions, type ClaimView } from "@/li
 import { latestIndexerEventKey } from "@/lib/feed";
 import { cents, compactAddress, dollars, e6 } from "@/lib/format";
 import { calculateLivePositionPnls } from "@/lib/portfolio";
+import "@/styles/account.css";
 
 type PositionRow = PositionView & Record<string, unknown>;
 const PORTFOLIO_EVENTS = new Set(["PositionOpened", "PositionClosed", "PositionLiquidated", "PositionSettled", "ClaimQueued", "ClaimPaid"]);
@@ -61,26 +62,72 @@ export default function PortfolioPage() {
     finally { setBusy(undefined); }
   };
 
-  return <div className="page-stack">
-    <div className="page-header"><p className="eyebrow">DEVNET ACCOUNT</p><h1>Portfolio</h1><p>Positions and payouts indexed directly from Wick program events.</p></div>
-    {!owner && <div className="notice">Create the demo wallet or connect Phantom / Solflare to load a portfolio.</div>}
-    {owner && !backendReady && <div className="notice">Backend is not configured. No position data can be verified.</div>}
-    {backendReady && !actions.client && <div className="notice">{actions.error ?? "Trading is not configured."}</div>}
-    {error && <div className="notice" role="alert">{error}</div>}
-    {signature && <div className="notice" role="status">Confirmed on devnet · {compactAddress(signature)}</div>}
-    <section className="panel">
-      <div className="section-heading"><div>Positions</div>{owner && <span className="muted">{compactAddress(owner)}</span>}</div>
-      {positions.length === 0 ? <div className="empty">No indexed positions for this wallet.</div> : <div className="portfolio-list">
-        {positions.map((position) => <article className="position-card" key={position.address}>
-          <div><span className={`side-pill ${position.side}`}>{position.side.toUpperCase()}</span><strong>{compactAddress(position.market)}</strong><small>{position.status}</small></div>
-          <dl><div><dt>Margin</dt><dd>{dollars(e6(position.marginE6), 2)}</dd></div><div><dt>Leverage</dt><dd>{position.leverage}×</dd></div><div><dt>Entry</dt><dd>{cents(position.entryE6 / 1_000_000)}</dd></div><div><dt>Contracts</dt><dd>{e6(position.contractsE6).toFixed(2)}</dd></div><div><dt>{position.status === "open" ? "Live PnL" : "Realized PnL"}</dt><dd>{position.status === "open" ? livePnls[position.address] === undefined ? "—" : dollars(e6(livePnls[position.address]), 2) : position.realizedPnlE6 === undefined ? "—" : dollars(e6(String(position.realizedPnlE6)), 2)}</dd></div></dl>
-          {position.status === "open" && <div><button className="secondary-button" type="button" disabled={busy === position.address || !backendReady || !actions.client} onClick={() => void run(position.address, () => actions.client!.closePosition(position, 10_000))}>Close position</button><button className="text-button" type="button" disabled={busy === position.address || !backendReady || !actions.client} onClick={() => void run(position.address, () => actions.client!.settlePosition(position))}>Settle if resolved</button></div>}
-        </article>)}
+  return <div className="account-page">
+    <header className="account-hero">
+      <div>
+        <p className="account-eyebrow">DEVNET ACCOUNT</p>
+        <h1>Portfolio</h1>
+        <p>Positions and payouts indexed directly from Wick program events.</p>
+      </div>
+      {owner && <div className="account-wallet"><span>Active wallet</span><strong>{compactAddress(owner)}</strong></div>}
+    </header>
+
+    <div className="account-alerts">
+      {!owner && <div className="account-notice">Create the demo wallet or connect Phantom / Solflare to load a portfolio.</div>}
+      {owner && !backendReady && <div className="account-notice">Backend is not configured. No position data can be verified.</div>}
+      {backendReady && !actions.client && <div className="account-notice">{actions.error ?? "Trading is not configured."}</div>}
+      {error && <div className="account-notice account-notice-error" role="alert">{error}</div>}
+      {signature && <div className="account-notice account-notice-success" role="status">Confirmed on devnet · {compactAddress(signature)}</div>}
+    </div>
+
+    <section className="account-surface account-positions" aria-labelledby="account-positions-heading">
+      <div className="account-section-heading">
+        <div>
+          <p className="account-section-kicker">Open &amp; settled</p>
+          <h2 id="account-positions-heading">Positions</h2>
+        </div>
+        <span>{positions.length} indexed</span>
+      </div>
+      {positions.length === 0 ? <div className="account-empty">No indexed positions for this wallet.</div> : <div className="account-table-wrap">
+        <table className="account-table">
+          <thead><tr><th>Market</th><th>Side</th><th>Margin</th><th>Leverage</th><th>Entry</th><th>Contracts</th><th>PnL</th><th><span className="account-visually-hidden">Actions</span></th></tr></thead>
+          <tbody>{positions.map((position) => {
+            const pnlValue = position.status === "open" ? livePnls[position.address] : position.realizedPnlE6 === undefined ? undefined : String(position.realizedPnlE6);
+            const pnl = pnlValue === undefined ? undefined : e6(pnlValue);
+            return <tr key={position.address}>
+              <td data-label="Market"><div className="account-market"><strong>{compactAddress(position.market)}</strong><span>{position.status}</span></div></td>
+              <td data-label="Side"><span className={`account-side account-side-${position.side}`}>{position.side.toUpperCase()}</span></td>
+              <td data-label="Margin">{dollars(e6(position.marginE6), 2)}</td>
+              <td data-label="Leverage">{position.leverage}×</td>
+              <td data-label="Entry">{cents(position.entryE6 / 1_000_000)}</td>
+              <td data-label="Contracts">{e6(position.contractsE6).toFixed(2)}</td>
+              <td data-label={position.status === "open" ? "Live PnL" : "Realized PnL"}><span className={pnl === undefined ? "account-pnl" : pnl >= 0 ? "account-pnl account-pnl-positive" : "account-pnl account-pnl-negative"}>{pnl === undefined ? "—" : dollars(pnl, 2)}</span></td>
+              <td data-label="Actions">{position.status === "open" ? <div className="account-row-actions">
+                <button className="account-button account-button-secondary" type="button" disabled={busy === position.address || !backendReady || !actions.client} onClick={() => void run(position.address, () => actions.client!.closePosition(position, 10_000))}>{busy === position.address ? "Confirming…" : "Close"}</button>
+                <button className="account-button account-button-text" type="button" disabled={busy === position.address || !backendReady || !actions.client} onClick={() => void run(position.address, () => actions.client!.settlePosition(position))}>Settle</button>
+              </div> : <span className="account-complete">Complete</span>}</td>
+            </tr>;
+          })}</tbody>
+        </table>
       </div>}
     </section>
-    <section className="panel">
-      <div className="section-heading"><div>Queued claims</div><span className="muted">FIFO pool payouts</span></div>
-      {claims.length === 0 ? <div className="empty">No queued claims.</div> : claims.map((claim) => <div className="claim-row" key={claim.address}><span>Claim #{claim.claimIndex}</span><strong>{dollars(e6(claim.amountE6) - e6(claim.paidE6), 2)} owed</strong><span>{claim.status}</span><button className="secondary-button" disabled={busy === claim.address || claim.status === "paid" || !backendReady || !actions.client} onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))} type="button">Claim</button></div>)}
+
+    <section className="account-surface account-claims" aria-labelledby="account-claims-heading">
+      <div className="account-section-heading">
+        <div><p className="account-section-kicker">FIFO pool payouts</p><h2 id="account-claims-heading">Queued claims</h2></div>
+        <span>{claims.length} total</span>
+      </div>
+      {claims.length === 0 ? <div className="account-empty">No queued claims.</div> : <div className="account-table-wrap">
+        <table className="account-table account-claims-table">
+          <thead><tr><th>Claim</th><th>Amount owed</th><th>Status</th><th><span className="account-visually-hidden">Action</span></th></tr></thead>
+          <tbody>{claims.map((claim) => <tr key={claim.address}>
+            <td data-label="Claim"><strong>#{claim.claimIndex}</strong></td>
+            <td data-label="Amount owed"><strong>{dollars(e6(claim.amountE6) - e6(claim.paidE6), 2)}</strong></td>
+            <td data-label="Status"><span className="account-status">{claim.status}</span></td>
+            <td data-label="Action"><button className="account-button account-button-secondary" disabled={busy === claim.address || claim.status === "paid" || !backendReady || !actions.client} onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))} type="button">{busy === claim.address ? "Confirming…" : "Claim"}</button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
     </section>
   </div>;
 }
