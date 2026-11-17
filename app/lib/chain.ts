@@ -71,7 +71,7 @@ export function readChainEnvironment(environment: ChainEnvironmentVariables = br
 
 export function createWickClient(wallet: Wallet, environment: ChainEnvironmentVariables = browserChainEnvironment()): WickBrowserClient {
   const configured = readChainEnvironment(environment);
-  if (!wallet.publicKey) throw new Error("Create the demo wallet or connect Phantom / Solflare first.");
+  if (!wallet.publicKey) throw new Error("Create a test wallet or connect Phantom / Solflare first.");
   const connection = new Connection(configured.rpcUrl, "confirmed");
   const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed", preflightCommitment: "confirmed" });
   const program = new Program(WICK_IDL as unknown as Idl, provider) as unknown as ProgramFacade;

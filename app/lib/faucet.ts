@@ -40,7 +40,7 @@ export async function sendFaucetGrant(options: SendFaucetGrantOptions): Promise<
   if (genesis !== SOLANA_DEVNET_GENESIS_HASH) throw new Error(`Refusing non-devnet faucet RPC (genesis ${genesis})`);
 
   const treasuryBalance = await options.connection.getBalance(options.treasury.publicKey, "confirmed");
-  if (treasuryBalance < FAUCET_MIN_TREASURY_LAMPORTS) throw new Error("Demo faucet treasury has insufficient devnet SOL");
+  if (treasuryBalance < FAUCET_MIN_TREASURY_LAMPORTS) throw new Error("Test faucet treasury has insufficient devnet SOL");
 
   const mintInfo = await (options.readMint ?? (async (connection, mint) => getMint(connection, mint, "confirmed")))(options.connection, options.mint);
   if (!mintInfo.isInitialized || mintInfo.decimals !== USDC_DECIMALS) {

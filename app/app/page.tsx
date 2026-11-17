@@ -39,7 +39,7 @@ export default function LandingPage() {
   return <div className="landing-page">
     <section className="landing-hero" aria-labelledby="landing-title">
       <div className="landing-hero-copy">
-        <p className="landing-kicker">SOLANA DEVNET · GEMINI PREDICTION MARKETS</p>
+        <p className="landing-kicker">GEMINI PREDICTION MARKETS</p>
         <h1 id="landing-title">Every strike.<br /><em>One fair surface.</em></h1>
         <p className="landing-lede">Wick turns Gemini&apos;s BTC prediction markets into risk-capped synthetic YES/NO positions, priced from the options volatility surface.</p>
         <div className="landing-actions">
@@ -49,7 +49,7 @@ export default function LandingPage() {
         <div className="landing-proof" aria-label="Product principles">
           <div><b>Gemini</b><span>Official outcomes</span></div>
           <div><b>Options IV</b><span>Independent fair value</span></div>
-          <div><b>Solana</b><span>Devnet execution</span></div>
+          <div><b>Execution</b><span>Test assets only</span></div>
         </div>
       </div>
 

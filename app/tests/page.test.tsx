@@ -10,6 +10,8 @@ describe("LandingPage", () => {
     const { container } = render(<LandingPage />);
 
     expect(screen.getByRole("heading", { name: /Every strike.*One fair surface/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Solana devnet · Gemini prediction markets/i)).not.toBeInTheDocument();
+    expect(screen.getByText("GEMINI PREDICTION MARKETS")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /A prediction market risk engine/i }).querySelector("br")).toBeNull();
     expect(screen.getByText(/Live state appears after health checks pass/i)).toBeInTheDocument();
     expect(screen.getByText(/No invented liquidity/i)).toBeInTheDocument();

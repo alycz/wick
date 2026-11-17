@@ -7,7 +7,9 @@ const healthState = vi.hoisted(() => ({
 }));
 
 vi.mock("next/dynamic", () => ({
-  default: () => function MockWalletButton() { return <button type="button">Select Wallet</button>; },
+  default: () => function MockWalletButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+    return <button type="button" {...props}>{children}</button>;
+  },
 }));
 vi.mock("@solana/wallet-adapter-react", () => ({ useWallet: () => ({ publicKey: undefined }) }));
 vi.mock("@/hooks/use-markets", () => ({ useHealth: () => healthState.value }));
@@ -21,19 +23,28 @@ describe("WalletPanel availability", () => {
   });
   afterEach(cleanup);
 
-  it("uses one concise test-wallet action and hides funding while execution is unavailable", () => {
+  it("hydrates as one wallet entry with both wallet choices and no unavailable funding action", () => {
     render(<DemoWalletProvider><WalletPanel /></DemoWalletProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Create test wallet" }));
+    const entry = screen.getByRole("button", { name: "Wallet" });
 
-    expect(screen.getByRole("status", { name: "Local test wallet" })).toBeInTheDocument();
-    expect(screen.queryByText(/Demo · devnet/i)).not.toBeInTheDocument();
+    expect(entry).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Create test wallet" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect browser wallet" })).not.toBeInTheDocument();
+    fireEvent.click(entry);
+    expect(screen.getByRole("dialog", { name: "Wallet options" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Create test wallet/i })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Connect browser wallet" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Faucet" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(entry).toHaveFocus();
   });
 
   it("restores faucet access only after the backend verifies chain execution", () => {
     healthState.value = { health: { chainConfigured: true } };
     render(<DemoWalletProvider><WalletPanel /></DemoWalletProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Create test wallet" }));
+    fireEvent.click(screen.getByRole("button", { name: "Wallet" }));
+    fireEvent.click(screen.getByRole("button", { name: /Create test wallet/i }));
 
     expect(screen.getByRole("button", { name: "Faucet" })).toBeInTheDocument();
   });

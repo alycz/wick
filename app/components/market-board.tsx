@@ -64,7 +64,7 @@ export function MarketBoard() {
   return <div className="markets-page">
     <header className="markets-heading">
       <div>
-        <p className="markets-eyebrow">MARKET TERMINAL · SOLANA DEVNET</p>
+        <p className="markets-eyebrow">MARKET TERMINAL</p>
         <h1>BTC prediction markets</h1>
       </div>
       <div className={`markets-health ${health?.ok ? "markets-health-online" : ""}`} role="status">

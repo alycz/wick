@@ -65,7 +65,7 @@ export default function PortfolioPage() {
   return <div className="account-page">
     <header className="account-hero">
       <div>
-        <p className="account-eyebrow">DEVNET ACCOUNT</p>
+        <p className="account-eyebrow">ACCOUNT</p>
         <h1>Portfolio</h1>
         <p>Positions and payouts indexed directly from Wick program events.</p>
       </div>
@@ -73,7 +73,7 @@ export default function PortfolioPage() {
     </header>
 
     <div className="account-alerts">
-      {!owner && <div className="account-notice">Create the demo wallet or connect Phantom / Solflare to load a portfolio.</div>}
+      {!owner && <div className="account-notice">Create a test wallet or connect Phantom / Solflare to load a portfolio.</div>}
       {owner && !backendReady && <div className="account-notice">Backend is not configured. No position data can be verified.</div>}
       {backendReady && !actions.client && <div className="account-notice">{actions.error ?? "Trading is not configured."}</div>}
       {error && <div className="account-notice account-notice-error" role="alert">{error}</div>}

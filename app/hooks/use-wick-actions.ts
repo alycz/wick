@@ -27,7 +27,7 @@ export function useWickActions(): WickActionsState {
         : async <T extends Transaction | VersionedTransaction>(transactions: T[]): Promise<T[]> => Promise.all(transactions.map((transaction) => connected.signTransaction!(transaction) as Promise<T>)),
     } : undefined;
     const wallet = demo.anchorWallet ?? externalWallet;
-    if (!wallet) return { error: "Create the demo wallet or connect Phantom / Solflare first." };
+    if (!wallet) return { error: "Create a test wallet or connect Phantom / Solflare first." };
     try {
       return { client: createWickClient(wallet), owner: wallet.publicKey.toBase58() };
     } catch (error) {
