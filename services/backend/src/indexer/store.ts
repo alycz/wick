@@ -208,6 +208,7 @@ export class IndexerStore {
         break;
       case "PositionSettled":
         this.updatePosition(event, "settled", data.pnlE6, data.paidE6);
+        this.addFees(data.feeE6);
         break;
       case "ClaimQueued":
         this.database.prepare(`INSERT OR IGNORE INTO payout_claims
