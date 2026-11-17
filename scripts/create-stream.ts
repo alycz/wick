@@ -46,16 +46,47 @@ export function substituteProgramId(source: string, programId: string): string {
   return source.replaceAll("__PROGRAM_ID__", programId);
 }
 
-async function request(apiKey: string, path: string, body: Record<string, unknown>): Promise<unknown> {
+async function request(apiKey: string, path: string, body?: Record<string, unknown>): Promise<unknown> {
   const response = await fetch(`${STREAMS_API}${path}`, {
-    method: "POST",
+    method: body === undefined ? "GET" : "POST",
     headers: { "Content-Type": "application/json", "x-api-key": apiKey },
-    body: JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(20_000),
   });
   const payload = await response.json().catch(() => ({ error: "QuickNode returned a non-JSON response" })) as unknown;
   if (!response.ok) throw new Error(`QuickNode Streams ${path} failed with HTTP ${response.status}`);
   return payload;
+}
+
+const STREAM_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function requireStreamIdentity(value: unknown): { id: string; status?: string } {
+  if (!value || typeof value !== "object") throw new Error("QuickNode create Stream response was not an object");
+  const record = value as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id : "";
+  if (!STREAM_ID.test(id)) throw new Error("QuickNode create Stream response did not contain a valid Stream UUID");
+  return { id, ...(typeof record.status === "string" ? { status: record.status } : {}) };
+}
+
+export async function waitForActiveStream(
+  id: string,
+  getStream: () => Promise<unknown>,
+  options: { timeoutMs?: number; pollMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<Record<string, unknown>> {
+  if (!STREAM_ID.test(id)) throw new Error("Cannot verify an invalid QuickNode Stream ID");
+  const deadline = Date.now() + (options.timeoutMs ?? 30_000);
+  const delay = options.sleep ?? ((ms: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, ms)));
+  do {
+    const value = await getStream();
+    if (!value || typeof value !== "object") throw new Error("QuickNode get Stream response was not an object");
+    const record = value as Record<string, unknown>;
+    if (record.id !== id) throw new Error("QuickNode get Stream response ID did not match the created Stream");
+    if (record.status === "active") return record;
+    if (record.status === "paused") throw new Error(`QuickNode Stream ${id} is paused, not active`);
+    if (Date.now() >= deadline) break;
+    await delay(options.pollMs ?? 1_000);
+  } while (Date.now() < deadline);
+  throw new Error(`QuickNode Stream ${id} did not reach active status before timeout`);
 }
 
 async function findRecentProgramBlock(rpcUrl: string, programId: string): Promise<string> {
@@ -120,8 +151,12 @@ export async function createStream(options: { testOnly?: boolean } = {}): Promis
     fix_block_reorgs: 1,
     keep_distance_from_tip: 0,
   });
-  const id = result && typeof result === "object" && "id" in result ? String((result as { id: unknown }).id) : "created";
-  console.log(`QuickNode Stream ${id} is active`);
+  const created = requireStreamIdentity(result);
+  const active = created.status === "active"
+    ? result as Record<string, unknown>
+    : await waitForActiveStream(created.id, () => request(environment.apiKey, `/streams/${created.id}`));
+  if (active.status !== "active") throw new Error(`QuickNode Stream ${created.id} is not active`);
+  console.log(`QuickNode Stream ${created.id} verified active`);
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : undefined;
