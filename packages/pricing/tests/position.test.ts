@@ -26,6 +26,7 @@ describe("fixed-point position math", () => {
     expect(pnlE6(quantity, 550_000, 500_000)).toBe(10_000_000n);
     expect(liquidationMarkE6(500_000, 10)).toBe(450_000);
     expect(liquidationMarkE6(500_000, 10, 500)).toBe(452_500);
+    expect(liquidationMarkE6(500_000, 6)).toBe(416_666);
     expect(closeResult(10_000_000n, quantity, 500_000, 550_000, 200)).toEqual({
       pnlE6: 10_000_000n,
       feeE6: 200_000n,

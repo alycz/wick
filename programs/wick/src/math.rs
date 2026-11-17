@@ -36,26 +36,56 @@ pub fn pnl_e6(contracts: u64, mark_e6: u32, entry_e6: u32) -> Result<i128> {
         .ok_or_else(|| error!(WickError::MathOverflow))
 }
 
+/// A trader can never lose more than the margin transferred into the vault.
+/// Raw leveraged PnL is still useful for liquidation-distance math, but all
+/// economic settlement, LP accounting, events, and emissions use this value.
+pub fn cap_loss_to_margin(pnl: i128, margin: u64) -> Result<i128> {
+    let floor = i128::from(margin)
+        .checked_neg()
+        .ok_or_else(|| error!(WickError::MathOverflow))?;
+    Ok(pnl.max(floor))
+}
+
+/// Surplus is distributable only after every queued payout has priority and
+/// only when there are stakers to receive it.
+pub fn staker_surplus_e6(
+    lp_balance: i128,
+    staker_cap: u64,
+    queue_owed: u64,
+    total_staked: u64,
+) -> Result<u64> {
+    if queue_owed > 0 || total_staked == 0 || lp_balance <= i128::from(staker_cap) {
+        return Ok(0);
+    }
+    u64::try_from(
+        lp_balance
+            .checked_sub(i128::from(staker_cap))
+            .ok_or(WickError::MathOverflow)?,
+    )
+    .map_err(|_| error!(WickError::MathOverflow))
+}
+
 pub fn liq_mark_e6(entry_e6: u32, leverage: u16, maintenance_bps: u16) -> Result<u32> {
     require!(
         leverage > 0 && maintenance_bps <= 10_000,
         WickError::InvalidParameter
     );
-    let maintenance_e6 = (maintenance_bps as u128)
-        .checked_mul(100)
+    // Keep the multiply before the final division. Dividing the loss fraction
+    // first rounds it down and can move the stored boundary one micro-unit up
+    // from the canonical packages/pricing integer formula.
+    let leverage_bps = (leverage as u128)
+        .checked_mul(10_000)
         .ok_or(WickError::MathOverflow)?;
-    let loss_fraction_e6 = (PRICE_E6 as u128)
-        .checked_sub(maintenance_e6)
-        .ok_or(WickError::MathOverflow)?
-        .checked_div(leverage as u128)
+    let maintenance_discount_bps = 10_000_u128
+        .checked_sub(maintenance_bps as u128)
         .ok_or(WickError::MathOverflow)?;
-    let multiplier = (PRICE_E6 as u128)
-        .checked_sub(loss_fraction_e6)
+    let retained_bps = leverage_bps
+        .checked_sub(maintenance_discount_bps)
         .ok_or(WickError::MathOverflow)?;
     let result = (entry_e6 as u128)
-        .checked_mul(multiplier)
+        .checked_mul(retained_bps)
         .ok_or(WickError::MathOverflow)?
-        .checked_div(PRICE_E6 as u128)
+        .checked_div(leverage_bps)
         .ok_or(WickError::MathOverflow)?;
     u32::try_from(result).map_err(|_| error!(WickError::MathOverflow))
 }
@@ -140,6 +170,24 @@ mod tests {
     }
 
     #[test]
+    fn liquidation_vectors_match_typescript_integer_ordering() {
+        // These are shared regression vectors for packages/pricing's
+        // liquidationMarkE6 formula. The 6x case catches premature division.
+        let vectors = [
+            (500_000, 6, 0, 416_666),
+            (500_000, 10, 0, 450_000),
+            (500_000, 10, 500, 452_500),
+            (990_000, 7, 125, 850_339),
+        ];
+        for (entry, leverage, maintenance_bps, expected) in vectors {
+            assert_eq!(
+                liq_mark_e6(entry, leverage, maintenance_bps).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn emission_curve_reduces_above_threshold() {
         assert_eq!(
             wicked_emission_e6(1_000_000, 0, 10_000_000, 10_000_000, 0).unwrap(),
@@ -158,6 +206,42 @@ mod tests {
         assert_eq!(
             accrued_rewards(2_000_000, 3 * REWARD_SCALE, 2_000_000 * REWARD_SCALE).unwrap(),
             4_000_000
+        );
+    }
+
+    #[test]
+    fn realized_loss_is_capped_by_posted_margin() {
+        assert_eq!(
+            cap_loss_to_margin(-1_000_000_000, 100_000_000).unwrap(),
+            -100_000_000
+        );
+        assert_eq!(
+            cap_loss_to_margin(-20_000_000, 100_000_000).unwrap(),
+            -20_000_000
+        );
+        assert_eq!(
+            cap_loss_to_margin(50_000_000, 100_000_000).unwrap(),
+            50_000_000
+        );
+    }
+
+    #[test]
+    fn staker_surplus_respects_cap_queue_and_stake() {
+        assert_eq!(
+            staker_surplus_e6(150_000_000, 100_000_000, 0, 10).unwrap(),
+            50_000_000
+        );
+        assert_eq!(
+            staker_surplus_e6(150_000_000, 100_000_000, 1, 10).unwrap(),
+            0
+        );
+        assert_eq!(
+            staker_surplus_e6(150_000_000, 100_000_000, 0, 0).unwrap(),
+            0
+        );
+        assert_eq!(
+            staker_surplus_e6(90_000_000, 100_000_000, 0, 10).unwrap(),
+            0
         );
     }
 
