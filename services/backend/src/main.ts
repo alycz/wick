@@ -1,6 +1,7 @@
 import { GeminiClient, GeminiQuoteStream } from "@wick/gemini";
 import { AutoVolSource, DeribitVolSource, DeriveVolSource, RealizedVolSource } from "@wick/vol";
 import pino from "pino";
+import { createCollectorWorkerFromEnvironment } from "./collector/service.js";
 import { IndexerService, registerIndexerRoutes } from "./indexer/index.js";
 import { createChainPort, PricerEngine } from "./pricer/index.js";
 import { buildServer } from "./server.js";
@@ -12,6 +13,10 @@ const logger = pino({
     censor: "[REDACTED]",
   },
 });
+
+const collector = await createCollectorWorkerFromEnvironment({ environment: process.env, logger });
+if (collector) logger.info({}, "Solana collector enabled");
+else logger.info({}, "Solana collector disabled");
 
 const gemini = new GeminiClient();
 const volLogger = {
@@ -62,13 +67,17 @@ const port = Number(process.env.PORT ?? 3_000);
 const host = process.env.HOST ?? "0.0.0.0";
 
 await server.listen({ port, host });
+collector?.start();
 
 let shuttingDown = false;
 const shutdown = async (signal: string) => {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ signal }, "graceful shutdown started");
-  try { await server.close(); }
+  try {
+    await collector?.stop();
+    await server.close();
+  }
   catch (error) {
     logger.error({ error: error instanceof Error ? error.message : String(error) }, "graceful shutdown failed");
     process.exitCode = 1;
