@@ -16,6 +16,11 @@ const STAKE_SEED = encode("stake");
 const STAKING_VAULT_SEED = encode("staking_vault");
 
 export interface ChainEnvironment { programId: PublicKey; usdcMint: PublicKey; rpcUrl: string }
+export interface ChainEnvironmentVariables {
+  NEXT_PUBLIC_PROGRAM_ID?: string;
+  NEXT_PUBLIC_USDC_TEST_MINT?: string;
+  NEXT_PUBLIC_RPC_URL?: string;
+}
 export interface ProgramMethodBuilder { accounts(accounts: Record<string, PublicKey>): { rpc(options?: { commitment?: Commitment }): Promise<TransactionSignature> } }
 export interface ProgramFacade {
   readonly programId: PublicKey;
@@ -30,7 +35,7 @@ export interface OpenPositionInput { symbol: string; side: "yes" | "no"; marginE
 export interface PositionActionInput { address: string; market: string; owner: string }
 export interface ClaimActionInput { address: string; owner: string }
 
-function browserChainEnvironment(): NodeJS.ProcessEnv {
+function browserChainEnvironment(): ChainEnvironmentVariables {
   // Keep these as literal property reads so Next.js replaces NEXT_PUBLIC values
   // in the browser bundle. Passing `process.env` through an alias is not inlined.
   return {
@@ -40,7 +45,7 @@ function browserChainEnvironment(): NodeJS.ProcessEnv {
   };
 }
 
-export function chainConfigurationError(environment: NodeJS.ProcessEnv = browserChainEnvironment()): string | undefined {
+export function chainConfigurationError(environment: ChainEnvironmentVariables = browserChainEnvironment()): string | undefined {
   const programValue = environment.NEXT_PUBLIC_PROGRAM_ID?.trim();
   if (!programValue) return "Trading is not configured: the Wick devnet program ID is missing.";
   const mintValue = environment.NEXT_PUBLIC_USDC_TEST_MINT?.trim();
@@ -58,13 +63,13 @@ export function chainConfigurationError(environment: NodeJS.ProcessEnv = browser
   return undefined;
 }
 
-export function readChainEnvironment(environment: NodeJS.ProcessEnv = browserChainEnvironment()): ChainEnvironment {
+export function readChainEnvironment(environment: ChainEnvironmentVariables = browserChainEnvironment()): ChainEnvironment {
   const error = chainConfigurationError(environment);
   if (error) throw new Error(error);
   return { programId: new PublicKey(environment.NEXT_PUBLIC_PROGRAM_ID!), usdcMint: new PublicKey(environment.NEXT_PUBLIC_USDC_TEST_MINT!), rpcUrl: environment.NEXT_PUBLIC_RPC_URL! };
 }
 
-export function createWickClient(wallet: Wallet, environment: NodeJS.ProcessEnv = browserChainEnvironment()): WickBrowserClient {
+export function createWickClient(wallet: Wallet, environment: ChainEnvironmentVariables = browserChainEnvironment()): WickBrowserClient {
   const configured = readChainEnvironment(environment);
   if (!wallet.publicKey) throw new Error("Create the demo wallet or connect Phantom / Solflare first.");
   const connection = new Connection(configured.rpcUrl, "confirmed");
