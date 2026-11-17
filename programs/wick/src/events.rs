@@ -67,6 +67,7 @@ pub struct PositionSettled {
     pub owner: Pubkey,
     pub outcome: Outcome,
     pub pnl_e6: i128,
+    pub fee_e6: u64,
     pub paid_e6: u64,
 }
 #[event]

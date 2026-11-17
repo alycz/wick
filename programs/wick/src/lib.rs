@@ -431,7 +431,7 @@ pub mod wick {
         );
         if ctx.accounts.market.status == MarketStatus::Invalid {
             let margin = ctx.accounts.position.margin;
-            pay_or_queue_settlement(&mut ctx, margin, 0, claim_index, Outcome::None)?;
+            pay_or_queue_settlement(&mut ctx, margin, 0, 0, claim_index, Outcome::None)?;
         } else {
             let won = (ctx.accounts.position.side == Side::Yes
                 && ctx.accounts.market.outcome == Outcome::Yes)
@@ -471,7 +471,7 @@ pub mod wick {
                 )?;
             }
             let outcome = ctx.accounts.market.outcome;
-            pay_or_queue_settlement(&mut ctx, owed, pnl, claim_index, outcome)?;
+            pay_or_queue_settlement(&mut ctx, owed, pnl, fee, claim_index, outcome)?;
         }
         Ok(())
     }
@@ -526,6 +526,11 @@ pub mod wick {
             complete
         });
         emit_lp(&ctx.accounts.lp);
+        close_claim_if_complete(
+            &ctx.accounts.claim,
+            ctx.accounts.owner.to_account_info(),
+            complete,
+        )?;
         Ok(())
     }
 
@@ -853,10 +858,10 @@ pub struct ClaimQueue<'info> {
     #[account(mut, seeds = [b"vault"], bump, token::mint = usdc_mint, token::authority = vault)]
     pub vault: Account<'info, TokenAccount>,
     pub usdc_mint: Account<'info, Mint>,
-    #[account(mut)]
+    #[account(mut, seeds = [b"claim", claim.index.to_le_bytes().as_ref()], bump = claim.bump)]
     pub claim: Account<'info, PayoutClaim>,
     /// CHECK: constrained to claim.owner.
-    #[account(address = claim.owner)]
+    #[account(mut, address = claim.owner)]
     pub owner: UncheckedAccount<'info>,
     #[account(init_if_needed, payer = payer, associated_token::mint = usdc_mint, associated_token::authority = owner)]
     pub owner_usdc: Account<'info, TokenAccount>,
@@ -1252,6 +1257,7 @@ fn settle_open_position(
             owner: ctx.accounts.owner.key(),
             outcome: value,
             pnl_e6: pnl,
+            fee_e6: fee,
             paid_e6: pay
         });
     }
@@ -1337,6 +1343,7 @@ fn pay_or_queue_settlement(
     ctx: &mut Context<SettlePosition>,
     owed: u64,
     pnl: i128,
+    fee: u64,
     claim_index: u64,
     outcome: Outcome,
 ) -> Result<()> {
@@ -1373,8 +1380,70 @@ fn pay_or_queue_settlement(
         owner: ctx.accounts.position.owner,
         outcome,
         pnl_e6: pnl,
+        fee_e6: fee,
         paid_e6: pay
     });
     emit_lp(&ctx.accounts.lp);
     Ok(())
+}
+
+fn close_claim_if_complete<'info>(
+    claim: &Account<'info, PayoutClaim>,
+    rent_recipient: AccountInfo<'info>,
+    complete: bool,
+) -> Result<()> {
+    let destination_balance = validate_claim_close(
+        claim.owner,
+        *rent_recipient.key,
+        claim.to_account_info().lamports(),
+        rent_recipient.lamports(),
+        complete,
+    )?;
+    if destination_balance.is_some() {
+        claim.close(rent_recipient)?;
+    }
+    Ok(())
+}
+
+fn validate_claim_close(
+    claim_owner: Pubkey,
+    rent_recipient: Pubkey,
+    claim_lamports: u64,
+    recipient_lamports: u64,
+    complete: bool,
+) -> Result<Option<u64>> {
+    require_keys_eq!(claim_owner, rent_recipient, WickError::InvalidParameter);
+    if !complete {
+        return Ok(None);
+    }
+    Ok(Some(
+        recipient_lamports
+            .checked_add(claim_lamports)
+            .ok_or(WickError::MathOverflow)?,
+    ))
+}
+
+#[cfg(test)]
+mod claim_close_tests {
+    use super::*;
+
+    #[test]
+    fn claim_close_is_conditional_and_refunds_the_validated_owner() {
+        let owner = Pubkey::new_unique();
+        assert_eq!(
+            validate_claim_close(owner, owner, 2_000_000, 100_000, false).unwrap(),
+            None
+        );
+        assert_eq!(
+            validate_claim_close(owner, owner, 2_000_000, 100_000, true).unwrap(),
+            Some(2_100_000)
+        );
+    }
+
+    #[test]
+    fn claim_close_rejects_wrong_recipient_and_lamport_overflow() {
+        let owner = Pubkey::new_unique();
+        assert!(validate_claim_close(owner, Pubkey::new_unique(), 1, 0, true).is_err());
+        assert!(validate_claim_close(owner, owner, 1, u64::MAX, true).is_err());
+    }
 }

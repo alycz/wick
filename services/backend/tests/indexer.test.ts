@@ -49,6 +49,13 @@ function positionClosed(): string {
   ]));
 }
 
+function positionSettled(): string {
+  return encodeEventForTest("PositionSettled", Buffer.concat([
+    POSITION.toBuffer(), OWNER.toBuffer(), Buffer.from([1]), signed128(10_000_000n),
+    unsigned(200_000n, 8), unsigned(19_800_000n, 8),
+  ]));
+}
+
 function lpUpdated(): string {
   return encodeEventForTest("LpUpdated", Buffer.concat([signed128(500_000_000n), unsigned(3_000_000n, 8)]));
 }
@@ -135,6 +142,34 @@ describe("QuickNode Streams indexer", () => {
     expect(count).toBe(2);
     expect(indexer.store.feed(10).map((event) => event.name)).toEqual(["LpUpdated", "PositionOpened"]);
     expect(indexer.store.feed(10).every((event) => event.provenance === "rpc_reconcile")).toBe(true);
+  });
+
+  it("projects a profitable settlement fee into LP history exactly once", async () => {
+    const { server, indexer } = await makeServer();
+    const transaction = {
+      signature: "profitable-settlement",
+      slot: 399,
+      blockTime: 1_700_000_001,
+      logs: [
+        `Program ${PROGRAM_ID} invoke [1]`,
+        positionOpened(),
+        positionSettled(),
+        lpUpdated(),
+        `Program ${PROGRAM_ID} success`,
+      ],
+    };
+
+    expect(indexer.store.processTransactions([transaction], "quicknode_stream")).toBe(3);
+    expect(indexer.store.processTransactions([transaction], "rpc_reconcile")).toBe(0);
+    expect((await server.inject({ method: "GET", url: `/positions?owner=${OWNER.toBase58()}` })).json()).toEqual([
+      expect.objectContaining({ status: "settled", realizedPnlE6: "10000000", paidE6: "19800000" }),
+    ]);
+    expect((await server.inject({ method: "GET", url: "/lp/history" })).json()).toEqual([
+      expect.objectContaining({ feesE6: "200000", signature: "profitable-settlement" }),
+    ]);
+    expect(indexer.store.feed(3).find((event) => event.name === "PositionSettled")?.data).toEqual(
+      expect.objectContaining({ feeE6: "200000", pnlE6: "10000000", paidE6: "19800000" }),
+    );
   });
 
   it("upgrades reconciled events to Stream provenance on authenticated redelivery", async () => {
