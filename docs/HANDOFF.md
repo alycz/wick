@@ -14,7 +14,8 @@ Last updated: 2026-11-17 (UTC)
 - WP7: implementation complete on `wp7/frontend` — Next.js 14 App Router frontend with responsive dark trading UI for `/`, `/m/[symbol]`, `/portfolio`, and `/pool`; validated live `/markets`, history, `/health`, WebSocket and SSE clients; QuickNode activity rail; browser-local demo keypair with export/reset; Phantom/Solflare support; fixed-point trade previews; and fail-closed, readable chain configuration errors. The Vercel faucet route submits one real devnet transaction for 0.05 SOL and 1,000 six-decimal test USDC only when the treasury, mint and mint authority are configured and verified; it enforces a 10-minute browser/IP cooldown plus local and on-chain 200-grant caps and never returns a fabricated balance. Three unit/component tests, ESLint, strict TypeScript and the optimized production build pass. Managed browser QA verified all four routes, exact safety copy, honest unconfigured/empty states, localStorage wallet persistence, safe faucet failure when unconfigured and readable chain-action errors. Full fresh-browser trade/faucet verification remains blocked by the missing deployed program/IDL, funded treasury, test-USDC mint, backend deployment and Vercel configuration; no deployment is claimed.
 - WP8: implementation complete on `wp8/scripts` — guarded devnet deploy/config initialization, rate-limited one-shot airdrop, verified test-USDC create/read-back, strengthened collector devnet checks, real Anchor bot transport, exact `demo-check`, and Playwright + ffmpeg demo recording/caption pipeline. Bot logic uses live `/markets`, funds real ignored devnet keypairs, confirms every submitted transaction, respects live leverage caps, fails the run on any transaction error, and runs `demo-check` afterward to require a positive vault. Nine script tests cover injected transports, caps, devnet refusal, captions and all demo assertions; CLI deploy/airdrop dry-runs report `submitted:false`. The 30-minute real bot run, positive-vault verification and video recording are blocked by the undeployed program/empty IDL, zero-SOL treasury, read-only backend chain adapter, absent public deployments and missing credentials. The bot dry-run fails explicitly at the empty IDL and no transaction is claimed.
 - WP9: implementation/preflight complete on `wp9/deploy` — fail-closed deployment readiness and public verification scripts, generated-IDL sync, monorepo Vercel manifest, Docker context exclusions, ordered provider runbook, and conditional official eligibility checklist are present. The readiness gate correctly reports every absent prerequisite and refuses `--require-ready`. No Solana, Railway, Vercel, or QuickNode deployment was attempted because the required CLIs, credentials, chain artifacts, funding, and public webhook are absent; the backend also still uses the explicit `UnconfiguredChainPort`. There are no public URLs or live provider IDs, and no deployment or sponsor-eligibility claim is made.
-- WP10–WP11: not yet started.
+- WP10: submission documentation complete on `wp10/submission` — README now covers the problem, product, exact pricing/risk formulas and leverage vectors, pool economics and risk assumptions, Mermaid architecture, Solana program/address registry with conditional explorer evidence, QuickNode network/dataset/filter/destination/why plus an explicit live-evidence gate, Gemini endpoints, setup, validation and known limitations. `docs/ARCHITECTURE.md` and copy-ready five-answer `docs/DEVPOST.md` are present. `docs/DEMO.md` defines an exact 2:45 deployed-product storyboard, burn-in captions and fail-closed recording command. No MP4 was fabricated while deployment is absent. QuickNode remains explicitly unselectable on Devpost until its real Stream evidence boxes pass.
+- WP11: not yet started.
 
 ## Credentials and deployment blockers
 
@@ -39,6 +40,8 @@ Collector persistence: `scripts/sol-collector.ts` checks balances every 15 minut
 - Railway backend: pending
 - Vercel frontend: pending
 - QuickNode Stream: pending deployed program transaction, verified test-filter response, backend URL and credentials
+- Demo video: pending verified public deployment and successful fail-closed recorder run
+- Devpost submission: pending verified URLs/video, account-holder review and submission
 - Public GitHub branch/commit: pending
 
 WP9 readiness details and operator order are in `docs/DEPLOYMENT.md`. QuickNode eligibility is conditional on Streams being a core data source plus a real configured Stream/filter/destination and README documentation; exact evidence boxes are in `docs/ELIGIBILITY.md`. None of the live boxes is checked. Finalists must be able to present in person in Austin on Saturday, November 21 to qualify for prizes under the official rules.
@@ -47,8 +50,22 @@ WP2 currently uses the build-time ID `EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeM
 
 ## Account-holder actions at submission
 
-1. Upload `demo/wick-demo.mp4`.
-2. Paste `docs/DEVPOST.md` into Devpost.
-3. Finish deployment and verification by the internal cutoff Thursday, November 19, 2026 at 11:59 PM CST.
-4. Submit before the official cutoff Friday, November 20, 2026 at 12:00 PM CST.
-5. Confirm finalist in-person attendance in Austin on Saturday, November 21.
+1. Provide authorized QuickNode, Railway, Vercel and GitHub project contexts without placing credentials in chat, logs or git; fund the treasury with at least 8 devnet SOL if automated funding is still unavailable.
+2. Finish deployment and make `pnpm deploy:verify` pass by the internal cutoff **Thursday, November 19, 2026 at 11:59 PM CST**.
+3. Run the guarded recorder from `docs/DEMO.md`, watch the full truthful 2:45 output, and upload `demo/wick-demo.mp4` to an accessible host.
+4. Replace all pending deployment identifiers/URLs in README, `docs/HANDOFF.md` and `docs/DEVPOST.md` with verified values and explorer links.
+5. Paste the five answers from `docs/DEVPOST.md`. Select Track 02, the Solana chain award and Gemini Prediction Markets only with the documented deployment evidence. **Do not select QuickNode Streams unless every live box in `docs/ELIGIBILITY.md` is checked.**
+6. Test the repository, app and video URLs from a signed-out browser, then submit before the official cutoff **Friday, November 20, 2026 at 12:00 PM CST**.
+7. Confirm the team can present in person in Austin on Saturday, November 21; the official rules require finalist attendance to qualify for prizes.
+
+## Submission readiness
+
+| Required item | Status | Blocking evidence |
+|---|---|---|
+| Public source + setup/technical docs | Documentation ready; public URL pending | Authenticated GitHub push/public commit |
+| Track 02 working smart-contract demo | Blocked | Executable program, chain adapter, mint/funding and public browser lifecycle |
+| Solana award | Blocked | Actual program ID/explorer link and verified core lifecycle |
+| Gemini Prediction Markets bounty | Code/live public API evidence present | Overall working deployed-demo requirement remains |
+| QuickNode Streams bounty | **Do not select** | Active Stream ID, real test-filter transaction, public destination and observed feed delivery |
+| 2–3 minute demo video | Blocked | Verified deployment; guarded recorder has intentionally produced no MP4 |
+| Final Devpost submission | Blocked | All required public URLs/video and account-holder submit action |
