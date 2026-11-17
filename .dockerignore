@@ -1,0 +1,13 @@
+.git
+.github
+.keys
+.state
+.env
+.env.*
+!.env.example
+**/node_modules
+**/.next
+**/dist
+target
+demo
+coverage
