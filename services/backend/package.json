@@ -6,20 +6,24 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "node --import tsx src/main.ts",
-    "start": "node dist/main.js",
+    "start": "node --import tsx src/main.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",
+    "@solana/spl-token": "0.4.14",
+    "@solana/web3.js": "1.98.4",
     "@fastify/websocket": "11.2.0",
     "@wick/gemini": "workspace:*",
     "@wick/pricing": "workspace:*",
     "@wick/shared": "workspace:*",
     "@wick/vol": "workspace:*",
     "better-sqlite3": "12.4.1",
+    "bs58": "6.0.0",
     "fastify": "5.6.1",
     "pino": "9.11.0",
+    "tsx": "4.20.6",
     "zod": "3.25.76"
   },
   "devDependencies": {
