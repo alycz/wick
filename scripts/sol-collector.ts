@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 
 const EIGHT_HOURS_MS = 8 * 60 * 60 * 1_000;
 const KEEPER_TARGET = LAMPORTS_PER_SOL;
-const FUNDER_TARGET = 2 * LAMPORTS_PER_SOL;
 const TREASURY_RESERVE = 500_000_000;
 const statePath = resolve(".state/sol-collector.json");
 
@@ -54,7 +53,6 @@ async function topUp(connection: Connection, treasury: Keypair, target: PublicKe
 export async function collectorCycle(): Promise<void> {
   const treasury = await loadOrCreateKeypair(process.env.TREASURY_KEYPAIR ?? ".keys/treasury.json");
   const keeper = await loadOrCreateKeypair(process.env.KEEPER_KEYPAIR ?? ".keys/keeper.json");
-  const funder = await loadOrCreateKeypair(process.env.FAUCET_AUTHORITY_KEYPAIR ?? ".keys/faucet-authority.json");
   const state = await loadState();
   const publicConnection = new Connection(process.env.PUBLIC_SOLANA_RPC_URL ?? PUBLIC_DEVNET_RPC, "confirmed");
   await assertDevnet(publicConnection);
@@ -66,13 +64,11 @@ export async function collectorCycle(): Promise<void> {
     await requestConservativeAirdrop(quickNodeConnection, treasury.publicKey, "quicknode-devnet", state);
   }
   await topUp(publicConnection, treasury, keeper.publicKey, KEEPER_TARGET);
-  await topUp(publicConnection, treasury, funder.publicKey, FUNDER_TARGET);
   const balances = await Promise.all([
     publicConnection.getBalance(treasury.publicKey),
     publicConnection.getBalance(keeper.publicKey),
-    publicConnection.getBalance(funder.publicKey),
   ]);
-  console.info(JSON.stringify({ event: "collector_status", treasury: treasury.publicKey.toBase58(), keeper: keeper.publicKey.toBase58(), funder: funder.publicKey.toBase58(), balances }));
+  console.info(JSON.stringify({ event: "collector_status", treasury: treasury.publicKey.toBase58(), keeper: keeper.publicKey.toBase58(), balances }));
 }
 
 async function main(): Promise<void> {

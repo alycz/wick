@@ -1,25 +1,34 @@
-import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddress, getMint, type Mint } from "@solana/spl-token";
+import { createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, type Account, type Mint } from "@solana/spl-token";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
-import { SOLANA_DEVNET_GENESIS_HASH } from "@wick/shared";
+import { FAUCET_GRANT_E6, FAUCET_INVENTORY_E6, SOLANA_DEVNET_GENESIS_HASH, USDC_DECIMALS } from "@wick/shared";
 
-export const FAUCET_GRANT_E6 = 1_000_000_000n;
-export const FAUCET_MAX_SUPPLY_E6 = 200n * FAUCET_GRANT_E6;
+export { FAUCET_GRANT_E6 };
+export const FAUCET_MAX_SUPPLY_E6 = FAUCET_INVENTORY_E6;
 export const FAUCET_SOL_LAMPORTS = Math.round(0.05 * LAMPORTS_PER_SOL);
 // Covers the 0.05 SOL transfer plus ATA rent and transaction fees with margin.
 export const FAUCET_MIN_TREASURY_LAMPORTS = Math.round(0.06 * LAMPORTS_PER_SOL);
 
-type MintSnapshot = Pick<Mint, "decimals" | "isInitialized" | "mintAuthority" | "supply">;
+type MintSnapshot = Pick<Mint, "decimals" | "freezeAuthority" | "isInitialized" | "mintAuthority" | "supply">;
+type TokenAccountSnapshot = Pick<Account, "amount" | "isFrozen" | "isInitialized" | "mint" | "owner">;
 type MintReader = (connection: Connection, mint: PublicKey) => Promise<MintSnapshot>;
+type TokenAccountReader = (connection: Connection, account: PublicKey) => Promise<TokenAccountSnapshot>;
 type TransactionSender = (connection: Connection, transaction: Transaction, signers: Keypair[]) => Promise<string>;
 type TokenAccountDeriver = (mint: PublicKey, owner: PublicKey) => Promise<PublicKey>;
+
+export class FaucetInventoryDepletedError extends Error {
+  constructor() {
+    super("The finite 200-grant demo faucet inventory has been depleted.");
+    this.name = "FaucetInventoryDepletedError";
+  }
+}
 
 export interface SendFaucetGrantOptions {
   connection: Connection;
   mint: PublicKey;
   recipient: PublicKey;
   treasury: Keypair;
-  authority: Keypair;
   readMint?: MintReader;
+  readTokenAccount?: TokenAccountReader;
   sendTransaction?: TransactionSender;
   deriveTokenAccount?: TokenAccountDeriver;
 }
@@ -34,19 +43,29 @@ export async function sendFaucetGrant(options: SendFaucetGrantOptions): Promise<
   if (treasuryBalance < FAUCET_MIN_TREASURY_LAMPORTS) throw new Error("Demo faucet treasury has insufficient devnet SOL");
 
   const mintInfo = await (options.readMint ?? (async (connection, mint) => getMint(connection, mint, "confirmed")))(options.connection, options.mint);
-  if (!mintInfo.isInitialized || mintInfo.decimals !== 6 || !mintInfo.mintAuthority?.equals(options.authority.publicKey)) {
-    throw new Error("Configured faucet authority does not control the initialized six-decimal test-USDC mint");
+  if (!mintInfo.isInitialized || mintInfo.decimals !== USDC_DECIMALS) {
+    throw new Error("Configured faucet mint is not initialized six-decimal test USDC");
   }
-  if (mintInfo.supply + FAUCET_GRANT_E6 > FAUCET_MAX_SUPPLY_E6) throw new Error("The 200-wallet demo faucet cap has been reached.");
+  if (mintInfo.mintAuthority !== null || mintInfo.freezeAuthority !== null) {
+    throw new Error("Configured faucet mint authorities are not permanently revoked");
+  }
+  if (mintInfo.supply !== FAUCET_MAX_SUPPLY_E6) {
+    throw new Error("Configured faucet mint does not have the exact finite 200-grant supply");
+  }
 
-  const ata = await (options.deriveTokenAccount ?? getAssociatedTokenAddress)(options.mint, options.recipient);
+  const deriveTokenAccount = options.deriveTokenAccount ?? getAssociatedTokenAddress;
+  const treasuryAta = await deriveTokenAccount(options.mint, options.treasury.publicKey);
+  const recipientAta = await deriveTokenAccount(options.mint, options.recipient);
+  const treasuryInventory = await (options.readTokenAccount ?? (async (connection, account) => getAccount(connection, account, "confirmed")))(options.connection, treasuryAta);
+  if (!treasuryInventory.isInitialized || treasuryInventory.isFrozen || !treasuryInventory.mint.equals(options.mint) || !treasuryInventory.owner.equals(options.treasury.publicKey)) {
+    throw new Error("Configured faucet treasury token account is invalid");
+  }
+  if (treasuryInventory.amount < FAUCET_GRANT_E6) throw new FaucetInventoryDepletedError();
+
   const transaction = new Transaction().add(
     SystemProgram.transfer({ fromPubkey: options.treasury.publicKey, toPubkey: options.recipient, lamports: FAUCET_SOL_LAMPORTS }),
-    createAssociatedTokenAccountIdempotentInstruction(options.treasury.publicKey, ata, options.recipient, options.mint),
-    createMintToInstruction(options.mint, ata, options.authority.publicKey, FAUCET_GRANT_E6),
+    createAssociatedTokenAccountIdempotentInstruction(options.treasury.publicKey, recipientAta, options.recipient, options.mint),
+    createTransferCheckedInstruction(treasuryAta, options.mint, recipientAta, options.treasury.publicKey, FAUCET_GRANT_E6, USDC_DECIMALS),
   );
-  const signers = options.authority.publicKey.equals(options.treasury.publicKey)
-    ? [options.treasury]
-    : [options.treasury, options.authority];
-  return (options.sendTransaction ?? (async (connection, tx, txSigners) => sendAndConfirmTransaction(connection, tx, txSigners, { commitment: "confirmed" })))(options.connection, transaction, signers);
+  return (options.sendTransaction ?? (async (connection, tx, signers) => sendAndConfirmTransaction(connection, tx, signers, { commitment: "confirmed" })))(options.connection, transaction, [options.treasury]);
 }

@@ -266,7 +266,7 @@ Current live verification is limited to public, read-only data: Gemini discovery
 
 - No public deployment, executable devnet Wick program, generated deployed IDL, test mint, Stream, or video exists yet.
 - The backend chain adapter is explicitly unconfigured, so keeper writes, liquidations, and settlements cannot run end to end.
-- The public Solana devnet faucet returned HTTP 410 in this environment; the documented treasury, keeper, and demo-wallet funder have zero SOL.
+- The public Solana devnet faucet returned HTTP 410 in this environment; the documented treasury and keeper have zero SOL. The treasury is also the demo-wallet funder; the separate mint-authority key is provisioning-only and is revoked before deployment.
 - QuickNode, Railway, Vercel, and authenticated GitHub credentials/project contexts are absent.
 - The self-bootstrapping pool can queue profitable payouts and depends on future losses/liquidity; it is experimental economics.
 - Keeper/oracle trust is not decentralized, the contracts are unaudited, and provider/API availability can interrupt service.

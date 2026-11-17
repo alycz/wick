@@ -6,13 +6,13 @@ Run `pnpm deploy:check` before every attempt. It reports only presence/absence, 
 
 ## 1. Solana devnet program and accounts
 
-Required tooling is Anchor 0.31.1, Solana 2.2.20, SPL Token CLI, and Rust 1.85.1. Required inputs are funded devnet-only admin/keeper/treasury/faucet keypairs. Never commit a keypair.
+Required tooling is Anchor 0.31.1, Solana 2.2.20, SPL Token CLI, and Rust 1.85.1. Required inputs are funded devnet-only admin/keeper/treasury keypairs plus a one-time mint-authority keypair used only during provisioning. Never commit a keypair.
 
 1. Fund the treasury with at least 8 devnet SOL and keep the deploy authority funded. The internal escalation time is Wednesday, November 18 at noon CST.
 2. Generate or restore `target/deploy/wick-keypair.json`, set `PROGRAM_ID` to its public key, run `anchor keys sync`, and confirm `Anchor.toml` and `declare_id!` agree.
 3. Run `anchor build`. `pnpm sync:idl` then refuses an empty IDL and exports the real instruction-bearing IDL to `packages/shared/src/idl.ts`. `pnpm deploy:program` performs both steps and refuses a keypair/program-ID mismatch.
 4. Deploy to devnet with the build plus 20% maximum program length. The deployment script verifies the returned account is executable before logging success.
-5. Run `pnpm create:mint` and retain the verified six-decimal `USDC_TEST_MINT`.
+5. Run `pnpm create:mint`. It creates or migrates the six-decimal `USDC_TEST_MINT`, mints the remaining amount up to exactly 200 grants (200,000 test USDC) into the treasury ATA, and permanently revokes both mint and freeze authorities in the final provisioning transaction. Confirm the read-back reports `remainingGrants`, `mintAuthorityRevoked: true`, and `freezeAuthorityRevoked: true`. Keep `FAUCET_AUTHORITY_KEYPAIR` only until this succeeds; remove it from deployment environments afterward. Re-running the command verifies the finite inventory and cannot refill it.
 6. Run `pnpm init:config`, then verify config, vault, LP state, keeper, and mint accounts through RPC. A build-time ID is not a deployed-program claim.
 
 Current blocker: Solana, Anchor, and SPL Token CLIs, deploy artifacts, funded keypairs, program ID, mint, and devnet SOL are absent. The build-time ID in `Anchor.toml` is not deployed.
@@ -32,9 +32,11 @@ Current blocker: Railway CLI/token/project context are absent, and the chain ada
 
 ## 3. Vercel frontend
 
-1. Set `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_PROGRAM_ID`, `NEXT_PUBLIC_USDC_TEST_MINT`, `NEXT_PUBLIC_RPC_URL`, `TREASURY_KEYPAIR`, and `FAUCET_AUTHORITY_KEYPAIR` in the authorized project. The last two are server-only secrets.
+1. Set `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_PROGRAM_ID`, `NEXT_PUBLIC_USDC_TEST_MINT`, `NEXT_PUBLIC_RPC_URL`, and `TREASURY_KEYPAIR` in the authorized project. Only the treasury key is a server-only runtime secret. Do **not** deploy `FAUCET_AUTHORITY_KEYPAIR`; provisioning has permanently revoked it.
 2. Deploy from the repository root with `vercel deploy --prod`; `vercel.json` builds `@wick/app` from the monorepo.
-3. Wait for the deployment to reach a terminal ready state. Verify `/`, `/m/<live-symbol>`, `/portfolio`, `/pool`, and the safe faucet response in a fresh browser. Record only the canonical production URL.
+3. Wait for the deployment to reach a terminal ready state. Verify `/`, `/m/<live-symbol>`, `/portfolio`, `/pool`, and the safe faucet response in a fresh browser. Before the grant, verify the mint supply is exactly 200,000,000,000 base units, both authorities are `null`, and the treasury ATA holds at least 1,000,000,000 base units. Afterward verify the single signature contains both the 0.05 SOL transfer and the 1,000 test-USDC transfer. Record only the canonical production URL.
+
+The ten-minute browser/IP cooldown and in-flight set are best-effort controls scoped to one warm Vercel instance; they are not a distributed identity or abuse boundary. The hard global bound is the finite treasury token inventory: no runtime key can mint or freeze more test USDC, and concurrent functions race on the same on-chain balance, so an overdraw transaction fails atomically without sending its paired SOL transfer.
 
 Current blocker: Vercel CLI/token/project context, public backend URL, program/mint, and funded faucet keypairs are absent. No Vercel project or URL was created.
 
