@@ -2,7 +2,7 @@
 
 Wick is not deployed. This runbook is intentionally fail-closed: a command returning, a provider accepting a build, or a URL existing is not proof that the product works. Do not record a deployment until the provider reports terminal success and `pnpm deploy:verify` passes against public URLs.
 
-Run `pnpm deploy:check` before every attempt. It reports only presence/absence, never credential values. `pnpm deploy:check --require-ready` is the CI/operator gate and exits non-zero while any prerequisite is absent.
+Run `pnpm deploy:check` before every attempt. It reports only presence/absence, never credential values. It verifies the installed Anchor, Solana, Rust and pnpm versions against the repository pins. `pnpm deploy:check --require-ready` is the CI/operator gate and exits non-zero while any prerequisite or required deployment evidence is absent.
 
 ## 1. Solana devnet program and accounts
 
@@ -28,6 +28,13 @@ Required inputs are an authorized existing Railway project token, the deployed p
 5. Deploy using an authorized Railway token. A detached upload is only queued: poll deployment status until it is terminal `SUCCESS`. Treat `FAILED`, `CRASHED`, `REMOVED`, or a timeout as failure.
 6. Verify `/health` reports `ok`, `cluster: devnet`, healthy volatility, and `chainConfigured: true`; then record the public URL and Railway CPU/RAM/credit usage in `docs/HANDOFF.md`.
 
+For the readiness gate, provide the non-secret context/evidence fields in
+`.env.example`: project, environment and service IDs; the full deployed source
+commit; Dockerfile path; `/data` volume mount; public HTTPS domain; and terminal
+`SUCCESS` status. `RAILWAY_MCP_AUTHENTICATED=true` may replace CLI/token access
+evidence only after the connector is authenticated; it never replaces those
+service and deployment checks.
+
 Current blocker: Railway CLI/token/project context are absent, and deployed chain inputs are absent. Railway connector authentication has been verified, but no Wick service was created while source publication remains approval-blocked. No Railway service or domain was created.
 
 ## 3. Vercel frontend
@@ -35,6 +42,9 @@ Current blocker: Railway CLI/token/project context are absent, and deployed chai
 1. Set `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_PROGRAM_ID`, `NEXT_PUBLIC_USDC_TEST_MINT`, `NEXT_PUBLIC_RPC_URL`, and `TREASURY_KEYPAIR` in the authorized project. Only the treasury key is a server-only runtime secret. Do **not** deploy `FAUCET_AUTHORITY_KEYPAIR`; provisioning has permanently revoked it.
 2. Deploy from the repository root with `vercel deploy --prod`; `vercel.json` builds `@wick/app` from the monorepo.
 3. Wait for the deployment to reach a terminal ready state. Verify `/`, `/m/<live-symbol>`, `/portfolio`, `/pool`, and the safe faucet response in a fresh browser. Before the grant, verify the mint supply is exactly 200,000,000,000 base units, both authorities are `null`, and the treasury ATA holds at least 1,000,000,000 base units. Afterward verify the single signature contains both the 0.05 SOL transfer and the 1,000 test-USDC transfer. Record only the canonical production URL.
+
+Set `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID` from the authorized linked project;
+the readiness gate will not infer project context from a CLI installation.
 
 The ten-minute browser/IP cooldown and in-flight set are best-effort controls scoped to one warm Vercel instance; they are not a distributed identity or abuse boundary. The hard global bound is the finite treasury token inventory: no runtime key can mint or freeze more test USDC, and concurrent functions race on the same on-chain balance, so an overdraw transaction fails atomically without sending its paired SOL transfer.
 
@@ -45,7 +55,7 @@ Current blocker: Vercel CLI/token/project context, public backend URL, program/m
 Creating a Stream before a real Wick transaction would spend credits without qualifying evidence. Wait until the program has a successful devnet transaction and the Railway HTTPS webhook accepts authenticated events.
 
 1. Set `QUICKNODE_API_KEY`, `QUICKNODE_RPC_URL`, `PROGRAM_ID`, `NEXT_PUBLIC_BACKEND_URL`, `STREAMS_WEBHOOK_SECRET`, and the real transaction block as `STREAMS_TEST_BLOCK`.
-2. Run `pnpm create:stream -- --test-only`. It substitutes the deployed program ID, tests the filter against that real block, and saves the response. It must contain a matched Wick transaction.
+2. Run `pnpm create:stream -- --test-only`. It substitutes the deployed program ID, tests the filter against that real block, and resolves the matched signature through `QUICKNODE_RPC_URL`. It saves an evidence envelope only after the RPC transaction is successful, is in that same block, and actually invokes Wick. The readiness gate parses and cross-checks this evidence against `PROGRAM_ID` and `STREAMS_TEST_BLOCK`; file existence alone never passes.
 3. Run `pnpm create:stream` once. Record the returned Stream ID. Confirm it is active, network `solana-devnet`, dataset `block`, filter matches Wick and skips failed transactions, and destination is the authenticated backend webhook.
 4. Submit a real program transaction and require it at `/feed` within roughly two seconds. Only then may the README/HANDOFF checklist be marked complete.
 5. One hour later, read QuickNode usage and project burn through Saturday, November 21 at 11:59 PM CST. If projected usage exceeds 8M credits, enable the specification's on-demand pause/resume policy and record the measurement and decision.

@@ -1,12 +1,16 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { PUBLIC_DEVNET_RPC } from "../packages/shared/src/constants.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  QUICKNODE_DATASET,
+  QUICKNODE_NETWORK,
+  type QuickNodeFilterEvidence,
+  type RpcTransactionEvidence,
+  verifyFilterTestResult,
+} from "./lib/quicknode-evidence.js";
 
 const STREAMS_API = "https://api.quicknode.com/streams/rest/v1";
-const NETWORK = "solana-devnet";
-const DATASET = "block";
 const EXTERNAL_ID = "wick-solana-devnet-program-events-v1";
 
 export interface StreamEnvironment {
@@ -18,26 +22,26 @@ export interface StreamEnvironment {
   testBlock?: string;
 }
 
-function required(name: string): string {
-  const value = process.env[name]?.trim();
+function required(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
 
-export function readEnvironment(): StreamEnvironment {
-  const programId = required("PROGRAM_ID");
+export function readEnvironment(environment: NodeJS.ProcessEnv = process.env): StreamEnvironment {
+  const programId = required(environment, "PROGRAM_ID");
   new PublicKey(programId);
-  const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL)?.trim();
+  const backendUrl = (environment.NEXT_PUBLIC_BACKEND_URL ?? environment.BACKEND_URL)?.trim();
   if (!backendUrl) throw new Error("NEXT_PUBLIC_BACKEND_URL or BACKEND_URL is required");
   const parsedBackend = new URL(backendUrl);
   if (parsedBackend.protocol !== "https:") throw new Error("The Streams webhook backend must use HTTPS");
   return {
-    apiKey: required("QUICKNODE_API_KEY"),
+    apiKey: required(environment, "QUICKNODE_API_KEY"),
     programId,
     backendUrl: parsedBackend.toString().replace(/\/$/, ""),
-    webhookSecret: required("STREAMS_WEBHOOK_SECRET"),
-    rpcUrl: process.env.PUBLIC_SOLANA_RPC_URL?.trim() || PUBLIC_DEVNET_RPC,
-    ...(process.env.STREAMS_TEST_BLOCK?.trim() ? { testBlock: process.env.STREAMS_TEST_BLOCK.trim() } : {}),
+    webhookSecret: required(environment, "STREAMS_WEBHOOK_SECRET"),
+    rpcUrl: required(environment, "QUICKNODE_RPC_URL"),
+    ...(environment.STREAMS_TEST_BLOCK?.trim() ? { testBlock: environment.STREAMS_TEST_BLOCK.trim() } : {}),
   };
 }
 
@@ -97,12 +101,40 @@ async function findRecentProgramBlock(rpcUrl: string, programId: string): Promis
   return successful.slot.toString();
 }
 
-function containsMatchedTransaction(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(containsMatchedTransaction);
-  if (!value || typeof value !== "object") return false;
-  const object = value as Record<string, unknown>;
-  if (Array.isArray(object.matchedTransactions) && object.matchedTransactions.length > 0) return true;
-  return Object.values(object).some(containsMatchedTransaction);
+async function loadRpcTransaction(connection: Connection, signature: string): Promise<RpcTransactionEvidence | null> {
+  const transaction = await connection.getParsedTransaction(signature, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  if (!transaction) return null;
+  const instructions = [
+    ...transaction.transaction.message.instructions,
+    ...(transaction.meta?.innerInstructions ?? []).flatMap((group) => group.instructions),
+  ];
+  return {
+    signature: transaction.transaction.signatures[0] ?? "",
+    slot: transaction.slot,
+    succeeded: transaction.meta?.err === null,
+    invokedProgramIds: instructions.map((instruction) => instruction.programId.toBase58()),
+  };
+}
+
+export async function verifyAndSaveFilterTestResult(input: {
+  testResult: unknown;
+  programId: string;
+  block: string;
+  loadTransaction: (signature: string) => Promise<RpcTransactionEvidence | null>;
+  writeEvidence: (evidence: QuickNodeFilterEvidence) => Promise<void>;
+  now?: () => Date;
+}): Promise<QuickNodeFilterEvidence> {
+  const evidence = await verifyFilterTestResult(input.testResult, {
+    programId: input.programId,
+    block: input.block,
+    loadTransaction: input.loadTransaction,
+    ...(input.now ? { now: input.now } : {}),
+  });
+  await input.writeEvidence(evidence);
+  return evidence;
 }
 
 export async function createStream(options: { testOnly?: boolean } = {}): Promise<void> {
@@ -112,27 +144,33 @@ export async function createStream(options: { testOnly?: boolean } = {}): Promis
   const filter = substituteProgramId(filterSource, environment.programId);
   const filterFunction = Buffer.from(filter).toString("base64");
   const block = environment.testBlock ?? await findRecentProgramBlock(environment.rpcUrl, environment.programId);
+  const connection = new Connection(environment.rpcUrl, "confirmed");
 
   const testResult = await request(environment.apiKey, "/streams/test_filter", {
-    network: NETWORK,
-    dataset: DATASET,
+    network: QUICKNODE_NETWORK,
+    dataset: QUICKNODE_DATASET,
     filter_function: filterFunction,
     block,
   });
   const fixture = resolve(root, "services/backend/fixtures/quicknode-filter-test.json");
-  await mkdir(dirname(fixture), { recursive: true });
-  await writeFile(fixture, `${JSON.stringify(testResult, null, 2)}\n`, "utf8");
-  if (!containsMatchedTransaction(testResult)) {
-    throw new Error(`The QuickNode filter test for block ${block} did not return a Wick transaction; the real response was saved for inspection`);
-  }
-  console.log(`QuickNode filter test matched a Wick transaction in devnet block ${block}`);
+  const evidence = await verifyAndSaveFilterTestResult({
+    testResult,
+    programId: environment.programId,
+    block,
+    loadTransaction: (signature) => loadRpcTransaction(connection, signature),
+    writeEvidence: async (value) => {
+      await mkdir(dirname(fixture), { recursive: true });
+      await writeFile(fixture, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    },
+  });
+  console.log(`QuickNode filter test matched and RPC-verified ${evidence.matchedTransaction.signature} in devnet block ${block}`);
   if (options.testOnly) return;
 
   const result = await request(environment.apiKey, "/streams", {
     name: "wick-solana-devnet",
     external_id: EXTERNAL_ID,
-    network: NETWORK,
-    dataset: DATASET,
+    network: QUICKNODE_NETWORK,
+    dataset: QUICKNODE_DATASET,
     region: "usa_east",
     dataset_batch_size: 5,
     elastic_batch_enabled: true,
