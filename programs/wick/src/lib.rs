@@ -52,6 +52,7 @@ pub mod wick {
         lp.total_staked = 0;
         lp.loser_mint = ctx.accounts.loser_mint.key();
         lp.bump = ctx.bumps.lp;
+        lp.undistributed_staker_rewards = 0;
 
         emit!(ConfigInitialized {
             admin: config.admin,
@@ -60,6 +61,56 @@ pub mod wick {
             loser_mint: lp.loser_mint
         });
         emit_lp(lp);
+        Ok(())
+    }
+
+    /// Reallocates a legacy LP PDA after the deferred-reward cursor was
+    /// appended. Existing bytes and field offsets are preserved, and the new
+    /// cursor is zero-initialized.
+    pub fn migrate_lp(ctx: Context<MigrateLp>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        let lp = ctx.accounts.lp.to_account_info();
+        require_keys_eq!(*lp.owner, crate::ID, WickError::Unauthorized);
+
+        let new_len = 8 + LpState::INIT_SPACE;
+        let old_len = new_len
+            .checked_sub(std::mem::size_of::<u64>())
+            .ok_or(WickError::MathOverflow)?;
+        require!(
+            lp.data_len() == old_len || lp.data_len() == new_len,
+            WickError::InvalidParameter
+        );
+        {
+            let data = lp.try_borrow_data()?;
+            require!(
+                data.get(..8) == Some(LpState::DISCRIMINATOR.as_ref()),
+                WickError::InvalidParameter
+            );
+        }
+
+        let previous_len = lp.data_len();
+        if previous_len == old_len {
+            let required_lamports = Rent::get()?.minimum_balance(new_len);
+            let shortfall = required_lamports.saturating_sub(lp.lamports());
+            if shortfall > 0 {
+                anchor_lang::system_program::transfer(
+                    CpiContext::new(
+                        ctx.accounts.system_program.to_account_info(),
+                        anchor_lang::system_program::Transfer {
+                            from: ctx.accounts.admin.to_account_info(),
+                            to: lp.clone(),
+                        },
+                    ),
+                    shortfall,
+                )?;
+            }
+            lp.resize(new_len)?;
+        }
+
+        emit!(LpMigrated {
+            old_len: u32::try_from(previous_len).map_err(|_| error!(WickError::MathOverflow))?,
+            new_len: u32::try_from(new_len).map_err(|_| error!(WickError::MathOverflow))?,
+        });
         Ok(())
     }
 
@@ -517,6 +568,7 @@ pub mod wick {
                 .checked_add(1)
                 .ok_or(WickError::MathOverflow)?;
         }
+        distribute_deferred_staker_rewards(&mut ctx.accounts.lp)?;
         distribute_staker_surplus(&mut ctx.accounts.lp, ctx.accounts.config.staker_cap)?;
         emit!(ClaimPaid {
             claim: ctx.accounts.claim.key(),
@@ -536,6 +588,10 @@ pub mod wick {
 
     pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
         require!(amount > 0, WickError::InvalidParameter);
+        require!(
+            ctx.accounts.lp.undistributed_staker_rewards == 0,
+            WickError::DeferredRewardsPending
+        );
         let pending = accrued_rewards(
             ctx.accounts.stake_account.amount,
             ctx.accounts.lp.reward_per_token_e12,
@@ -581,6 +637,10 @@ pub mod wick {
         require!(
             amount > 0 && amount <= ctx.accounts.stake_account.amount,
             WickError::InvalidParameter
+        );
+        require!(
+            ctx.accounts.lp.undistributed_staker_rewards == 0,
+            WickError::DeferredRewardsPending
         );
         let pending = accrued_rewards(
             ctx.accounts.stake_account.amount,
@@ -761,6 +821,19 @@ pub struct InitConfig<'info> {
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct MigrateLp<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: the instruction validates the owner, discriminator and exact
+    /// legacy/current length before reallocating the canonical LP PDA.
+    #[account(mut, seeds = [b"lp"], bump)]
+    pub lp: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -1100,13 +1173,26 @@ fn add_fee(lp: &mut LpState, fee: u64) -> Result<()> {
         .ok_or(WickError::MathOverflow)?;
     if lp.queue_owed == 0 {
         increment_reward_per_token(lp, stakers)?;
+    } else if lp.total_staked > 0 {
+        lp.undistributed_staker_rewards = lp
+            .undistributed_staker_rewards
+            .checked_add(stakers)
+            .ok_or(WickError::MathOverflow)?;
     }
-    // If fees arrive while claims are queued, their share remains reserved in
-    // fees_stakers but is not assigned in the accumulator. The specified
-    // LpState has no separate undistributed-reward cursor, so assigning that
-    // reserve after the queue clears could double-credit earlier, unclaimed
-    // rewards. A future account migration can add such a cursor safely.
     Ok(())
+}
+
+fn distribute_deferred_staker_rewards(lp: &mut LpState) -> Result<u64> {
+    if lp.queue_owed > 0 || lp.undistributed_staker_rewards == 0 {
+        return Ok(0);
+    }
+    // Stake/unstake are locked from the first deferred fee until this point,
+    // so the same staking cohort and denominator receive the queued accrual.
+    let amount = lp.undistributed_staker_rewards;
+    require!(lp.total_staked > 0, WickError::InvalidParameter);
+    increment_reward_per_token(lp, amount)?;
+    lp.undistributed_staker_rewards = 0;
+    Ok(amount)
 }
 
 fn apply_lp_pnl(lp: &mut LpState, pnl: i128, fee: u64, staker_cap: u64) -> Result<()> {
@@ -1320,6 +1406,22 @@ fn settle_open_position(
 mod economic_regression_tests {
     use super::*;
 
+    #[derive(AnchorSerialize)]
+    struct LegacyLpState {
+        balance: i128,
+        high_watermark: u64,
+        cumulative_losses: u64,
+        fees_stakers: u64,
+        fees_treasury: u64,
+        queue_head: u64,
+        queue_tail: u64,
+        queue_owed: u64,
+        reward_per_token_e12: u128,
+        total_staked: u64,
+        loser_mint: Pubkey,
+        bump: u8,
+    }
+
     fn lp(balance: i128, queue_owed: u64, total_staked: u64) -> LpState {
         LpState {
             balance,
@@ -1334,7 +1436,35 @@ mod economic_regression_tests {
             total_staked,
             loser_mint: Pubkey::default(),
             bump: 0,
+            undistributed_staker_rewards: 0,
         }
+    }
+
+    #[test]
+    fn deferred_cursor_is_an_append_only_layout_change() {
+        let state = lp(123, 456, 789);
+        let legacy = LegacyLpState {
+            balance: state.balance,
+            high_watermark: state.high_watermark,
+            cumulative_losses: state.cumulative_losses,
+            fees_stakers: state.fees_stakers,
+            fees_treasury: state.fees_treasury,
+            queue_head: state.queue_head,
+            queue_tail: state.queue_tail,
+            queue_owed: state.queue_owed,
+            reward_per_token_e12: state.reward_per_token_e12,
+            total_staked: state.total_staked,
+            loser_mint: state.loser_mint,
+            bump: state.bump,
+        };
+        let mut legacy_bytes = LpState::DISCRIMINATOR.to_vec();
+        legacy.serialize(&mut legacy_bytes).unwrap();
+        let mut current_bytes = Vec::new();
+        state.try_serialize(&mut current_bytes).unwrap();
+
+        assert_eq!(current_bytes.len(), legacy_bytes.len() + 8);
+        assert_eq!(&current_bytes[..legacy_bytes.len()], legacy_bytes);
+        assert_eq!(&current_bytes[legacy_bytes.len()..], &[0_u8; 8]);
     }
 
     #[test]
@@ -1375,18 +1505,33 @@ mod economic_regression_tests {
     }
 
     #[test]
-    fn fee_accumulator_does_not_advance_while_queue_is_outstanding() {
+    fn queued_fee_share_is_assigned_exactly_once_after_queue_clears() {
         let mut state = lp(0, 1, 10_000_000);
         add_fee(&mut state, 2_000_000).unwrap();
         assert_eq!(state.fees_stakers, 1_000_000);
         assert_eq!(state.fees_treasury, 1_000_000);
         assert_eq!(state.reward_per_token_e12, 0);
+        assert_eq!(state.undistributed_staker_rewards, 1_000_000);
+
+        add_fee(&mut state, 4_000_000).unwrap();
+        assert_eq!(state.fees_stakers, 3_000_000);
+        assert_eq!(state.undistributed_staker_rewards, 3_000_000);
+        assert_eq!(distribute_deferred_staker_rewards(&mut state).unwrap(), 0);
 
         state.queue_owed = 0;
+        assert_eq!(
+            distribute_deferred_staker_rewards(&mut state).unwrap(),
+            3_000_000
+        );
+        assert_eq!(state.undistributed_staker_rewards, 0);
+        assert_eq!(state.reward_per_token_e12, 3 * REWARD_SCALE / 10);
+        assert_eq!(distribute_deferred_staker_rewards(&mut state).unwrap(), 0);
+        assert_eq!(state.reward_per_token_e12, 3 * REWARD_SCALE / 10);
+
         add_fee(&mut state, 2_000_000).unwrap();
-        assert_eq!(state.fees_stakers, 2_000_000);
-        assert_eq!(state.fees_treasury, 2_000_000);
-        assert_eq!(state.reward_per_token_e12, REWARD_SCALE / 10);
+        assert_eq!(state.fees_stakers, 4_000_000);
+        assert_eq!(state.fees_treasury, 4_000_000);
+        assert_eq!(state.reward_per_token_e12, 4 * REWARD_SCALE / 10);
     }
 }
 

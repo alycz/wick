@@ -42,6 +42,9 @@ pub struct LpState {
     pub total_staked: u64,
     pub loser_mint: Pubkey,
     pub bump: u8,
+    /// Fee shares accrued while payout claims had priority. Appended to keep
+    /// every pre-existing LpState field at its original serialized offset.
+    pub undistributed_staker_rewards: u64,
 }
 
 #[account]

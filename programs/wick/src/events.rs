@@ -120,6 +120,12 @@ pub struct LpUpdated {
     pub queue_owed: u64,
 }
 
+#[event]
+pub struct LpMigrated {
+    pub old_len: u32,
+    pub new_len: u32,
+}
+
 /// Cross-language conformance proof emitted by the read-only vector verifier.
 #[event]
 pub struct MathVectorsVerified {
