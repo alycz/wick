@@ -4,7 +4,7 @@
 
 Wick is a Solana devnet application for leveraged synthetic YES/NO positions on Gemini's live BTC prediction markets. It computes an options-implied fair value for every supported strike, shows that value beside Gemini's bid and ask, and sizes leverage market by market using binary gamma. Trades settle against Gemini's official outcome, never a price invented by Wick.
 
-> **Verification status — November 17, 2026:** the application, Anchor program, pricing engine, indexer, frontend, deployment gates, and recording pipeline are implemented and pass local checks. Public Gemini and volatility feeds were exercised successfully. Wick is **not deployed**: there is no executable devnet Wick program, test-USDC mint, Railway service, Vercel URL, active QuickNode Stream, or demo video. The ID currently present in the source is a build-time identity only. See [HANDOFF](docs/HANDOFF.md), [DEPLOYMENT](docs/DEPLOYMENT.md), and [ELIGIBILITY](docs/ELIGIBILITY.md). No sponsor or working-demo eligibility is claimed before those gates pass.
+> **Verification status — November 17, 2026:** WP11 passed 94 TypeScript tests, 15 native Rust tests, lint and the production build. Real public Gemini and volatility reads passed. Seven implementation/validation findings remain open or partial, including the unexecuted Anchor lifecycle suite; see the [WP11 report](docs/WP11_REPORT.md). Wick is **not deployed**: there is no executable devnet Wick program, test-USDC mint, Railway service, Vercel URL, active QuickNode Stream, or demo video. The ID currently present in the source is a build-time identity only. See [HANDOFF](docs/HANDOFF.md), [DEPLOYMENT](docs/DEPLOYMENT.md), and [ELIGIBILITY](docs/ELIGIBILITY.md). No sponsor or working-demo eligibility is claimed before those gates pass.
 
 Wick is a UBC Hackathon 2026 project for Track 02, DeFi & Onchain Apps. It is devnet-only software using test assets; it is not audited and is not a real-money product.
 
@@ -265,7 +265,10 @@ Current live verification is limited to public, read-only data: Gemini discovery
 ## Known limitations
 
 - No public deployment, executable devnet Wick program, generated deployed IDL, test mint, Stream, or video exists yet.
-- The backend chain adapter is explicitly unconfigured, so keeper writes, liquidations, and settlements cannot run end to end.
+- Real backend/frontend transaction adapters exist, but remain fail-closed until a generated matching IDL, executable devnet program, funded authorities and public configuration are verified.
+- Independent WP11 review passed 94 TypeScript and 15 native Rust tests; local-validator/on-chain execution and public lifecycle remain unverified. See [WP11 report](docs/WP11_REPORT.md) for the seven open/partial findings.
+- Faucet cooldown is best-effort per serverless instance; its global funding bound is finite on-chain inventory. Staking fee shares accrued while payout claims are queued remain reserved without later reward assignment.
+- Persistent backend collector integration and external source publication remain approval-blocked; the standalone collector is preserved.
 - The public Solana devnet faucet returned HTTP 410 in this environment; the documented treasury and keeper have zero SOL. The treasury is also the demo-wallet funder; the separate mint-authority key is provisioning-only and is revoked before deployment.
 - QuickNode, Railway, Vercel, and authenticated GitHub credentials/project contexts are absent.
 - The self-bootstrapping pool can queue profitable payouts and depends on future losses/liquidity; it is experimental economics.
