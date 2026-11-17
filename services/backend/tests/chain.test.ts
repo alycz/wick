@@ -6,7 +6,7 @@ import {
   submitAndConfirmTransaction,
   type ChainTransport,
 } from "../src/pricer/chain.js";
-import type { CreateMarketRequest, MarkUpdateRequest, OpenPositionRef } from "../src/pricer/types.js";
+import type { CreateMarketRequest, MarkUpdateRequest, OpenPositionRef, SettlementMarketRef } from "../src/pricer/types.js";
 
 const programId = web3.Keypair.generate().publicKey;
 const keeper = web3.Keypair.generate();
@@ -43,6 +43,7 @@ class RecordingTransport implements ChainTransport {
     return "confirmed-mark-signature";
   }
   listOpenPositions = vi.fn(async (): Promise<readonly OpenPositionRef[]> => []);
+  listSettlementMarkets = vi.fn(async (): Promise<readonly SettlementMarketRef[]> => []);
   liquidate = vi.fn(async () => "liquidate-signature");
   settleMarket = vi.fn(async () => "settle-signature");
   voidMarket = vi.fn(async () => "void-signature");

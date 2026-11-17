@@ -29,6 +29,13 @@ interface Candidate {
   strike: number;
 }
 
+interface PendingSettlement {
+  symbol: string;
+  eventTicker: string;
+  expiryMs: number;
+  stage: "await_outcome" | "crank";
+}
+
 export interface PricerEngineOptions {
   gemini: GeminiGateway;
   vol: VolSource;
@@ -97,7 +104,8 @@ export class PricerEngine {
   private quotes = new Map<string, GeminiQuote>();
   private lastPosted = new Map<string, { markE6: number; cap: number; at: number }>();
   private ensuredMarkets = new Set<string>();
-  private handledSettlements = new Set<string>();
+  private pendingSettlements = new Map<string, PendingSettlement>();
+  private completedSettlements = new Set<string>();
   private quoteStream: QuoteStream | undefined;
   private quoteSymbolsKey = "";
   private intervals: ReturnType<typeof setInterval>[] = [];
@@ -141,6 +149,8 @@ export class PricerEngine {
       chainConfigured: this.chain.configured(),
       running: this.runningState,
       ...(this.lastDiscoveryAt === undefined ? {} : { lastDiscoveryAt: this.lastDiscoveryAt }),
+      // `lastMarkAt` is intentionally the last confirmed on-chain batch, not
+      // the most recent local pricing attempt. Demo readiness depends on it.
       ...(this.lastMarkAt === undefined ? {} : { lastMarkAt: this.lastMarkAt }),
       ...(this.lastError === undefined ? {} : { lastError: this.lastError }),
     };
@@ -202,6 +212,12 @@ export class PricerEngine {
           if (!Number.isFinite(strike) || strike <= 0) continue;
           const candidate: Candidate = { bucket: group.bucket, event: group.event, contract, strike };
           next.set(contract.instrumentSymbol, candidate);
+          this.rememberPendingSettlement({
+            symbol: contract.instrumentSymbol,
+            eventTicker: group.event.ticker,
+            expiryMs: Date.parse(group.event.expiryDate),
+            stage: "await_outcome",
+          });
           this.quotes.set(contract.instrumentSymbol, this.quotes.get(contract.instrumentSymbol) ?? quoteFromContract(contract, this.now()));
           if (this.chain.configured()) ensureRequests.push(this.ensureMarket(candidate));
         }
@@ -236,7 +252,6 @@ export class PricerEngine {
         }
       }
       this.store.replace(markets, now);
-      this.lastMarkAt = now;
       this.lastError = undefined;
       if (this.chain.configured()) {
         await this.postAdaptiveMarks(markets, now);
@@ -254,29 +269,35 @@ export class PricerEngine {
     this.settling = true;
     try {
       const now = this.now();
-      const expired = [...this.candidates.values()].filter((candidate) =>
-        Date.parse(candidate.event.expiryDate) <= now && !this.handledSettlements.has(candidate.contract.instrumentSymbol));
-      for (const candidate of expired) {
+      try { await this.recoverPendingSettlements(); }
+      catch (error) {
+        this.logger.warn({ error: errorMessage(error) }, "On-chain settlement recovery failed; retrying known pending markets");
+      }
+      const expired = [...this.pendingSettlements.values()].filter((pending) => pending.expiryMs <= now);
+      for (const pending of expired) {
         try {
-          const event = await withRetry(() => this.gemini.getEvent(candidate.event.ticker), { attempts: 2, baseDelayMs: 250 });
-          if (event.status !== "settled" && event.status !== "invalid") continue;
-          const symbol = candidate.contract.instrumentSymbol;
-          if (event.status === "invalid") {
-            const signature = await this.chain.voidMarket(symbol);
-            this.logger.info({ symbol, signature }, "Invalid Gemini market voided on chain");
-          } else {
-            const contract = event.contracts.find((item) => item.instrumentSymbol === symbol);
-            if (!contract?.resolutionSide) throw new Error("Gemini settlement is missing resolutionSide");
-            const settlementValue = event.settlement?.value ?? contract.settlementValue;
-            if (settlementValue == null) throw new Error("Gemini settlement is missing official settlement value");
-            const signature = await this.chain.settleMarket(symbol, contract.resolutionSide, settlementToE6(settlementValue));
-            this.logger.info({ symbol, outcome: contract.resolutionSide, signature }, "Gemini outcome settled on chain");
+          if (pending.stage === "await_outcome") {
+            const event = await withRetry(() => this.gemini.getEvent(pending.eventTicker), { attempts: 2, baseDelayMs: 250 });
+            if (event.status !== "settled" && event.status !== "invalid") continue;
+            if (event.status === "invalid") {
+              const signature = await this.chain.voidMarket(pending.symbol);
+              this.logger.info({ symbol: pending.symbol, signature }, "Invalid Gemini market voided on chain");
+            } else {
+              const contract = event.contracts.find((item) => item.instrumentSymbol === pending.symbol);
+              if (!contract?.resolutionSide) throw new Error("Gemini settlement is missing resolutionSide");
+              const settlementValue = event.settlement?.value ?? contract.settlementValue;
+              if (settlementValue == null) throw new Error("Gemini settlement is missing official settlement value");
+              const signature = await this.chain.settleMarket(pending.symbol, contract.resolutionSide, settlementToE6(settlementValue));
+              this.logger.info({ symbol: pending.symbol, outcome: contract.resolutionSide, signature }, "Gemini outcome settled on chain");
+            }
+            pending.stage = "crank";
           }
-          await this.chain.settleOpenPositions(symbol);
+          await this.chain.settleOpenPositions(pending.symbol);
           await this.chain.claimQueue();
-          this.handledSettlements.add(symbol);
+          this.completedSettlements.add(pending.symbol);
+          this.pendingSettlements.delete(pending.symbol);
         } catch (error) {
-          this.logger.warn({ symbol: candidate.contract.instrumentSymbol, error: errorMessage(error) }, "Settlement crank failed");
+          this.logger.warn({ symbol: pending.symbol, stage: pending.stage, error: errorMessage(error) }, "Settlement crank failed");
         }
       }
     } finally {
@@ -390,6 +411,7 @@ export class PricerEngine {
         signal: controller.signal,
       });
       this.lastBatchAt = now;
+      this.lastMarkAt = now;
       for (const request of requests) this.lastPosted.set(request.symbol, { markE6: request.markE6, cap: request.maxLeverage, at: now });
       this.priorityFeeMicroLamports = 0;
       this.logger.info({ count: requests.length, signature }, "Adaptive mark batch confirmed");
@@ -398,6 +420,25 @@ export class PricerEngine {
       this.logger.warn({ count: requests.length, error: errorMessage(error) }, "Mark batch failed; next attempt will add a small priority fee");
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  private rememberPendingSettlement(pending: PendingSettlement): void {
+    if (this.completedSettlements.has(pending.symbol)) return;
+    const current = this.pendingSettlements.get(pending.symbol);
+    if (!current || (current.stage === "await_outcome" && pending.stage === "crank")) this.pendingSettlements.set(pending.symbol, pending);
+  }
+
+  private async recoverPendingSettlements(): Promise<void> {
+    const markets = await this.chain.listSettlementMarkets();
+    for (const market of markets) {
+      if (this.completedSettlements.has(market.symbol)) continue;
+      this.rememberPendingSettlement({
+        symbol: market.symbol,
+        eventTicker: eventTickerFromSymbol(market.symbol),
+        expiryMs: market.expiryTs * 1_000,
+        stage: market.status === "settled" || market.status === "invalid" ? "crank" : "await_outcome",
+      });
     }
   }
 
@@ -427,4 +468,12 @@ export class PricerEngine {
     this.lastError = `${operation}: ${errorMessage(error)}`;
     this.logger.error({ operation, error: errorMessage(error) }, "Pricer operation failed");
   }
+}
+
+function eventTickerFromSymbol(symbol: string): string {
+  if (!symbol.startsWith("GEMI-")) throw new Error(`Cannot recover Gemini event ticker from symbol ${symbol}`);
+  const withoutPrefix = symbol.slice("GEMI-".length);
+  const contractSeparator = withoutPrefix.lastIndexOf("-");
+  if (contractSeparator <= 0) throw new Error(`Cannot recover Gemini event ticker from symbol ${symbol}`);
+  return withoutPrefix.slice(0, contractSeparator);
 }
