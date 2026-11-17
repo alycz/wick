@@ -43,6 +43,8 @@ const healthSchema = z.object({
   volSource: z.enum(["deribit", "derive", "realized"]),
   geminiHealthy: z.boolean().optional(),
   lastTickTs: z.number().optional(),
+  markAgeMs: z.number().nonnegative().optional(),
+  discoveryAgeMs: z.number().nonnegative().optional(),
 }).passthrough();
 
 export interface ClaimView { address: string; claimIndex: string; owner: string; amountE6: string; paidE6: string; status: string }

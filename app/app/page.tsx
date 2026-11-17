@@ -6,6 +6,9 @@ import type { PricerMarket } from "@wick/shared";
 import { useHealth, useMarkets } from "@/hooks/use-markets";
 import { cents, dollars, durationCountdown } from "@/lib/format";
 
+const LIVE_MARK_MAX_AGE_MS = 10_000;
+const LIVE_QUOTE_MAX_AGE_MS = 30_000;
+
 const tabs = [
   ["Hourly", "1h"], ["Daily", "1d"], ["Weekly", "1w"], ["Month-end", "month-end"],
 ] as const;
@@ -22,6 +25,13 @@ export default function MarketsPage() {
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(timer); }, []);
   const hero = useMemo(() => markets.filter((market) => market.duration === "15m" && market.status === "open").sort((a, b) => a.expiryTs - b.expiryTs)[0], [markets]);
   const ladder = markets.filter((market) => market.kind === "ladder" && market.duration === duration).sort((a, b) => a.strike - b.strike);
+  const quoteAgeMs = hero ? now - hero.gemini.ts : undefined;
+  const live = Boolean(
+    hero && !error && health?.ok && health.chainConfigured && health.volHealthy
+      && health.markAgeMs !== undefined && health.markAgeMs <= LIVE_MARK_MAX_AGE_MS
+      && quoteAgeMs !== undefined && quoteAgeMs >= 0 && quoteAgeMs <= LIVE_QUOTE_MAX_AGE_MS,
+  );
+  const heroStatus = live ? "Live BTC" : loading && !hero ? "Loading BTC" : hero ? "Stale BTC" : "BTC unavailable";
 
   return <div className="page-stack">
     <section className="page-intro">
@@ -35,7 +45,7 @@ export default function MarketsPage() {
     </div>
     {error && <div className="notice" role="status">{error}</div>}
     <section className="hero-market panel" aria-labelledby="hero-title">
-      <div className="section-heading"><div><span className="live-dot connected" /> Live BTC · 15 minute</div>{hero && <span className="badge">{hero.volSource} vol</span>}</div>
+      <div className="section-heading"><div><span className={`live-dot ${live ? "connected" : ""}`} /> {heroStatus} · 15 minute</div>{hero && <span className="badge">{hero.volSource} vol</span>}</div>
       {loading && !hero ? <div className="skeleton-block" /> : hero ? <>
         <div className="hero-main">
           <div><span className="muted">Reference strike</span><strong className="hero-number">{dollars(hero.strike, 2)}</strong><small>BTC spot {dollars(hero.spot, 2)}</small></div>
