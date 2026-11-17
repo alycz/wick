@@ -14,7 +14,7 @@ interface InitBuilder {
 }
 
 export async function initConfig(options: { verifyOnly?: boolean } = {}): Promise<void> {
-  if (WICK_IDL.instructions.length === 0) throw new Error("Generated Wick IDL is empty; run the verified WP2 Anchor build/export before init-config");
+  if ((WICK_IDL.instructions as readonly unknown[]).length === 0) throw new Error("Generated Wick IDL is empty; run the verified WP2 Anchor build/export before init-config");
   const programId = new PublicKey(requiredEnv("PROGRAM_ID"));
   if (programId.toBase58() !== WICK_IDL.address) throw new Error("PROGRAM_ID does not match packages/shared generated IDL address");
   const usdcMint = new PublicKey(requiredEnv("USDC_TEST_MINT"));

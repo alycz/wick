@@ -13,7 +13,7 @@ use events::*;
 use math::*;
 use state::*;
 
-declare_id!("EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi");
+declare_id!("HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN");
 
 #[program]
 pub mod wick {
@@ -883,24 +883,24 @@ pub struct ClosePosition<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump, has_one = usdc_mint)]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
     #[account(mut)]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
     #[account(mut, has_one = owner, has_one = market, close = owner)]
-    pub position: Account<'info, Position>,
+    pub position: Box<Account<'info, Position>>,
     #[account(mut, seeds = [b"lp"], bump = lp.bump, has_one = loser_mint)]
-    pub lp: Account<'info, LpState>,
+    pub lp: Box<Account<'info, LpState>>,
     #[account(mut, seeds = [b"vault"], bump, token::mint = usdc_mint, token::authority = vault)]
-    pub vault: Account<'info, TokenAccount>,
-    pub usdc_mint: Account<'info, Mint>,
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub usdc_mint: Box<Account<'info, Mint>>,
     #[account(mut, associated_token::mint = usdc_mint, associated_token::authority = owner)]
-    pub owner_usdc: Account<'info, TokenAccount>,
+    pub owner_usdc: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    pub loser_mint: Account<'info, Mint>,
+    pub loser_mint: Box<Account<'info, Mint>>,
     #[account(init_if_needed, payer = owner, associated_token::mint = loser_mint, associated_token::authority = owner)]
-    pub owner_wicked: Account<'info, TokenAccount>,
+    pub owner_wicked: Box<Account<'info, TokenAccount>>,
     #[account(init_if_needed, payer = owner, space = 8 + PayoutClaim::INIT_SPACE, seeds = [b"claim", claim_index.to_le_bytes().as_ref()], bump)]
-    pub claim: Account<'info, PayoutClaim>,
+    pub claim: Box<Account<'info, PayoutClaim>>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -945,27 +945,27 @@ pub struct SettlePosition<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump, has_one = usdc_mint)]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
     #[account(mut)]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
     #[account(mut, has_one = market, close = owner)]
-    pub position: Account<'info, Position>,
+    pub position: Box<Account<'info, Position>>,
     /// CHECK: constrained to the position owner.
     #[account(mut, address = position.owner)]
     pub owner: UncheckedAccount<'info>,
     #[account(mut, seeds = [b"lp"], bump = lp.bump, has_one = loser_mint)]
-    pub lp: Account<'info, LpState>,
+    pub lp: Box<Account<'info, LpState>>,
     #[account(mut, seeds = [b"vault"], bump, token::mint = usdc_mint, token::authority = vault)]
-    pub vault: Account<'info, TokenAccount>,
-    pub usdc_mint: Account<'info, Mint>,
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub usdc_mint: Box<Account<'info, Mint>>,
     #[account(init_if_needed, payer = payer, associated_token::mint = usdc_mint, associated_token::authority = owner)]
-    pub owner_usdc: Account<'info, TokenAccount>,
+    pub owner_usdc: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    pub loser_mint: Account<'info, Mint>,
+    pub loser_mint: Box<Account<'info, Mint>>,
     #[account(init_if_needed, payer = payer, associated_token::mint = loser_mint, associated_token::authority = owner)]
-    pub owner_wicked: Account<'info, TokenAccount>,
+    pub owner_wicked: Box<Account<'info, TokenAccount>>,
     #[account(init_if_needed, payer = payer, space = 8 + PayoutClaim::INIT_SPACE, seeds = [b"claim", claim_index.to_le_bytes().as_ref()], bump)]
-    pub claim: Account<'info, PayoutClaim>,
+    pub claim: Box<Account<'info, PayoutClaim>>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,

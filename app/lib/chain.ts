@@ -52,7 +52,7 @@ export function chainConfigurationError(environment: ChainEnvironmentVariables =
   if (!mintValue) return "Trading is not configured: the test-USDC mint is missing.";
   const rpcUrl = environment.NEXT_PUBLIC_RPC_URL?.trim();
   if (!rpcUrl) return "Trading is not configured: the Solana devnet RPC URL is missing.";
-  if (WICK_IDL.instructions.length === 0) return "Trading is not configured: deploy Wick and export its generated IDL first.";
+  if ((WICK_IDL.instructions as readonly unknown[]).length === 0) return "Trading is not configured: deploy Wick and export its generated IDL first.";
   try {
     const programId = new PublicKey(programValue);
     new PublicKey(mintValue);

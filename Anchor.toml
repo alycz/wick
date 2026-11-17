@@ -6,14 +6,17 @@ solana_version = "2.2.20"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-wick = "EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi"
-
 [programs.devnet]
-wick = "EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi"
+wick = "HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN"
+
+[programs.localnet]
+wick = "HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN"
+
+[registry]
+url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

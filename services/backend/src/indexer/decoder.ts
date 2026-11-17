@@ -72,9 +72,19 @@ function normalize(value: unknown): unknown {
     if ("toBase58" in value && typeof value.toBase58 === "function") return value.toBase58();
     if ("toString" in value && value.constructor?.name === "BN") return value.toString();
     if (Array.isArray(value)) return value.map(normalize);
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalize(item)]));
+    const entries = Object.entries(value);
+    if (entries.length === 1 && isEmptyVariant(entries[0]![1])) return camelCase(entries[0]![0]);
+    return Object.fromEntries(entries.map(([key, item]) => [camelCase(key), normalize(item)]));
   }
   return value;
+}
+
+function camelCase(value: string): string {
+  return value.replace(/_([a-z0-9])/gu, (_, character: string) => character.toUpperCase());
+}
+
+function isEmptyVariant(value: unknown): boolean {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
 }
 
 export class WickEventDecoder {

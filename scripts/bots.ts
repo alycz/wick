@@ -33,7 +33,7 @@ class DevnetBotTransport implements BotTransport {
   }
 
   static async create(): Promise<DevnetBotTransport> {
-    if (WICK_IDL.instructions.length === 0) throw new Error("Generated Wick IDL is empty; bots cannot submit real positions");
+    if ((WICK_IDL.instructions as readonly unknown[]).length === 0) throw new Error("Generated Wick IDL is empty; bots cannot submit real positions");
     const programId = new PublicKey(requiredEnv("PROGRAM_ID"));
     if (programId.toBase58() !== WICK_IDL.address) throw new Error("PROGRAM_ID does not match generated IDL");
     const backendUrl = requiredEnv("NEXT_PUBLIC_BACKEND_URL").replace(/\/$/, "");
