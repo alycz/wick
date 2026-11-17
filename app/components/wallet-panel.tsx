@@ -1,7 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Keypair } from "@solana/web3.js";
+import type { Wallet } from "@coral-xyz/anchor/dist/cjs/provider";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { compactAddress } from "@/lib/format";
@@ -16,6 +18,7 @@ const BROWSER_KEY = "wick-browser-id-v1";
 
 interface DemoWalletContextValue {
   publicKey?: string;
+  anchorWallet?: Wallet;
   create: () => void;
   reset: () => void;
   exportKey: () => void;
@@ -46,9 +49,22 @@ export function DemoWalletProvider({ children }: { children: ReactNode }) {
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = "wick-demo-wallet.json"; anchor.click(); URL.revokeObjectURL(url);
   }, [wallet]);
+  const anchorWallet = useMemo<Wallet | undefined>(() => wallet ? {
+    publicKey: wallet.publicKey,
+    signTransaction: async <T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> => {
+      if (transaction instanceof VersionedTransaction) transaction.sign([wallet]);
+      else transaction.partialSign(wallet);
+      return transaction;
+    },
+    signAllTransactions: async <T extends Transaction | VersionedTransaction>(transactions: T[]): Promise<T[]> => Promise.all(transactions.map(async (transaction) => {
+      if (transaction instanceof VersionedTransaction) transaction.sign([wallet]);
+      else transaction.partialSign(wallet);
+      return transaction;
+    })),
+  } : undefined, [wallet]);
   const value = useMemo<DemoWalletContextValue>(() => ({
-    ...(wallet ? { publicKey: wallet.publicKey.toBase58() } : {}), create, reset, exportKey,
-  }), [wallet, create, reset, exportKey]);
+    ...(wallet && anchorWallet ? { publicKey: wallet.publicKey.toBase58(), anchorWallet } : {}), create, reset, exportKey,
+  }), [wallet, anchorWallet, create, reset, exportKey]);
   return <DemoWalletContext.Provider value={value}>{children}</DemoWalletContext.Provider>;
 }
 
@@ -68,15 +84,17 @@ function browserId(): string {
 
 export function WalletPanel() {
   const wallet = useDemoWallet();
+  const connected = useWallet();
   const [funding, setFunding] = useState(false);
   const [message, setMessage] = useState<string>();
   const fund = async () => {
-    if (!wallet.publicKey) return;
+    const recipient = wallet.publicKey ?? connected.publicKey?.toBase58();
+    if (!recipient) return;
     setFunding(true); setMessage(undefined);
     try {
       const response = await fetch("/api/faucet", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ publicKey: wallet.publicKey, browserId: browserId() }),
+        body: JSON.stringify({ publicKey: recipient, browserId: browserId() }),
       });
       const result = await response.json() as { message?: string; signature?: string };
       if (!response.ok) throw new Error(result.message ?? `Faucet failed (${response.status})`);
@@ -96,7 +114,8 @@ export function WalletPanel() {
           <button className="text-button danger" type="button" onClick={wallet.reset}>Reset</button>
         </div>
       ) : (
-        <button className="primary-button" type="button" onClick={wallet.create}>Try it now</button>
+        <><button className="primary-button" type="button" onClick={wallet.create}>Try it now</button>
+        {connected.publicKey && <button className="text-button" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}</>
       )}
       <WalletMultiButton />
       {message && <p className="wallet-message" aria-live="polite">{message}</p>}

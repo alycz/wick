@@ -4,9 +4,9 @@ import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { PositionSide } from "@wick/shared";
 import { PriceChart } from "@/components/line-chart";
+import { useWickActions } from "@/hooks/use-wick-actions";
 import { useMarket, useMarketHistory } from "@/hooks/use-markets";
-import { chainConfigurationError } from "@/lib/chain";
-import { cents, dollars } from "@/lib/format";
+import { cents, compactAddress, dollars } from "@/lib/format";
 import { tradePreview } from "@/lib/preview";
 
 export default function TradePage() {
@@ -18,9 +18,27 @@ export default function TradePage() {
   const [margin, setMargin] = useState(100);
   const [leverage, setLeverage] = useState(1);
   const [actionError, setActionError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
+  const [signature, setSignature] = useState<string>();
+  const actions = useWickActions();
   const cappedLeverage = market ? Math.min(leverage, market.maxLeverage) : 1;
   const preview = useMemo(() => market ? tradePreview(market, side, margin, cappedLeverage, history) : undefined, [market, side, margin, cappedLeverage, history]);
-  const submit = () => setActionError(chainConfigurationError());
+  const submit = async () => {
+    if (!actions.client || !preview || !market) { setActionError(actions.error ?? "Trading is not configured."); return; }
+    setSubmitting(true); setActionError(undefined); setSignature(undefined);
+    try {
+      const result = await actions.client.openPosition({
+        symbol: market.symbol,
+        side,
+        marginE6: BigInt(Math.round(margin * 1_000_000)),
+        leverage: cappedLeverage,
+        maxEntryE6: Math.min(990_000, Math.ceil(preview.entry * 1_000_000) + 1_000),
+      });
+      setSignature(result);
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : String(reason));
+    } finally { setSubmitting(false); }
+  };
 
   if (loading && !market) return <div className="panel skeleton-block" />;
   if (!market) return <div className="page-stack"><div className="notice">{error ?? "This verified market is no longer available."}</div></div>;
@@ -38,8 +56,10 @@ export default function TradePage() {
         <label>Leverage <span>{cappedLeverage}× / {market.maxLeverage}× cap</span><input aria-label="Leverage" min="1" max={market.maxLeverage} type="range" value={cappedLeverage} onChange={(event) => setLeverage(Number(event.target.value))} /></label>
         <p className="risk-note" title={`Risk cap ${market.maxLeverage}x (global 1000x): above this, an ordinary few-second BTC move could liquidate you`}>Risk cap {market.maxLeverage}x (global 1000x): above this, an ordinary few-second BTC move could liquidate you.</p>
         {preview && <dl className="preview-list"><div><dt>Entry</dt><dd>{cents(preview.entry)}</dd></div><div><dt>Contracts</dt><dd>{preview.contracts.toFixed(2)}</dd></div><div><dt>Max payout</dt><dd>{dollars(preview.maxPayout, 2)}</dd></div><div><dt>Liquidation</dt><dd>{preview.liquidationPrice ? `${dollars(preview.liquidationPrice)} (${preview.liquidationPct?.toFixed(2)}%)` : "Awaiting price sensitivity"}</dd></div><div><dt>Profit fee</dt><dd>2% · up to {dollars(preview.feeAtMaxProfit, 2)}</dd></div></dl>}
-        <button className="trade-cta button-reset" type="button" onClick={submit}>Open {side.toUpperCase()} at {cappedLeverage}× <span>→</span></button>
+        <button className="trade-cta button-reset" type="button" onClick={() => void submit()} disabled={submitting || market.status !== "open" || !actions.client}>{submitting ? "Confirming devnet transaction…" : `Open ${side.toUpperCase()} at ${cappedLeverage}×`} <span>→</span></button>
+        {!actions.client && <p className="form-error" role="status">{actions.error ?? "Trading is not configured."}</p>}
         {actionError && <p className="form-error" role="alert">{actionError}</p>}
+        {signature && <p className="wallet-message" role="status">Confirmed on devnet · {compactAddress(signature)}</p>}
       </section>
     </div>
   </div>;
