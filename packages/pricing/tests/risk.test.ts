@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { leverageCap, liqDistance, SECONDS_PER_YEAR, upDownTheo } from "../src/index.js";
+import { leverageCap, liqDistance, SECONDS_PER_YEAR, twoSidedLeverageCap, upDownTheo } from "../src/index.js";
 
 describe("binary-gamma leverage cap", () => {
   it("matches the required 15-minute, daily and 30-day cap vectors", () => {
@@ -13,6 +13,14 @@ describe("binary-gamma leverage cap", () => {
   it("uses the side probability's implied d2 when d2 is omitted", () => {
     expect(leverageCap({ probabilitySide: 0.5, volatility: 0.5, timeYears: 10 * 60 / SECONDS_PER_YEAR }).cap).toBe(4);
     expect(leverageCap({ probabilitySide: 0.01, volatility: 0.5, timeYears: 10 * 60 / SECONDS_PER_YEAR }).cap).toBeGreaterThanOrEqual(1);
+  });
+
+  it("uses the safer side when one market cap governs YES and NO", () => {
+    const common = { volatility: 0.5, timeYears: 10 * 60 / SECONDS_PER_YEAR, globalMax: 1_000 };
+    const yes = leverageCap({ ...common, probabilitySide: 0.99 }).cap;
+    const no = leverageCap({ ...common, probabilitySide: 0.01 }).cap;
+    expect(twoSidedLeverageCap({ ...common, probabilitySide: 0.99 })).toBe(Math.min(yes, no));
+    expect(twoSidedLeverageCap({ ...common, probabilitySide: 0.99 })).toBeLessThan(yes);
   });
 });
 

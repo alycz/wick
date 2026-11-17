@@ -5,7 +5,7 @@ import {
   type GeminiEvent,
   type GeminiMarketBucket,
 } from "@wick/gemini";
-import { ladderTheo, leverageCap, SECONDS_PER_YEAR, upDownTheo } from "@wick/pricing";
+import { ladderTheo, SECONDS_PER_YEAR, twoSidedLeverageCap, upDownTheo } from "@wick/pricing";
 import type { GeminiQuote, PricerMarket } from "@wick/shared";
 import type { VolSource } from "@wick/vol";
 import { MarketStore } from "./store.js";
@@ -299,13 +299,13 @@ export class PricerEngine {
       timeYears,
       volAtStrike: (strike) => this.vol.vol(expiryMs, strike),
     });
-    const cap = leverageCap({
+    const cap = twoSidedLeverageCap({
       probabilitySide: theo,
       volatility,
       timeYears,
       ...(theoResult === undefined ? {} : { d2: theoResult.d2 }),
       globalMax: 1_000,
-    }).cap;
+    });
     const quote = this.quotes.get(candidate.contract.instrumentSymbol) ?? quoteFromContract(candidate.contract, now);
     const edge = quote.mid === undefined ? undefined : theo - quote.mid;
     return {

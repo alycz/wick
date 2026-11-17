@@ -42,6 +42,17 @@ export function leverageCap(input: LeverageCapInput): LeverageCapResult {
   };
 }
 
+/** A market stores one cap for both outcomes, so use the safer side's cap. */
+export function twoSidedLeverageCap(input: LeverageCapInput): number {
+  const yes = leverageCap(input).cap;
+  const no = leverageCap({
+    ...input,
+    probabilitySide: 1 - input.probabilitySide,
+    ...(input.d2 === undefined ? {} : { d2: -input.d2 }),
+  }).cap;
+  return Math.min(yes, no);
+}
+
 export interface LiquidationDistanceInput {
   side: PricingSide;
   liqMarkE6: number;
