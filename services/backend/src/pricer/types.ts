@@ -51,6 +51,14 @@ export interface OpenPositionRef {
   liqMarkE6: number;
 }
 
+export type SettlementMarketStatus = "open" | "halted" | "expired" | "settled" | "invalid";
+
+export interface SettlementMarketRef {
+  symbol: string;
+  expiryTs: number;
+  status: SettlementMarketStatus;
+}
+
 /**
  * Boundary around all on-chain writes and reads. WP5 does not silently replace
  * an unavailable Anchor client with fake success; production must provide a
@@ -62,6 +70,7 @@ export interface ChainPort {
   createMarket(request: CreateMarketRequest, signal?: AbortSignal): Promise<string>;
   updateMarks(requests: readonly MarkUpdateRequest[], options: { priorityFeeMicroLamports: number; signal?: AbortSignal }): Promise<string>;
   listOpenPositions(signal?: AbortSignal): Promise<readonly OpenPositionRef[]>;
+  listSettlementMarkets(signal?: AbortSignal): Promise<readonly SettlementMarketRef[]>;
   liquidate(positionAddress: string, signal?: AbortSignal): Promise<string>;
   settleMarket(symbol: string, outcome: "yes" | "no", settlementValueE6: bigint, signal?: AbortSignal): Promise<string>;
   voidMarket(symbol: string, signal?: AbortSignal): Promise<string>;

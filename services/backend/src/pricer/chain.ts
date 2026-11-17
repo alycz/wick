@@ -4,7 +4,7 @@ import { WICK_IDL } from "@wick/shared";
 import bs58 from "bs58";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { ChainPort, CreateMarketRequest, MarkUpdateRequest, OpenPositionRef } from "./types.js";
+import type { ChainPort, CreateMarketRequest, MarkUpdateRequest, OpenPositionRef, SettlementMarketRef, SettlementMarketStatus } from "./types.js";
 
 const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 const REQUIRED_INSTRUCTIONS = {
@@ -49,6 +49,7 @@ export interface ChainTransport {
   createMarket(request: CreateMarketRequest, signal?: AbortSignal): Promise<string>;
   updateMarks(requests: readonly MarkUpdateRequest[], priorityFeeMicroLamports: number, signal?: AbortSignal): Promise<string>;
   listOpenPositions(signal?: AbortSignal): Promise<readonly OpenPositionRef[]>;
+  listSettlementMarkets(signal?: AbortSignal): Promise<readonly SettlementMarketRef[]>;
   liquidate(positionAddress: string, signal?: AbortSignal): Promise<string>;
   settleMarket(symbol: string, outcome: "yes" | "no", settlementValueE6: bigint, signal?: AbortSignal): Promise<string>;
   voidMarket(symbol: string, signal?: AbortSignal): Promise<string>;
@@ -64,6 +65,7 @@ export class ConfiguredChainPort implements ChainPort {
   createMarket(request: CreateMarketRequest, signal?: AbortSignal) { return this.transport.createMarket(request, signal); }
   updateMarks(requests: readonly MarkUpdateRequest[], options: { priorityFeeMicroLamports: number; signal?: AbortSignal }) { return this.transport.updateMarks(requests, options.priorityFeeMicroLamports, options.signal); }
   listOpenPositions(signal?: AbortSignal) { return this.transport.listOpenPositions(signal); }
+  listSettlementMarkets(signal?: AbortSignal) { return this.transport.listSettlementMarkets(signal); }
   liquidate(positionAddress: string, signal?: AbortSignal) { return this.transport.liquidate(positionAddress, signal); }
   settleMarket(symbol: string, outcome: "yes" | "no", settlementValueE6: bigint, signal?: AbortSignal) { return this.transport.settleMarket(symbol, outcome, settlementValueE6, signal); }
   voidMarket(symbol: string, signal?: AbortSignal) { return this.transport.voidMarket(symbol, signal); }
@@ -80,6 +82,7 @@ export class UnconfiguredChainPort implements ChainPort {
   createMarket(_request: CreateMarketRequest, _signal?: AbortSignal): Promise<string> { return Promise.reject(this.unavailable()); }
   updateMarks(_requests: readonly MarkUpdateRequest[], _options: { priorityFeeMicroLamports: number; signal?: AbortSignal }): Promise<string> { return Promise.reject(this.unavailable()); }
   listOpenPositions(_signal?: AbortSignal): Promise<readonly OpenPositionRef[]> { return Promise.reject(this.unavailable()); }
+  listSettlementMarkets(_signal?: AbortSignal): Promise<readonly SettlementMarketRef[]> { return Promise.reject(this.unavailable()); }
   liquidate(_positionAddress: string, _signal?: AbortSignal): Promise<string> { return Promise.reject(this.unavailable()); }
   settleMarket(_symbol: string, _outcome: "yes" | "no", _settlementValueE6: bigint, _signal?: AbortSignal): Promise<string> { return Promise.reject(this.unavailable()); }
   voidMarket(_symbol: string, _signal?: AbortSignal): Promise<string> { return Promise.reject(this.unavailable()); }
@@ -205,6 +208,15 @@ class AnchorChainTransport implements ChainTransport {
     return result;
   }
 
+  async listSettlementMarkets(signal?: AbortSignal): Promise<readonly SettlementMarketRef[]> {
+    throwIfAborted(signal);
+    return (await this.account("market").all()).map((row) => ({
+      symbol: decodeSymbol(row.account),
+      expiryTs: numberValue(row.account.expiryTs, "market.expiryTs"),
+      status: settlementMarketStatus(row.account.status),
+    }));
+  }
+
   async liquidate(positionAddress: string, signal?: AbortSignal): Promise<string> {
     throwIfAborted(signal);
     const positionKey = new web3.PublicKey(positionAddress);
@@ -321,6 +333,11 @@ function variantName(value: unknown): string {
   if (typeof value === "string") return value.toLowerCase();
   if (value && typeof value === "object") return Object.keys(value)[0]?.toLowerCase() ?? "";
   return "";
+}
+function settlementMarketStatus(value: unknown): SettlementMarketStatus {
+  const status = variantName(value);
+  if (status === "open" || status === "halted" || status === "expired" || status === "settled" || status === "invalid") return status;
+  throw new Error(`market.status has unsupported variant ${status || "unknown"}`);
 }
 function publicKey(value: unknown, label: string): web3.PublicKey {
   if (value instanceof web3.PublicKey) return value;
