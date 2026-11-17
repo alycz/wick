@@ -6,7 +6,7 @@ import { WICK_IDL } from "../packages/shared/src/idl.js";
 import { evaluateDeploymentReadiness } from "./lib/deployment-check.js";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const commandNames = ["anchor", "solana", "spl-token", "railway", "vercel", "docker"];
+const commandNames = ["anchor", "solana", "rustc", "pnpm", "spl-token", "railway", "vercel", "docker"];
 const fileNames = [
   "target/deploy/wick-keypair.json",
   "target/deploy/wick.so",
@@ -24,8 +24,24 @@ async function existingFiles(): Promise<Set<string>> {
   return result;
 }
 
-function existingCommands(): Set<string> {
-  return new Set(commandNames.filter((command) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0));
+function commandEvidence(): { commands: Set<string>; versions: Map<string, string> } {
+  const commands = new Set<string>();
+  const versions = new Map<string, string>();
+  for (const command of commandNames) {
+    const result = spawnSync(command, ["--version"], { encoding: "utf8" });
+    if (result.status !== 0) continue;
+    commands.add(command);
+    versions.set(command, `${result.stdout ?? ""}${result.stderr ?? ""}`.trim());
+  }
+  return { commands, versions };
+}
+
+async function quicknodeFilterEvidence(): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(resolve(root, "services/backend/fixtures/quicknode-filter-test.json"), "utf8")) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 async function backendAdapterConfigured(): Promise<boolean> {
@@ -33,12 +49,15 @@ async function backendAdapterConfigured(): Promise<boolean> {
   return !main.includes("new UnconfiguredChainPort()");
 }
 
+const commandState = commandEvidence();
 const readiness = evaluateDeploymentReadiness({
-  commands: existingCommands(),
+  commands: commandState.commands,
+  commandVersions: commandState.versions,
   files: await existingFiles(),
   environment: process.env,
   idlInstructionCount: WICK_IDL.instructions.length,
   backendChainAdapterConfigured: await backendAdapterConfigured(),
+  quicknodeFilterEvidence: await quicknodeFilterEvidence(),
 });
 
 console.info(JSON.stringify(readiness, null, 2));
