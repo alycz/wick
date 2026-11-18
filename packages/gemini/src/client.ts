@@ -22,6 +22,20 @@ export interface ListEventsOptions {
   offset?: number;
 }
 
+/** Fetch the whole active BTC catalog even if Gemini caps each page below the requested size. */
+export async function listActiveBtcEvents(client: Pick<GeminiClient, "listEvents">): Promise<GeminiEvent[]> {
+  const events: GeminiEvent[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await client.listEvents({ status: "active", search: "BTC", limit: 500, offset });
+    if (page.pagination.offset !== offset) throw new Error("Gemini returned an unexpected events offset");
+    events.push(...page.data);
+    offset += page.data.length;
+    if (offset >= page.pagination.total) return events;
+    if (!page.data.length) throw new Error("Gemini returned an incomplete events page");
+  }
+}
+
 export interface SpotTicker {
   bid: number;
   ask: number;

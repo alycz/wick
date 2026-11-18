@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { Logger } from "pino";
 import type { PricerEngine } from "./pricer/engine.js";
+import { databaseErrorCode, type HostedMarketData } from "./pricer/hosted-market-data.js";
 
 export interface BuildServerOptions {
   engine: PricerEngine;
@@ -11,6 +12,7 @@ export interface BuildServerOptions {
   telemetryIntervalMs?: number;
   registerAdditionalRoutes?: (server: BackendFastifyInstance) => Promise<void> | void;
   healthSupplement?: () => Record<string, unknown>;
+  hostedMarketData?: Pick<HostedMarketData, "prices" | "hasUpDownContract" | "expiredContracts" | "ladderPrices" | "expiredLadderContracts" | "lastSync">;
   allowedOrigins?: string[];
   allowLocalhostOrigins?: boolean;
 }
@@ -72,17 +74,64 @@ export async function buildServer(options: BuildServerOptions): Promise<BackendF
   });
 
   server.get("/markets", async () => options.engine.store.markets());
+  server.get("/markets/up-down-history", async (_request, reply) => {
+    const now = Date.now();
+    const local = options.engine.store.upDownHistory?.expiredContracts(now) ?? [];
+    if (!options.hostedMarketData) return local;
+    try {
+      const hosted = await options.hostedMarketData.expiredContracts(now);
+      const contracts = new Map([...local, ...hosted].map((contract) => [contract.symbol, contract]));
+      return [...contracts.values()]
+        .sort((left, right) => right.expiryTs - left.expiryTs || left.symbol.localeCompare(right.symbol))
+        .slice(0, 100);
+    } catch (error) {
+      server.log.warn({ code: databaseErrorCode(error) }, "Could not read hosted Up/Down contracts");
+      if (local.length) return local;
+      return reply.code(503).send({ code: "HISTORY_UNAVAILABLE", message: "Up/Down history is temporarily unavailable" });
+    }
+  });
+
+  server.get("/markets/ladder-history", async (_request, reply) => {
+    if (!options.hostedMarketData) return [];
+    try {
+      return await options.hostedMarketData.expiredLadderContracts(Date.now());
+    } catch (error) {
+      server.log.warn({ code: databaseErrorCode(error) }, "Could not read hosted ladder contracts");
+      return reply.code(503).send({ code: "HISTORY_UNAVAILABLE", message: "Dated market history is temporarily unavailable" });
+    }
+  });
 
   server.get<{ Params: { symbol: string } }>("/markets/:symbol/history", async (request, reply) => {
-    if (!options.engine.store.market(request.params.symbol)) {
+    const { symbol } = request.params;
+    const now = Date.now();
+    const history = options.engine.store.marketHistory(symbol, now);
+    const market = options.engine.store.market(symbol);
+    if (options.hostedMarketData) {
+      try {
+        let archived = market?.kind === "ladder" ? [] : await options.hostedMarketData.prices(symbol, now);
+        if (!archived.length && market?.kind !== "up_down") archived = await options.hostedMarketData.ladderPrices(symbol, now);
+        if (archived.length) {
+          const points = new Map([...history, ...archived].map((point) => [point.ts, point]));
+          return [...points.values()].sort((left, right) => left.ts - right.ts);
+        }
+        if (!market && !history.length && await options.hostedMarketData.hasUpDownContract(symbol, now)) return [];
+      } catch (error) {
+        server.log.warn({ code: databaseErrorCode(error) }, "Could not read hosted contract prices");
+        if (!history.length && !market) {
+          return reply.code(503).send({ code: "HISTORY_UNAVAILABLE", message: "Recorded prices are temporarily unavailable" });
+        }
+      }
+    }
+    if (!history.length && !market && !options.engine.store.upDownHistory?.hasContract(symbol, now)) {
       return reply.code(404).send({ code: "MARKET_NOT_FOUND", message: "Unknown Gemini market symbol" });
     }
-    return options.engine.store.marketHistory(request.params.symbol);
+    return history;
   });
 
   server.get("/health", async () => {
     const snapshot = options.engine.snapshot();
     const now = Date.now();
+    const hostedSyncedAt = options.hostedMarketData?.lastSync();
     return {
       ok: snapshot.running && snapshot.volHealthy,
       cluster: "devnet",
@@ -90,7 +139,11 @@ export async function buildServer(options: BuildServerOptions): Promise<BackendF
       volHealthy: snapshot.volHealthy,
       chainConfigured: snapshot.chainConfigured,
       marketCount: snapshot.markets.length,
+      unpricedMarkets: snapshot.unpricedMarkets,
+      hostedMarketDataConfigured: Boolean(options.hostedMarketData),
+      ...(hostedSyncedAt === undefined ? {} : { hostedMarketDataSyncAgeMs: Math.max(0, now - hostedSyncedAt) }),
       ...(snapshot.lastMarkAt === undefined ? {} : { markAgeMs: Math.max(0, now - snapshot.lastMarkAt) }),
+      ...(snapshot.lastPricingAt === undefined ? {} : { pricingAgeMs: Math.max(0, now - snapshot.lastPricingAt) }),
       ...(snapshot.lastDiscoveryAt === undefined ? {} : { discoveryAgeMs: Math.max(0, now - snapshot.lastDiscoveryAt) }),
       ...(snapshot.lastError === undefined ? {} : { lastError: snapshot.lastError }),
       ...options.healthSupplement?.(),
@@ -100,7 +153,10 @@ export async function buildServer(options: BuildServerOptions): Promise<BackendF
 
   server.get("/stream", { websocket: true }, (socket) => {
     const sendSnapshot = () => {
-      try { socket.send(JSON.stringify({ type: "markets", ts: Date.now(), data: options.engine.store.markets() })); }
+      try {
+        const snapshot = options.engine.snapshot();
+        socket.send(JSON.stringify({ type: "markets", ts: snapshot.lastPricingAt, data: snapshot.markets }));
+      }
       catch { /* close handler owns cleanup */ }
     };
     sendSnapshot();

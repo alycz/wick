@@ -1,9 +1,12 @@
 import { GeminiClient, GeminiQuoteStream } from "@wick/gemini";
-import { AutoVolSource, DeribitVolSource, DeriveVolSource, RealizedVolSource } from "@wick/vol";
+import { AutoVolSource, DeribitVolSource } from "@wick/vol";
 import { createCollectorWorkerFromEnvironment } from "./collector/service.js";
 import { IndexerService, registerIndexerRoutes } from "./indexer/index.js";
 import { createBackendLogger } from "./logging.js";
-import { createChainPort, PricerEngine } from "./pricer/index.js";
+import { createChainPort, MarketStore, PricerEngine } from "./pricer/index.js";
+import { HostedMarketData } from "./pricer/hosted-market-data.js";
+import { selectOptionSnapshots } from "./pricer/option-snapshots.js";
+import { UpDownHistory } from "./pricer/up-down-history.js";
 import { buildServer } from "./server.js";
 
 const logger = createBackendLogger();
@@ -17,10 +20,25 @@ const volLogger = {
   info: (fields: Record<string, unknown>, message: string) => logger.info(fields, message),
   warn: (fields: Record<string, unknown>, message: string) => logger.warn(fields, message),
 };
-const deribit = new DeribitVolSource({ logger: volLogger });
-const derive = new DeriveVolSource({ logger: volLogger });
-const realized = new RealizedVolSource();
-const vol = new AutoVolSource({ sources: [deribit, derive, realized], logger: volLogger });
+const indexer = new IndexerService({
+  databasePath: process.env.SQLITE_PATH ?? "/data/wick.db",
+  ...(process.env.STREAMS_WEBHOOK_SECRET === undefined ? {} : { webhookSecret: process.env.STREAMS_WEBHOOK_SECRET }),
+  ...(process.env.PROGRAM_ID === undefined ? {} : { programId: process.env.PROGRAM_ID }),
+  rpcUrl: process.env.PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+  logger,
+});
+const database = indexer.store.database;
+const databaseUrl = process.env.DATABASE_URL?.trim();
+const hosted = databaseUrl ? new HostedMarketData(database, databaseUrl, logger) : undefined;
+const history = new UpDownHistory(database, hosted ? (price) => hosted.queueUpDown(price) : undefined);
+const marketStore = new MarketStore(undefined, history);
+const deribit = new DeribitVolSource({
+  logger: volLogger,
+  ...(hosted ? { onOptionSnapshot: (snapshot) => {
+    hosted.queueOptions(snapshot.capturedAt, selectOptionSnapshots(snapshot, marketStore.markets()), snapshot);
+  } } : {}),
+});
+const vol = new AutoVolSource({ sources: [deribit], mode: "deribit", logger: volLogger });
 
 const chain = await createChainPort();
 if (chain.configured()) logger.info({ programId: process.env.PROGRAM_ID }, "Wick Anchor chain adapter verified on Solana devnet");
@@ -31,6 +49,8 @@ const engine = new PricerEngine({
   vol,
   chain,
   logger,
+  store: marketStore,
+  ...(hosted ? { onTheoInputs: (pricedAt, inputs) => hosted.queueTheoInputs(pricedAt, inputs) } : {}),
   quoteStreamFactory: ({ symbols, onQuote, onStatus }) => new GeminiQuoteStream({
     symbols,
     client: gemini,
@@ -43,17 +63,10 @@ const engine = new PricerEngine({
   }),
 });
 
-const indexer = new IndexerService({
-  databasePath: process.env.SQLITE_PATH ?? "/data/wick.db",
-  ...(process.env.STREAMS_WEBHOOK_SECRET === undefined ? {} : { webhookSecret: process.env.STREAMS_WEBHOOK_SECRET }),
-  ...(process.env.PROGRAM_ID === undefined ? {} : { programId: process.env.PROGRAM_ID }),
-  rpcUrl: process.env.PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
-  logger,
-});
-
 const server = await buildServer({
   engine,
   logger,
+  ...(hosted ? { hostedMarketData: hosted } : {}),
   registerAdditionalRoutes: (instance) => registerIndexerRoutes(instance, indexer),
   healthSupplement: () => indexer.health(),
 });
@@ -62,6 +75,7 @@ const host = process.env.HOST ?? "0.0.0.0";
 
 await server.listen({ port, host });
 collector?.start();
+hosted?.start();
 
 let shuttingDown = false;
 const shutdown = async (signal: string) => {
@@ -70,6 +84,7 @@ const shutdown = async (signal: string) => {
   logger.info({ signal }, "graceful shutdown started");
   try {
     await collector?.stop();
+    await hosted?.stop();
     await server.close();
   }
   catch (error) {

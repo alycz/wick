@@ -94,6 +94,38 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS stream_delivery_inbox_status_idx
     ON stream_delivery_inbox(status, received_at ASC);
   `,
+  `
+  CREATE TABLE up_down_contracts (
+    symbol TEXT PRIMARY KEY,
+    duration TEXT NOT NULL,
+    strike REAL NOT NULL,
+    open_ts INTEGER NOT NULL,
+    expiry_ts INTEGER NOT NULL
+  );
+  CREATE INDEX up_down_contracts_expiry_idx ON up_down_contracts(expiry_ts DESC, symbol);
+
+  CREATE TABLE up_down_prices (
+    symbol TEXT NOT NULL REFERENCES up_down_contracts(symbol) ON DELETE CASCADE,
+    bucket INTEGER NOT NULL,
+    ts INTEGER NOT NULL,
+    theo REAL NOT NULL,
+    spot REAL NOT NULL,
+    gemini_mid REAL,
+    PRIMARY KEY (symbol, bucket)
+  ) WITHOUT ROWID;
+  `,
+  `
+  CREATE TABLE market_data_outbox (
+    id TEXT PRIMARY KEY,
+    captured_at INTEGER NOT NULL,
+    payload TEXT NOT NULL
+  );
+  CREATE INDEX market_data_outbox_time_idx ON market_data_outbox(captured_at, id);
+  `,
+  `
+  ALTER TABLE up_down_prices ADD COLUMN gemini_bid REAL;
+  ALTER TABLE up_down_prices ADD COLUMN gemini_ask REAL;
+  `,
 ];
 
 export type WickDatabase = Database.Database;

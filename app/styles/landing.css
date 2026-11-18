@@ -35,7 +35,7 @@
 .hm .ghost { display: inline-block; margin-top: 6px; text-decoration: none; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 500; }
 .hm .ghost:hover { border-color: var(--faint); }
 .hm .mini { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.hm .mrow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--fg); text-decoration: none; }
+.hm .mrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--fg); text-decoration: none; }
 .hm a.mrow:hover { background: var(--panel); }
 .hm .mrow:last-child { border-bottom: 0; }
 .hm .mrow.hd { color: var(--muted); font-size: 12px; background: var(--panel); }

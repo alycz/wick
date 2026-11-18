@@ -12,11 +12,18 @@ const instrumentSchema = z.object({
 const summarySchema = z.object({
   instrument_name: z.string(),
   mark_iv: z.number().nullable().optional(),
+  bid_price: z.unknown(),
+  ask_price: z.unknown(),
+  mark_price: z.unknown(),
   underlying_price: z.number().positive().optional(),
   estimated_delivery_price: z.number().positive().optional(),
   creation_timestamp: z.number().optional(),
 });
 const indexSchema = z.object({ result: z.object({ index_price: z.number().positive() }) });
+
+function optionPrice(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
 
 interface SocketLike {
   onopen: ((event: Event) => void) | null;
@@ -37,6 +44,27 @@ export interface DeribitOptions {
   websocket?: boolean;
   socketFactory?: (url: string) => SocketLike;
   timers?: boolean;
+  onOptionSnapshot?: (snapshot: DeribitOptionSnapshot) => void;
+}
+
+export interface DeribitOptionQuote {
+  instrumentName: string;
+  expiryMs: number;
+  strike: number;
+  optionType: "call" | "put";
+  quoteCurrency: "BTC";
+  providerAt: number | null;
+  bidPrice: number | null;
+  askPrice: number | null;
+  markPrice: number | null;
+  markIvPct: number | null;
+  underlyingPrice: number | null;
+}
+
+export interface DeribitOptionSnapshot {
+  capturedAt: number;
+  spot: number;
+  quotes: DeribitOptionQuote[];
 }
 
 const consoleLogger: Logger = {
@@ -55,6 +83,7 @@ export class DeribitVolSource implements VolSource {
   private readonly websocket: boolean;
   private readonly socketFactory: (url: string) => SocketLike;
   private readonly timers: boolean;
+  private readonly onOptionSnapshot: DeribitOptions["onOptionSnapshot"];
   private readonly surface: VolSurface;
   private readonly metadata = new Map<string, z.infer<typeof instrumentSchema>>();
   private readonly summaries = new Map<string, z.infer<typeof summarySchema>>();
@@ -75,6 +104,7 @@ export class DeribitVolSource implements VolSource {
     this.websocket = options.websocket ?? true;
     this.socketFactory = options.socketFactory ?? ((url) => new WebSocket(url) as unknown as SocketLike);
     this.timers = options.timers ?? true;
+    this.onOptionSnapshot = options.onOptionSnapshot;
     this.surface = new VolSurface(this.now);
   }
 
@@ -125,6 +155,7 @@ export class DeribitVolSource implements VolSource {
     this.summaries.clear();
     for (const summary of summaries) this.summaries.set(summary.instrument_name, summary);
     this.rebuildSurface();
+    this.emitOptionSnapshot(summaries);
   }
 
   async probe(): Promise<void> {
@@ -137,7 +168,35 @@ export class DeribitVolSource implements VolSource {
     this.currentSpot = { px: index.result.index_price, ts: this.now() };
     for (const summary of summaries) this.summaries.set(summary.instrument_name, summary);
     if (this.metadata.size === 0) await this.refresh();
-    else this.rebuildSurface();
+    else {
+      this.rebuildSurface();
+      this.emitOptionSnapshot(summaries);
+    }
+  }
+
+  private emitOptionSnapshot(summaries: Array<z.infer<typeof summarySchema>>): void {
+    if (!this.onOptionSnapshot) return;
+    const capturedAt = this.now();
+    const quotes: DeribitOptionQuote[] = [];
+    for (const summary of summaries) {
+      const instrument = this.metadata.get(summary.instrument_name);
+      if (!instrument || instrument.expiration_timestamp <= capturedAt) continue;
+      quotes.push({
+        instrumentName: instrument.instrument_name,
+        expiryMs: instrument.expiration_timestamp,
+        strike: instrument.strike,
+        optionType: instrument.option_type,
+        quoteCurrency: "BTC",
+        providerAt: summary.creation_timestamp ?? null,
+        bidPrice: optionPrice(summary.bid_price),
+        askPrice: optionPrice(summary.ask_price),
+        markPrice: optionPrice(summary.mark_price),
+        markIvPct: summary.mark_iv && summary.mark_iv > 0 ? summary.mark_iv : null,
+        underlyingPrice: summary.underlying_price ?? summary.estimated_delivery_price ?? null,
+      });
+    }
+    try { this.onOptionSnapshot({ capturedAt, spot: this.currentSpot.px, quotes }); }
+    catch (error) { this.logFailure("option_snapshot", error); }
   }
 
   private async get(path: string): Promise<unknown> {
@@ -203,14 +262,17 @@ export class DeribitVolSource implements VolSource {
         if (!update || typeof update !== "object") continue;
         const item = update as Record<string, unknown>;
         const name = String(item.instrument_name ?? item.instrument ?? "");
-        const markIv = Number(item.mark_iv ?? item.iv);
+        // The mark-price stream sends a fraction. REST summaries use percentage points.
+        const markIv = typeof item.iv === "number" ? item.iv * 100 : Number(item.mark_iv);
         if (!name || !Number.isFinite(markIv) || markIv <= 0) continue;
         const existing = this.summaries.get(name);
+        const underlying = item.underlying_price;
         this.summaries.set(name, {
+          ...existing,
           instrument_name: name,
           mark_iv: markIv,
-          ...(Number.isFinite(Number(item.underlying_price)) ? { underlying_price: Number(item.underlying_price) } : {}),
-          ...(existing?.estimated_delivery_price ? { estimated_delivery_price: existing.estimated_delivery_price } : {}),
+          ...(typeof underlying === "number" && Number.isFinite(underlying) && underlying > 0 ? { underlying_price: underlying } : {}),
+          ...(typeof item.mark_price === "number" ? { mark_price: item.mark_price } : {}),
           creation_timestamp: Number(item.timestamp ?? this.now()),
         });
       }

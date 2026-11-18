@@ -5,6 +5,7 @@ import {
   classifyEvent,
   discoverBtcMarkets,
   GeminiClient,
+  listActiveBtcEvents,
   GeminiQuoteStream,
   geminiEventsResponseSchema,
   geminiSpotTickerSchema,
@@ -28,11 +29,23 @@ describe("Gemini live REST fixtures", () => {
     expect(buckets).toEqual(new Set(["five_minute", "fifteen_minute", "hourly", "daily", "weekly", "month_end"]));
     expect(discovered.filter((item) => item.bucket === "five_minute")).toHaveLength(2);
     expect(discovered.filter((item) => item.bucket === "fifteen_minute")).toHaveLength(2);
-    expect(discovered.flatMap((item) => item.contracts).every((contract) => {
-      if (contract.strike.type !== "above") return true;
-      const strike = Number(contract.strike.value);
-      return strike >= 65_411.15 * 0.9 && strike <= 65_411.15 * 1.1;
-    })).toBe(true);
+    const dated = response.data.filter((event) => event.type === "categorical" && Date.parse(event.expiryDate) > now);
+    expect(discovered.filter((group) => group.event.type === "categorical").flatMap((group) => group.contracts.map((contract) => contract.instrumentSymbol)).sort())
+      .toEqual(dated.flatMap((event) => event.contracts.map((contract) => contract.instrumentSymbol)).sort());
+    const daily = dated.find((event) => classifyEvent(event, now) === "daily")!;
+    const later = { ...daily, ticker: "BTC-LATER", expiryDate: new Date(Date.parse(daily.expiryDate) + 600_000).toISOString() };
+    expect(discoverBtcMarkets([daily, later], 1, now).map((group) => group.event.ticker)).toEqual([daily.ticker, later.ticker]);
+  });
+
+  it("reads the entire catalog when Gemini returns fewer events than requested", async () => {
+    const fixturePage = geminiEventsResponseSchema.parse(await fixture("active-btc.json"));
+    const events = fixturePage.data.slice(0, 3);
+    const result = await listActiveBtcEvents({
+      async listEvents({ offset = 0 } = {}) {
+        return { data: events.slice(offset, offset + 2), pagination: { limit: 2, offset, total: events.length } };
+      },
+    });
+    expect(result).toEqual(events);
   });
 
   it("classifies same-series ladders by expiry and title instead of series alone", async () => {
@@ -80,6 +93,17 @@ describe("quotes", () => {
     const base = data[0]!.contracts[0]!;
     const quote = quoteFromContract({ ...base, prices: { bestBid: "0.42" } }, 123);
     expect(quote).toEqual({ bid: 0.42, ts: 123 });
+  });
+
+  it("only shows executable REST sides and rejects crossed or out-of-range books", async () => {
+    const { data } = geminiEventsResponseSchema.parse(await fixture("active-btc.json"));
+    const base = data[0]!.contracts[0]!;
+    expect(quoteFromContract({ ...base, prices: { sell: { yes: "0.50" }, bestAsk: "0.03" } }, 123))
+      .toEqual({ ask: .03, ts: 123 });
+    expect(quoteFromContract({ ...base, prices: { bestBid: "0.50", bestAsk: "0.03", lastTradePrice: "0.20" } }, 123))
+      .toEqual({ last: .2, ts: 123 });
+    expect(parseBookTicker({ u: 1, E: 123, s: "btc", b: "2.0", a: "0.03" }).quote)
+      .toEqual({ ask: .03, ts: 123 });
   });
 
   it("parses nanosecond websocket timestamps", () => {

@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_MARKET_DATA_URL: process.env.NEXT_PUBLIC_MARKET_DATA_URL ||
+      (process.env.VERCEL_ENV === "production" ? "https://srv1321446.hstgr.cloud/wick-api" : ""),
+  },
   transpilePackages: ["@wick/shared", "@wick/pricing"],
   poweredByHeader: false,
   webpack(config) {

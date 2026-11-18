@@ -1,10 +1,11 @@
 import type { MarketHistoryPoint, PricerMarket } from "@wick/shared";
+import { upDownHistoryQuote, type UpDownHistory } from "./up-down-history.js";
 
 export class MarketStore {
   private readonly current = new Map<string, PricerMarket>();
   private readonly history = new Map<string, MarketHistoryPoint[]>();
 
-  constructor(private readonly historyWindowMs = 30 * 60_000) {}
+  constructor(private readonly historyWindowMs = 30 * 60_000, readonly upDownHistory?: UpDownHistory) {}
 
   replace(markets: readonly PricerMarket[], now = Date.now()): void {
     const symbols = new Set(markets.map((market) => market.symbol));
@@ -17,10 +18,11 @@ export class MarketStore {
 
   updateQuote(symbol: string, quote: PricerMarket["gemini"]): void {
     const market = this.current.get(symbol);
-    if (!market) return;
+    if (!market || quote.ts < market.gemini.ts) return;
+    const { edge: oldEdge, ...current } = market;
     const edge = quote.mid === undefined ? undefined : market.theo - quote.mid;
     this.current.set(symbol, {
-      ...market,
+      ...current,
       gemini: { ...quote },
       ...(edge === undefined ? {} : { edge }),
     });
@@ -38,8 +40,16 @@ export class MarketStore {
   }
 
   marketHistory(symbol: string, now = Date.now()): MarketHistoryPoint[] {
+    const archived = this.upDownHistory?.prices(symbol, now) ?? [];
+    const market = this.current.get(symbol);
+    if (!market) return archived;
     this.prune(symbol, now);
-    return (this.history.get(symbol) ?? []).map((point) => ({ ...point }));
+    const points = new Map(archived.map((point) => [point.ts, point]));
+    for (const point of this.history.get(symbol) ?? []) {
+      if (market.kind === "up_down" && (point.ts < market.openTs || point.ts >= market.expiryTs)) continue;
+      if (!points.has(point.ts)) points.set(point.ts, { ...point });
+    }
+    return [...points.values()].sort((left, right) => left.ts - right.ts);
   }
 
   private appendHistory(market: PricerMarket, now: number): void {
@@ -48,10 +58,11 @@ export class MarketStore {
       ts: now,
       theo: market.theo,
       spot: market.spot,
-      ...(market.gemini.mid === undefined ? {} : { geminiMid: market.gemini.mid }),
+      ...upDownHistoryQuote(market.gemini, now),
     };
     const previous = points.at(-1);
-    if (!previous || previous.theo !== point.theo || previous.spot !== point.spot || previous.geminiMid !== point.geminiMid) {
+    if (!previous || previous.theo !== point.theo || previous.spot !== point.spot || previous.geminiMid !== point.geminiMid
+      || previous.geminiBid !== point.geminiBid || previous.geminiAsk !== point.geminiAsk) {
       points.push(point);
     }
     this.history.set(market.symbol, points);

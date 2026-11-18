@@ -90,7 +90,7 @@ function browserId(): string {
 export function WalletPanel() {
   const wallet = useDemoWallet();
   const connected = useWallet();
-  const { health } = useHealth();
+  const { health } = useHealth("account");
   const account = useDemoAccount();
   const fundingAvailable = health?.chainConfigured === true;
   const [open, setOpen] = useState(false);

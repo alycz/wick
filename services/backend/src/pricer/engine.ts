@@ -1,15 +1,19 @@
 import {
   discoverBtcMarkets,
+  listActiveBtcEvents,
   quoteFromContract,
   type GeminiContract,
   type GeminiEvent,
   type GeminiMarketBucket,
 } from "@wick/gemini";
-import { ladderTheo, SECONDS_PER_YEAR, twoSidedLeverageCap, upDownTheo } from "@wick/pricing";
+import { BINARY_TWAP_WINDOW_SECONDS, LADDER_HALF_WIDTH_FRACTION, ladderTheo,
+  SECONDS_PER_YEAR, twoSidedLeverageCap, upDownTheo, type BinaryTheoResult } from "@wick/pricing";
 import type { GeminiQuote, PricerMarket } from "@wick/shared";
 import type { VolSource } from "@wick/vol";
 import { MarketStore } from "./store.js";
 import { withRetry } from "./retry.js";
+import type { MarketTheoInput, TheoModelInput } from "./theo-replay.js";
+import { upDownHistoryQuote } from "./up-down-history.js";
 import type {
   BackendLogger,
   ChainPort,
@@ -42,6 +46,7 @@ export interface PricerEngineOptions {
   chain: ChainPort;
   logger: BackendLogger;
   store?: MarketStore;
+  onTheoInputs?: (pricedAt: number, inputs: MarketTheoInput[]) => void;
   quoteStreamFactory?: QuoteStreamFactory;
   now?: () => number;
   discoveryIntervalMs?: number;
@@ -92,6 +97,7 @@ export class PricerEngine {
   private readonly chain: ChainPort;
   private readonly logger: BackendLogger;
   private readonly quoteStreamFactory: QuoteStreamFactory | undefined;
+  private readonly onTheoInputs: PricerEngineOptions["onTheoInputs"];
   private readonly now: () => number;
   private readonly discoveryIntervalMs: number;
   private readonly markIntervalMs: number;
@@ -117,6 +123,9 @@ export class PricerEngine {
   private lastBatchAt = 0;
   private lastDiscoveryAt: number | undefined;
   private lastMarkAt: number | undefined;
+  private lastPricingAt: number | undefined;
+  private theoArchiveMinute: number | undefined;
+  private readonly theoArchivedSymbols = new Set<string>();
   private lastError: string | undefined;
 
   constructor(options: PricerEngineOptions) {
@@ -126,6 +135,7 @@ export class PricerEngine {
     this.logger = options.logger;
     this.store = options.store ?? new MarketStore();
     this.quoteStreamFactory = options.quoteStreamFactory;
+    this.onTheoInputs = options.onTheoInputs;
     this.now = options.now ?? Date.now;
     this.discoveryIntervalMs = options.discoveryIntervalMs ?? 10_000;
     this.markIntervalMs = options.markIntervalMs ?? 1_000;
@@ -142,8 +152,16 @@ export class PricerEngine {
   snapshot(): PricerSnapshot {
     let volSource: PricerSnapshot["volSource"] = "unavailable";
     try { volSource = this.vol.name; } catch { /* source not selected */ }
+    const markets = this.store.markets();
+    const priced = new Set(markets.map((market) => market.symbol));
+    const now = this.now();
+    const unpricedMarkets = [...this.candidates.values()]
+      .filter(({ contract, event }) => !priced.has(contract.instrumentSymbol) && Date.parse(event.expiryDate) > now)
+      .map(({ contract, event, strike }) => ({
+        symbol: contract.instrumentSymbol, eventTicker: event.ticker, strike, expiryTs: Date.parse(event.expiryDate),
+      }));
     return {
-      markets: this.store.markets(),
+      markets, unpricedMarkets,
       volSource,
       volHealthy: this.vol.healthy(),
       chainConfigured: this.chain.configured(),
@@ -152,6 +170,7 @@ export class PricerEngine {
       // `lastMarkAt` is intentionally the last confirmed on-chain batch, not
       // the most recent local pricing attempt. Demo readiness depends on it.
       ...(this.lastMarkAt === undefined ? {} : { lastMarkAt: this.lastMarkAt }),
+      ...(this.lastPricingAt === undefined ? {} : { lastPricingAt: this.lastPricingAt }),
       ...(this.lastError === undefined ? {} : { lastError: this.lastError }),
     };
   }
@@ -191,11 +210,12 @@ export class PricerEngine {
     try {
       const spot = this.vol.spot().px;
       if (!Number.isFinite(spot) || spot <= 0) throw new Error("vol source has no valid BTC spot");
-      const response = await withRetry(
-        () => this.gemini.listEvents({ status: "active", search: "BTC", limit: 500, offset: 0 }),
+      const requestedAt = this.now();
+      const events = await withRetry(
+        () => listActiveBtcEvents(this.gemini),
         { attempts: 3, baseDelayMs: 250 },
       );
-      const discovered = discoverBtcMarkets(response.data, spot, this.now());
+      const discovered = discoverBtcMarkets(events, spot, this.now());
       const next = new Map<string, Candidate>();
       const ensureRequests: Promise<void>[] = [];
       for (const group of discovered) {
@@ -218,11 +238,15 @@ export class PricerEngine {
             expiryMs: Date.parse(group.event.expiryDate),
             stage: "await_outcome",
           });
-          this.quotes.set(contract.instrumentSymbol, this.quotes.get(contract.instrumentSymbol) ?? quoteFromContract(contract, this.now()));
+          const previousQuote = this.quotes.get(contract.instrumentSymbol);
+          if (!previousQuote || previousQuote.ts < requestedAt) {
+            this.quotes.set(contract.instrumentSymbol, quoteFromContract(contract, requestedAt));
+          }
           if (this.chain.configured()) ensureRequests.push(this.ensureMarket(candidate));
         }
       }
       this.candidates = next;
+      for (const symbol of this.quotes.keys()) if (!next.has(symbol)) this.quotes.delete(symbol);
       await Promise.all(ensureRequests);
       this.restartQuoteStream([...next.keys()]);
       this.lastDiscoveryAt = this.now();
@@ -245,13 +269,31 @@ export class PricerEngine {
       }
       const now = this.now();
       const markets: PricerMarket[] = [];
+      const archiveMinute = Math.floor(now / 60_000);
+      if (archiveMinute !== this.theoArchiveMinute) {
+        this.theoArchiveMinute = archiveMinute;
+        this.theoArchivedSymbols.clear();
+      }
+      const theoInputs: MarketTheoInput[] = [];
       for (const candidate of this.candidates.values()) {
-        try { markets.push(this.priceCandidate(candidate, now)); }
+        const capture = this.onTheoInputs && !this.theoArchivedSymbols.has(candidate.contract.instrumentSymbol);
+        try { markets.push(this.priceCandidate(candidate, now, capture ? theoInputs : undefined)); }
         catch (error) {
           this.logger.warn({ symbol: candidate.contract.instrumentSymbol, error: errorMessage(error) }, "Market pricing failed");
         }
       }
       this.store.replace(markets, now);
+      this.lastPricingAt = markets.length ? now : undefined;
+      if (this.onTheoInputs && theoInputs.length) {
+        try {
+          this.onTheoInputs(now, theoInputs);
+          for (const { symbol } of theoInputs) this.theoArchivedSymbols.add(symbol);
+        } catch (error) {
+          this.logger.warn({ error: errorMessage(error) }, "Could not archive market theo inputs");
+        }
+      }
+      try { this.store.upDownHistory?.record(markets, now); }
+      catch (error) { this.logger.warn({ error: errorMessage(error) }, "Could not archive Up/Down prices"); }
       this.lastError = undefined;
       if (this.chain.configured()) {
         await this.postAdaptiveMarks(markets, now);
@@ -305,21 +347,29 @@ export class PricerEngine {
     }
   }
 
-  private priceCandidate(candidate: Candidate, now: number): PricerMarket {
+  private priceCandidate(candidate: Candidate, now: number, archive?: MarketTheoInput[]): PricerMarket {
     const expiryMs = Date.parse(candidate.event.expiryDate);
     const timeYears = Math.max((expiryMs - now) / 1_000 / SECONDS_PER_YEAR, 1 / SECONDS_PER_YEAR);
     const spot = this.vol.spot().px;
     const volatility = this.vol.vol(expiryMs, candidate.strike);
     const kind = candidate.event.type === "binary" ? "up_down" : "ladder";
-    const theoResult = kind === "up_down"
-      ? upDownTheo({ spot, strike: candidate.strike, volatility, timeYears })
-      : undefined;
-    const theo = theoResult?.probability ?? ladderTheo({
-      forward: spot,
-      strike: candidate.strike,
-      timeYears,
-      volAtStrike: (strike) => this.vol.vol(expiryMs, strike),
-    });
+    let theoResult: BinaryTheoResult | undefined;
+    let model: TheoModelInput;
+    let theo: number;
+    if (kind === "up_down") {
+      model = { model: "up_down_v1", twapWindowSeconds: BINARY_TWAP_WINDOW_SECONDS };
+      theoResult = upDownTheo({ spot, strike: candidate.strike, volatility, timeYears, twapWindowSeconds: model.twapWindowSeconds });
+      theo = theoResult.probability;
+    } else {
+      const halfWidth = candidate.strike * LADDER_HALF_WIDTH_FRACTION;
+      const lowerVolatility = this.vol.vol(expiryMs, candidate.strike - halfWidth);
+      const upperVolatility = this.vol.vol(expiryMs, candidate.strike + halfWidth);
+      model = { model: "ladder_v1", halfWidthFraction: LADDER_HALF_WIDTH_FRACTION, lowerVolatility, upperVolatility };
+      theo = ladderTheo({
+        forward: spot, strike: candidate.strike, timeYears, halfWidthFraction: model.halfWidthFraction,
+        volAtStrike: (strike) => strike < candidate.strike ? lowerVolatility : upperVolatility,
+      });
+    }
     const cap = twoSidedLeverageCap({
       probabilitySide: theo,
       volatility,
@@ -329,7 +379,7 @@ export class PricerEngine {
     });
     const quote = this.quotes.get(candidate.contract.instrumentSymbol) ?? quoteFromContract(candidate.contract, now);
     const edge = quote.mid === undefined ? undefined : theo - quote.mid;
-    return {
+    const market: PricerMarket = {
       symbol: candidate.contract.instrumentSymbol,
       eventTicker: candidate.event.ticker,
       kind,
@@ -346,6 +396,12 @@ export class PricerEngine {
       status: expiryMs <= now ? "expired" : "open",
       volSource: this.vol.name,
     };
+    if (market.status === "open") archive?.push({
+      symbol: market.symbol, duration: market.duration, expiryTs: market.expiryTs,
+      spot, strike: market.strike, theo, volSource: market.volSource, timeYears, volatility, ...model,
+      ...(kind === "ladder" ? upDownHistoryQuote(quote, now) : {}),
+    });
+    return market;
   }
 
   private async ensureMarket(candidate: Candidate): Promise<void> {
@@ -381,6 +437,7 @@ export class PricerEngine {
     this.quoteStream = this.quoteStreamFactory({
       symbols,
       onQuote: (symbol, quote) => {
+        if (!this.candidates.has(symbol) || quote.ts < (this.quotes.get(symbol)?.ts ?? 0)) return;
         this.quotes.set(symbol, quote);
         this.store.updateQuote(symbol, quote);
       },
