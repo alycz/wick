@@ -5,7 +5,7 @@ import type { PricerMarket } from "@wick/shared";
 import { cents } from "@/lib/format";
 import { kLabel, signed, usd } from "@/lib/markets";
 
-/* Wick's chance curve across strikes, Gemini's bid to ask as bands, BTC spot, and the edge strip below. */
+/* Wick's chance curve across strikes, BTC spot, and the edge strip below. */
 
 const cssPath = (d: string) => ({ d: `path("${d}")` }) as CSSProperties;
 
@@ -41,7 +41,7 @@ export function ChainGraph({ rows, selected, onSelect, spot, upDown }: {
   const edge = selected.edge === undefined ? undefined : selected.edge * 100;
   const tipLeft = Math.max(8, x(si) > W * .6 ? x(si) - 200 : x(si) + 18);
   return <div className="graph" ref={box}>
-    {W > 50 && n > 0 && <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Wick fair price and Gemini quotes by strike">
+    {W > 50 && n > 0 && <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Wick fair price and edge by strike">
       <defs><linearGradient id="gArea" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#5fd4cc" stopOpacity=".22" /><stop offset="1" stopColor="#5fd4cc" stopOpacity="0" /></linearGradient></defs>
       {[0, .25, .5, .75, 1].map((g) => <g key={g}><line x1={L} x2={W - R} y1={y(g)} y2={y(g)} stroke="#1a1f24" /><text x={L - 8} y={y(g) + 4} textAnchor="end">{g * 100}¢</text></g>)}
       <line x1={L} x2={W - R} y1={e0} y2={e0} stroke="#22282e" /><text x={L - 8} y={e0 + 4} textAnchor="end">edge</text>
@@ -49,14 +49,9 @@ export function ChainGraph({ rows, selected, onSelect, spot, upDown }: {
       <path className="g-area" style={cssPath(`${curve} L${pts[n - 1]![0]},${B} L${pts[0]![0]},${B} Z`)} />
       <path className="g-curve" style={cssPath(curve)} />
       {rows.map((row, i) => {
-        const bid = row.gemini.bid; const ask = row.gemini.ask;
-        const quoted = bid !== undefined || ask !== undefined;
-        const low = bid ?? ask ?? 0; const high = ask ?? bid ?? 0;
         const ed = row.edge === undefined ? 0 : row.edge * 100;
         const h = Math.min(EB / 2 - 2, Math.abs(ed) * eS);
         return <g key={row.symbol}>
-          <rect className="g-band" x={x(i) - Math.min(7, stepX * .22)} width={Math.min(14, stepX * .44)} rx="2"
-            style={{ y: y(high), height: Math.max(2, y(low) - y(high)), opacity: quoted ? 1 : 0 } as CSSProperties} />
           <rect className="g-edge" x={x(i) - Math.min(6, stepX * .2)} width={Math.min(12, stepX * .4)} rx="1.5"
             style={{ y: ed >= 0 ? e0 - h : e0, height: Math.max(.5, h), fill: Math.abs(ed) < .5 ? "#3a434b" : ed > 0 ? "var(--yes-hi)" : "var(--no-hi)" } as CSSProperties} />
           {(n <= 14 || i % 2 === 0) && <text x={x(i)} y={H - 4} textAnchor="middle">{upDown ? usd(row.strike, 0) : kLabel(row.strike)}</text>}
@@ -72,7 +67,6 @@ export function ChainGraph({ rows, selected, onSelect, spot, upDown }: {
     {W > 50 && n > 0 && <div className="g-tip" style={{ left: tipLeft }}>
       <b>{upDown ? `Up from ${usd(selected.strike)}` : `Above ${usd(selected.strike, 0)}`}</b>
       <div><span>Wick</span><span>{cents(selected.theo)}</span></div>
-      <div><span>Gemini</span><span>{cents(selected.gemini.bid)} / {cents(selected.gemini.ask)}</span></div>
       <div><span>Edge</span><span className={edge === undefined || Math.abs(edge) < .5 ? "" : edge > 0 ? "up" : "down"}>{edge === undefined ? "—" : signed(edge, (v) => `${v.toFixed(1)}¢`)}</span></div>
       <div><span>Max leverage</span><span>{selected.maxLeverage}x</span></div>
     </div>}

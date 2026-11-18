@@ -80,11 +80,11 @@ describe("MarketsPage", () => {
     expect(state.getUpDownContracts).not.toHaveBeenCalled();
     details.open = true;
     fireEvent(details, new Event("toggle"));
-    expect(await screen.findByTestId("historical-chart")).toHaveTextContent("0.75,0.60");
+    expect(await screen.findByTestId("historical-chart")).toHaveTextContent(/^0\.75$/);
     fireEvent.click(screen.getByRole("button", { name: "Down" }));
-    expect(screen.getByTestId("historical-chart")).toHaveTextContent("0.25,0.40");
+    expect(screen.getByTestId("historical-chart")).toHaveTextContent(/^0\.25$/);
     fireEvent.change(screen.getByRole("combobox", { name: "Contract" }), { target: { value: earlier.symbol } });
-    expect(screen.getByTestId("historical-chart")).toHaveTextContent("0.45,0.55");
+    expect(screen.getByTestId("historical-chart")).toHaveTextContent(/^0\.45$/);
   });
 
   it("keeps dates and strikes separate and charts the history for the selected strike", () => {
@@ -152,7 +152,7 @@ describe("MarketsPage", () => {
     expect(screen.queryByRole("region", { name: "Trade" })).toBeNull();
   });
 
-  it("uses the last fair price in a second and drops crossed or stale Gemini sides", () => {
+  it("uses the last fair price in a second while omitting exchange quotes", () => {
     const tick = Math.floor(now / 1000) * 1000;
     const contract = { ...ladder[0]!, theo: .40, gemini: { ts: tick, bid: .99, ask: .10 } };
     state.markets = { ...state.markets, markets: [contract], observedAt: tick };
@@ -162,12 +162,12 @@ describe("MarketsPage", () => {
     ];
     const page = render(<MarketsPage />);
     const chart = within(screen.getByRole("region", { name: "Strike price chart" }));
-    expect(chart.getByTestId("bid")).toHaveTextContent(/^0.36$/);
-    expect(chart.getByTestId("ask")).toHaveTextContent(/^0.38$/);
+    expect(chart.queryByTestId("bid")).toBeNull();
+    expect(chart.queryByTestId("ask")).toBeNull();
     state.markets = { ...state.markets, markets: [{ ...contract, theo: .41, gemini: { ts: tick - 35_000, bid: .30, ask: .34 } }], observedAt: tick + 100 };
     page.rerender(<MarketsPage />);
     expect(chart.getByTestId("theo")).toHaveTextContent(/^0.35,0.37,0.41$/);
-    expect(chart.getByTestId("bid")).toHaveTextContent(/^0.36$/);
+    expect(chart.queryByTestId("bid")).toBeNull();
   });
 
   it("finds expired strike history by settlement date", async () => {
@@ -189,13 +189,13 @@ describe("MarketsPage", () => {
     expect(archive.getByTestId("historical-chart")).toHaveTextContent("0.54");
   });
 
-  it("opens in Pro with the strike chain, Gemini's top of book and no invented depth", () => {
+  it("opens in Pro with fair prices in the strike chain", () => {
     render(<MarketsPage />);
     expect(screen.getByRole("button", { name: "Pro" })).toHaveAttribute("aria-pressed", "true");
     const chain = screen.getByRole("region", { name: "Strike chain" });
     expect(within(chain).getByText("$65,000")).toBeInTheDocument();
-    const quote = screen.getByRole("region", { name: "Gemini quote" });
-    expect(within(quote).getByText("63.0¢")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Gemini quote" })).toBeNull();
+    expect(within(chain).queryByRole("columnheader", { name: /^(bid|ask)$/i })).toBeNull();
     expect(screen.queryByText(/order book/i)).not.toBeInTheDocument();
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(screen.getByText("Trading backend unavailable.")).toBeInTheDocument();
@@ -220,10 +220,10 @@ describe("MarketsPage", () => {
     render(<MarketsPage />);
     expect(screen.getByRole("button", { name: "15m up/down" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "5m up/down" }));
-    expect(within(screen.getByRole("region", { name: "Gemini quote" })).getByText("Up/Down 5m")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Strike chain" })).getByRole("heading", { name: "5 min Up/Down" })).toBeInTheDocument();
   });
 
-  it("plots recorded quotes and the live theo for the selected Up/Down contract", () => {
+  it("plots the recorded and live fair prices for the selected Up/Down contract", () => {
     const short = { ...upDown, symbol: "BTC-5M-UP", duration: "5m", expiryTs: now + 240_000, theo: .33 } as const;
     state.markets.markets.push(short);
     state.markets.observedAt = now;
@@ -238,13 +238,13 @@ describe("MarketsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "15m up/down" }));
     const chart = within(screen.getByRole("region", { name: "Up/Down chart" }));
     expect(chart.getByTestId("theo")).toHaveTextContent("0.62,0.63,0.55");
-    expect(chart.getByTestId("bid")).toHaveTextContent("0.60,0.61,0.53");
-    expect(chart.getByTestId("ask")).toHaveTextContent("0.65,0.66,0.57");
+    expect(chart.queryByTestId("bid")).toBeNull();
+    expect(chart.queryByTestId("ask")).toBeNull();
 
     fireEvent.click(chart.getByRole("button", { name: "Down" }));
     expect(chart.getByTestId("theo")).toHaveTextContent("0.38,0.37,0.45");
-    expect(chart.getByTestId("bid")).toHaveTextContent("0.35,0.34,0.43");
-    expect(chart.getByTestId("ask")).toHaveTextContent("0.40,0.39,0.47");
+    expect(chart.queryByTestId("bid")).toBeNull();
+    expect(chart.queryByTestId("ask")).toBeNull();
 
     fireEvent.click(chart.getByRole("button", { name: "BTC spot" }));
     expect(chart.getByTestId("chart")).toHaveAttribute("data-format", "usd");

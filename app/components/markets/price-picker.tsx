@@ -124,7 +124,7 @@ export function PricePicker({ rows, selected, onSelect, side, onSide, spot, sigm
           const x = X(row.strike);
           if (x < 4 || x > W - 4) return null;
           return <g key={row.symbol}>
-            <line className={`pk-tick${row.gemini.bid !== undefined ? " has" : ""}`} x1={x} x2={x} y1={AX} y2={AX + 6} />
+            <line className="pk-tick" x1={x} x2={x} y1={AX} y2={AX + 6} />
             {i % every === 0 && <text x={x} y={AX + 20} textAnchor="middle">{kLabel(row.strike)}</text>}
           </g>;
         })}

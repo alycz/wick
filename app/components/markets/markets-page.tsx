@@ -164,30 +164,14 @@ function ArchivedPriceChart({ symbol, side }: { symbol: string; side: PositionSi
   if (!history.length) return <p role="status">No recorded prices are available for this contract.</p>;
 
   const fair = new Map<number, number>();
-  const gemini = new Map<number, number>();
-  const bids = new Map<number, number>();
-  const asks = new Map<number, number>();
-  const upSide = side === "yes";
-  const price = (up: number) => upSide ? up : 1 - up;
   for (const point of history) {
-    const time = seconds(point.ts);
-    fair.set(time, price(point.theo));
-    if (!validQuote(point.geminiBid, point.geminiAsk, point.geminiMid)) continue;
-    const bid = upSide ? point.geminiBid : point.geminiAsk;
-    const ask = upSide ? point.geminiAsk : point.geminiBid;
-    if (bid !== undefined) bids.set(time, price(bid));
-    if (ask !== undefined) asks.set(time, price(ask));
-    if (bid === undefined && ask === undefined && point.geminiMid !== undefined) gemini.set(time, price(point.geminiMid));
+    fair.set(seconds(point.ts), side === "yes" ? point.theo : 1 - point.theo);
   }
-  const points = (data: Map<number, number>) => Array.from(data, ([time, value]) => ({ time, value }));
   return <>
-    <p>{bids.size || asks.size || gemini.size ? "Recorded Wick fair prices and Gemini quotes" : "Recorded Wick fair prices"}</p>
+    <p>Recorded Wick fair prices</p>
     {history.some((point) => point.reconstructed) && <p>Early Wick prices reconstructed from saved Deribit options.</p>}
     <WickChart historical format="cents" windows={[]} series={[
-      { id: "wick", label: "Wick fair price", color: "#5fd4cc", data: points(fair) },
-      ...(bids.size ? [{ id: "bid", label: "Gemini bid", color: "#9aa8ff", data: points(bids) }] : []),
-      ...(asks.size ? [{ id: "ask", label: "Gemini ask", color: "#e6a474", data: points(asks) }] : []),
-      ...(gemini.size ? [{ id: "gemini", label: "Gemini midpoint", color: "#7c87ab", data: points(gemini) }] : []),
+      { id: "wick", label: "Wick fair price", color: "#5fd4cc", data: Array.from(fair, ([time, value]) => ({ time, value })) },
     ]} />
   </>;
 }
@@ -346,25 +330,22 @@ function Pro(props: ViewProps) {
             <ChainGraph rows={rows} selected={selected} onSelect={choose} spot={spot} upDown={group.upDown} />
             <div className="g-legend">
               <span><i style={{ background: "var(--wick)" }} />Wick fair price</span>
-              <span><i style={{ background: "rgba(154,168,255,.35)", border: "1px solid rgba(154,168,255,.7)" }} />Gemini bid to ask</span>
               <span><i style={{ background: "var(--btc)", height: 2 }} />BTC spot</span>
               <span><i style={{ background: "var(--yes-hi)" }} /><i style={{ background: "var(--no-hi)" }} />Edge, Wick minus Gemini mid</span>
             </div>
           </> : <div className="tbl-wrap">
             <table>
-              <thead><tr><th>Strike</th><th>Bid</th><th>Wick theo</th><th>Ask</th><th>Edge</th><th>Leverage</th><th>Distance</th></tr></thead>
+              <thead><tr><th>Strike</th><th>Wick theo</th><th>Edge</th><th>Leverage</th><th>Distance</th></tr></thead>
               <tbody>
                 {rows.map((row) => {
                   const dist = (row.strike / spot - 1) * 100;
                   const spotRow = !spotRowDone && !group.upDown && row.strike > spot;
                   if (spotRow) spotRowDone = true;
                   return [
-                    spotRow ? <tr className="spot" key="spot"><td colSpan={7}>Current BTC spot <b>{usd(spot)}</b></td></tr> : null,
+                    spotRow ? <tr className="spot" key="spot"><td colSpan={5}>Current BTC spot <b>{usd(spot)}</b></td></tr> : null,
                     <tr key={row.symbol} className={`r${row.symbol === selected.symbol ? " sel" : ""}`} onClick={() => choose(row.symbol)}>
                       <td className="strike">{usd(row.strike, group.upDown ? 2 : 0)}</td>
-                      <td className="bidc">{row.gemini.bid === undefined ? "–" : (row.gemini.bid * 100).toFixed(1)}</td>
                       <td className="theo">{(row.theo * 100).toFixed(1)}</td>
-                      <td className="askc">{row.gemini.ask === undefined ? "–" : (row.gemini.ask * 100).toFixed(1)}</td>
                       <td className={edgeClass(row.edge)}>{edgeText(row.edge)}</td>
                       <td>{row.maxLeverage}x</td>
                       <td className="gm">{dist > 0 ? "+" : ""}{dist.toFixed(1)}%</td>
@@ -376,10 +357,6 @@ function Pro(props: ViewProps) {
           </div>}
         </section>
       </div>
-      <section className="p side-col bookp" aria-label="Gemini quote">
-        <div className="book-h"><b>{group.upDown ? marketName(group, selected) : `${usd(selected.strike, 0)} · ${group.label}`}</b><span>Gemini · YES · ¢</span></div>
-        <Quote market={selected} now={now} />
-      </section>
       <section className="p side-col" aria-label="Trade">
         <ProTicket market={selected} upDown={group.upDown} label={marketName(group, selected)} history={history} state={ticket} />
       </section>
@@ -388,40 +365,6 @@ function Pro(props: ViewProps) {
 }
 
 const cap = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
-
-/* Gemini's top of book for the selected strike, drawn against Wick's fair price. */
-function Quote({ market, now }: { market: PricerMarket; now: number }) {
-  const { bid, ask, mid, last } = market.gemini;
-  const fair = market.theo;
-  const c = (value: number | undefined, digits = 1) => value === undefined ? "–" : `${(value * 100).toFixed(digits)}¢`;
-  const ageSecs = Math.max(0, (now - market.gemini.ts) / 1000);
-  /* zoom the scale around the quote and the fair price so the markers spread out */
-  const points = [bid, ask, fair, mid].filter((value): value is number => value !== undefined);
-  const lo = Math.max(0, Math.min(...points) - .04), hi = Math.min(1, Math.max(...points) + .04);
-  const pos = (value: number) => `${((value - lo) / Math.max(hi - lo, .01)) * 100}%`;
-  return <div className="qt">
-    <div className="qt-ba">
-      <div className="qt-cell b"><span>Bid</span><b>{c(bid)}</b></div>
-      <div className="qt-cell a"><span>Ask</span><b>{c(ask)}</b></div>
-    </div>
-    <div className="qt-scale" aria-label={`Gemini ${c(bid)} to ${c(ask)}, Wick fair ${c(fair)}`}>
-      <div className="qt-track">
-        {bid !== undefined && ask !== undefined ? <i className="qt-band" style={{ left: pos(bid), width: `calc(${pos(ask)} - ${pos(bid)})` }} /> : null}
-        {mid !== undefined ? <i className="qt-mid" style={{ left: pos(mid) }} /> : null}
-        <i className="qt-fair" style={{ left: pos(fair) }}><em>Wick {c(fair)}</em></i>
-      </div>
-      <div className="qt-ends"><span>{c(lo, 0)}</span><span>{c(hi, 0)}</span></div>
-    </div>
-    <div className="qt-stats">
-      <div><span>Spread</span><b>{bid !== undefined && ask !== undefined ? c(ask - bid) : "–"}</b></div>
-      <div><span>Mid</span><b>{c(mid)}</b></div>
-      <div><span>Edge vs mid</span><b className={edgeClass(market.edge)}>{market.edge === undefined ? "–" : `${edgeText(market.edge)}¢`}</b></div>
-      <div><span>Last</span><b>{c(last)}</b></div>
-      <div><span>Quote age</span><b>{ageSecs < 60 ? `${ageSecs.toFixed(0)}s` : `${Math.floor(ageSecs / 60)}m`}</b></div>
-      <div><span>Leverage cap</span><b>{market.maxLeverage}x</b></div>
-    </div>
-  </div>;
-}
 
 /* ================= EASY ================= */
 function Easy(props: ViewProps) {
@@ -477,7 +420,7 @@ function Easy(props: ViewProps) {
       {pickMode && <PricePicker rows={rows} selected={selected} onSelect={choose} side={ticket.side} onSide={ticket.setSide} spot={spot} sigma={sigma} expiryTs={group.expiryTs} />}
       {!pickMode && <div>
         {up ? <div className="row sel">
-          <div className="k"><b>Up or down from {usd(selected.strike)}</b><small>Gemini {cents(selected.gemini.bid)} / {cents(selected.gemini.ask)} · {selected.maxLeverage}x</small></div>
+          <div className="k"><b>Up or down from {usd(selected.strike)}</b><small>{selected.maxLeverage}x max leverage</small></div>
           <div className="pct">{Math.round(selected.theo * 100)}<sup>%</sup></div>
           <div className="yn">
             <button type="button" className={`by${ticket.side === "yes" ? " on" : ""}`} onClick={() => ticket.setSide("yes")}>Up {cents(selected.theo)}</button>
@@ -486,15 +429,13 @@ function Easy(props: ViewProps) {
         </div> : <>
           {visible.map((row) => {
             const pct = Math.round(row.theo * 100);
-            const quote = row.gemini.bid === undefined && row.gemini.ask === undefined ? "No Gemini quote"
-              : `Gemini ${row.gemini.bid === undefined ? "–" : (row.gemini.bid * 100).toFixed(0)}–${row.gemini.ask === undefined ? "–" : (row.gemini.ask * 100).toFixed(0)}¢`;
             const showDivider = !divider && row.strike > spot;
             if (showDivider) divider = true;
             const on = row.symbol === selected.symbol;
             return <div key={row.symbol}>
               {showDivider && <div className="divider">BTC now <b>{usd(spot)}</b></div>}
               <div className={`row${on ? " sel" : ""}`} onClick={() => choose(row.symbol)}>
-                <div className="k"><b>{row.strike.toLocaleString("en-US")}</b><small>{quote} · {row.maxLeverage}x</small></div>
+                <div className="k"><b>{row.strike.toLocaleString("en-US")}</b><small>{row.maxLeverage}x max leverage</small></div>
                 <div className={`pct${pct < 5 ? " lo" : ""}`}>{pct < 1 ? "<1" : pct}<sup>%</sup></div>
                 <div className="yn">
                   <button type="button" className={`by${on && ticket.side === "yes" ? " on" : ""}`} onClick={(event) => { event.stopPropagation(); setSideFor(row, "yes"); }}>Buy Yes {cents(row.theo)}</button>
@@ -508,12 +449,11 @@ function Easy(props: ViewProps) {
         </>}
       </div>}
       <section className="e-detail" aria-label="Selected market">
-        <div className="pk-bar"><h2>Wick fair vs Gemini · {up ? `Up or Down · ${group.label}` : `Above ${usd(selected.strike, 0)}`}</h2>
+        <div className="pk-bar"><h2>Wick fair price · {up ? `Up or Down · ${group.label}` : `Above ${usd(selected.strike, 0)}`}</h2>
           <span className="mu" style={{ fontSize: 13 }}>{up ? `Window ends ${timeLabel(group.expiryTs)}` : `Settles ${dateLabel(group.expiryTs)}, ${timeLabel(group.expiryTs)}`}</span></div>
         <div className="p stats ed-stats">
           <div className="st"><span>Chance</span><div className="big">{Math.round(selected.theo * 100)}%<small>{up ? "Up" : "Yes"}</small></div></div>
           <div className="st"><span>Wick fair price</span><b style={{ color: "var(--wick)" }}>{cents(selected.theo)}</b></div>
-          <div className="st"><span>Gemini bid / ask</span><b>{selected.gemini.bid === undefined && selected.gemini.ask === undefined ? "No quote" : `${cents(selected.gemini.bid)} / ${cents(selected.gemini.ask)}`}</b></div>
           <div className="st"><span>Edge vs Gemini mid</span><b className={edgeClass(edge)}>{edge === undefined ? "–" : signed(edge * 100, (v) => `${v.toFixed(1)}¢`)}</b></div>
           <div className="st"><span>Leverage cap</span><b>{selected.maxLeverage}x</b></div>
         </div>
@@ -526,7 +466,7 @@ function Easy(props: ViewProps) {
       </section>
       <div className="about"><h2>How Wick prices this</h2><p>{up
         ? "Wick's Up price is its fair chance that BTC finishes the window above the price to beat, from options volatility. Leverage is capped per market and falls as the window gets close."
-        : "Each percentage is Wick's fair chance that BTC finishes above the strike, from options volatility. Gemini's own bid and ask show under each strike, and markets settle on Gemini's official result."}</p></div>
+        : "Each percentage is Wick's fair chance that BTC finishes above the strike, from options volatility. Markets settle on Gemini's official result."}</p></div>
     </div>
     <aside className="ticket"><EasyTicket market={selected} upDown={up} expiryLabel={group.label} history={history} state={ticket} /></aside>
   </div>;

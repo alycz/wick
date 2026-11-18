@@ -76,17 +76,16 @@ export default function LandingPage() {
     <section className="split">
       <div>
         <h2>A fair price where the order book runs out.</h2>
-        <p>Gemini&apos;s book is deep near the money and thin in the tails. Wick turns Deribit&apos;s BTC options volatility into a fair chance for every strike, and shows it beside Gemini&apos;s bid and ask.</p>
+        <p>Gemini&apos;s book is deep near the money and thin in the tails. Wick turns Deribit&apos;s BTC options volatility into a fair chance for every strike.</p>
         <p>When Wick&apos;s price and Gemini&apos;s disagree, you can see it before you trade.</p>
         <Link className="ghost" href="/trade">Open the strike ladder</Link>
       </div>
       <div className="mini" aria-label="Strikes near the money">
-        <div className="mrow hd"><span>BTC above{ladderGroup ? ` · ${ladderGroup.label}` : ""}</span><span>Wick</span><span>Gemini</span><span>Leverage cap</span></div>
+        <div className="mrow hd"><span>BTC above{ladderGroup ? ` · ${ladderGroup.label}` : ""}</span><span>Wick</span><span>Leverage cap</span></div>
         {near.length === 0 ? <div className="mini-empty">Strikes appear here when live prices load.</div> : near.map((market) =>
           <Link className="mrow" key={market.symbol} href={`/m/${encodeURIComponent(market.symbol)}`}>
             <div><b>{market.strike.toLocaleString("en-US")}</b><div className="bar"><i style={{ width: `${Math.round(market.theo * 100)}%` }} /></div></div>
             <b style={{ color: "var(--wick)" }}>{Math.round(market.theo * 100)}%</b>
-            <span className="mu">{market.gemini.bid !== undefined ? Math.round(market.gemini.bid * 100) : "—"}–{market.gemini.ask !== undefined ? Math.round(market.gemini.ask * 100) : "—"}¢</span>
             <span>{market.maxLeverage}x</span>
           </Link>)}
       </div>
@@ -103,7 +102,7 @@ export default function LandingPage() {
     <section className="split">
       <div><h2>Questions</h2><p>Wick runs on Solana. Prices come from Deribit options and markets settle on Gemini.</p></div>
       <div className="faq">
-        <details open><summary>Where do prices come from?</summary><p>Wick&apos;s fair price comes from BTC spot and Deribit&apos;s options volatility, with Derive and realized volatility as fallbacks. Gemini&apos;s bid and ask are shown next to it.</p></details>
+        <details open><summary>Where do prices come from?</summary><p>Wick&apos;s fair price comes from BTC spot and Deribit&apos;s options volatility, with Derive and realized volatility as fallbacks.</p></details>
         <details><summary>How is the leverage cap set?</summary><p>From binary gamma: how sharply a contract&apos;s value can swing for a small BTC move. The sharper the swing, the lower the cap.</p></details>
         <details><summary>Who pays winners?</summary><p>The pool. It fills up from losing trades rather than outside deposits. If the pool runs short, payouts wait in a first-in, first-out queue.</p></details>
       </div>
