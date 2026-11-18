@@ -2,6 +2,27 @@
 
 Last updated: 2026-11-17 (UTC)
 
+## Devnet deployment (2026-11-18)
+
+Deployed and initialized on devnet. These replace the pending/legacy values below.
+
+| Item | Address |
+| --- | --- |
+| Wick program | `GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8` |
+| Test USDC mint (6 dp, 200,000 supply, mint + freeze authority revoked) | `HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU` |
+| $WICKED mint (program PDA, authority = LP PDA) | `G7Za5zgi7GaHKButBTZsjyCfWh9LnmQqGtQbUTe6nQwP` |
+| Config PDA | `CYXmfcdiTW2jsx949ZxnbHQSfcudTW5TzsWurFYQ7oHc` |
+| LP PDA | `B2ffn9mwu3ihewWK7b6fWZ8StCfuPwYFJE1eh6cYLzeu` |
+| Vault (seeded with 50,000 test USDC) | `HX9HvC3rZG3FbVQYLVDs1E5bukcVB2oR1uvyMoXpGUVE` |
+| Staking vault | `GVvvXsUGY5N2AFJeCSeecTpzYNn3piwiySdy4Lvgvof4` |
+| Admin / upgrade authority | `DoUoh2GUNWpoS1qNMUvaw4RdHQBXXQK2q6LH9Li7594a` |
+| Keeper | `J4Y9nHEihf7h13DH2R8d3Aezk9qtKXS1iBnyokfRC1kJ` |
+| Faucet treasury (150,000 test USDC = 150 grants) | `CyPeSqCXTv5GdXdi2CSdnKwFYpa4gLRXB18k7ppUCMev` |
+
+The program, mint and RPC are defaults in `packages/shared/src/constants.ts`, so the frontend works without `NEXT_PUBLIC_PROGRAM_ID`, `NEXT_PUBLIC_USDC_TEST_MINT` or `NEXT_PUBLIC_RPC_URL`. Secrets still go in the hosts: `TREASURY_KEYPAIR` on Vercel (faucet), `PROGRAM_ID` + `USDC_TEST_MINT` + `KEEPER_KEYPAIR` on Railway (keeper creates markets and posts marks). Keypairs are never committed.
+
+The program was deployed with `--max-len` equal to its current size; run `solana program extend` before an upgrade that grows it.
+
 ## Progress
 
 - WP0: setup implemented and locally checked; live funding acceptance remains blocked — monorepo, pinned toolchain, CI, shared API contracts and a conservative devnet SOL collector are present. The collector now runs through the backend lifecycle only when `SOL_COLLECTOR_ENABLED=true`, performs an immediate cycle and then a 15-minute cadence, persists each endpoint's eight-hour cooldown beside `SQLITE_PATH`, coalesces overlapping triggers, verifies the exact devnet genesis, and drains on shutdown. The standalone entry point reuses the same worker and must not run concurrently with the backend. Seven injected-transport collector tests pass. No new faucet request or transfer occurred in the 2026-11-17 verification window; treasury and keeper remain at 0 SOL, so funding/mint creation is still blocked.
