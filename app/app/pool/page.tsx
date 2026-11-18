@@ -35,12 +35,6 @@ export default function PoolPage() {
   const actions = useWickActions();
   const account = useDemoAccount();
   const demoMode = actions.demo === true && account !== undefined;
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!demoMode) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [demoMode]);
   const feed = useFeed();
   const backendReady = backendConfigured();
   const refreshKey = latestIndexerEventKey(feed.events, POOL_EVENTS);
@@ -77,7 +71,7 @@ export default function PoolPage() {
   /* the demo account stakes against its own ledger, so it doesn't wait on pool history */
   const disabled = busy !== undefined || !actions.client || (!demoMode && (!backendReady || !metrics));
   const demoBalances = demoMode ? {
-    wallet: e6(account.ledger.wickedE6), staked: e6(account.ledger.stakedE6), rewards: Number(pendingRewardsE6(account.ledger, now)) / 1_000_000,
+    wallet: e6(account.ledger.wickedE6), staked: e6(account.ledger.stakedE6), rewards: Number(pendingRewardsE6(account.ledger)) / 1_000_000,
   } : undefined;
   const wicked = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   const amountE6 = BigInt(Math.round(amount * 1_000_000));
@@ -89,7 +83,9 @@ export default function PoolPage() {
     {(error || signature || (backendReady && !actions.client && !demoMode)) && <div className="pf-alerts">
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
       {backendReady && !actions.client && !demoMode && <p className="pf-note">{actions.error ?? "Staking is not configured."}</p>}
-      {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
+      {signature && <p className="pf-note pf-ok" role="status">{demoMode
+        ? `Local demo complete · ${signature} · no network transaction`
+        : `Devnet transaction confirmed · ${compactAddress(signature)}`}</p>}
     </div>}
 
     <section className="pf-stats" aria-label="Pool metrics">
@@ -146,7 +142,9 @@ export default function PoolPage() {
             {busy === tab ? "Confirming…" : `${tab === "stake" ? "Stake" : "Unstake"} ${amount.toLocaleString("en-US")} $WICKED`}
           </button>
         </>}
-        <p className="fine">$WICKED is emitted to losing traders on the pool&apos;s high-water-mark curve. Rewards only pay out while the payout queue is empty.</p>
+        <p className="fine">{demoMode
+          ? "Browser-only practice. Local stake actions create receipts, but the demo does not fabricate staking rewards or network transfers."
+          : "$WICKED is emitted to losing traders on the pool's high-water-mark curve. Rewards only pay out while the payout queue is empty."}</p>
       </div></aside>
     </div>
   </div>;

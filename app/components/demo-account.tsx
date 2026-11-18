@@ -1,12 +1,11 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Keypair } from "@solana/web3.js";
 import type { PricerMarket } from "@wick/shared";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMarkets } from "@/hooks/use-markets";
 import { DemoClient } from "@/lib/demo/client";
-import { createLedger, DEMO_STORAGE_KEY, parseLedger, reconcile, seedHistory, type DemoLedger } from "@/lib/demo/ledger";
+import { createLedger, demoAccountId, DEMO_STORAGE_KEY, parseLedger, reconcile, type DemoLedger } from "@/lib/demo/ledger";
 import { useDemoWallet } from "./wallet-panel";
 
 /* Visitors without a wallet get a demo account: real markets, simulated balance and positions.
@@ -27,7 +26,7 @@ const DemoAccountContext = createContext<DemoAccountValue | undefined>(undefined
 function load(): DemoLedger {
   let stored: string | null = null;
   try { stored = window.localStorage.getItem(DEMO_STORAGE_KEY); } catch { /* storage blocked */ }
-  return parseLedger(stored) ?? createLedger(Keypair.generate().publicKey.toBase58(), Date.now());
+  return parseLedger(stored) ?? createLedger(demoAccountId(), Date.now());
 }
 
 export function DemoAccountProvider({ children }: { children: ReactNode }) {
@@ -49,14 +48,12 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { ledgerRef.current = load(); setLedger(ledgerRef.current); setReady(true); }, []);
 
-  /* keeper pass: seed history once a BTC price is known, then liquidate and settle against live prices */
+  /* Local keeper pass: only mark-based liquidation. Settlement waits for an official outcome. */
   useEffect(() => {
     if (!ready) return;
     const run = () => {
       const now = Date.now();
-      const spot = marketsRef.current.find((market) => market.spot > 0)?.spot;
-      const seeded = spot === undefined ? ledgerRef.current : seedHistory(ledgerRef.current, spot, now);
-      commit(reconcile(seeded, marketsRef.current, now));
+      commit(reconcile(ledgerRef.current, marketsRef.current, now));
     };
     run();
     const timer = window.setInterval(run, 5_000);
@@ -65,9 +62,7 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
 
   const client = useMemo(() => new DemoClient({ read: () => ledgerRef.current, write: commit, markets: () => marketsRef.current }), [commit]);
   const reset = useCallback(() => {
-    const fresh = createLedger(Keypair.generate().publicKey.toBase58(), Date.now());
-    const spot = marketsRef.current.find((market) => market.spot > 0)?.spot;
-    commit(spot === undefined ? fresh : seedHistory(fresh, spot, Date.now()));
+    commit(createLedger(demoAccountId(), Date.now()));
   }, [commit]);
 
   const active = !wallet.publicKey && !connected.publicKey;

@@ -2,8 +2,8 @@ import type { PricerMarket } from "@wick/shared";
 import { describe, expect, it } from "vitest";
 import { DemoClient } from "@/lib/demo/client";
 import {
-  claimQueue, claimRewards, closePosition, createLedger, DEMO_START_USDC_E6, deposit, openPosition, parseLedger,
-  pendingRewardsE6, reconcile, seedHistory, settlePosition, stake, unstake, usdcE6, withdraw, type DemoLedger,
+  claimRewards, closePosition, createLedger, demoAccountId, demoReceiptId, DEMO_START_USDC_E6, deposit, openPosition, parseLedger,
+  pendingRewardsE6, reconcile, settlePosition, stake, unstake, usdcE6, withdraw, type DemoLedger,
 } from "@/lib/demo/ledger";
 
 const NOW = 1_800_000_000_000;
@@ -12,21 +12,34 @@ const market = (overrides: Partial<PricerMarket> = {}): PricerMarket => ({
   openTs: NOW - 3_600_000, expiryTs: NOW + 3_600_000, spot: 95_400, theo: 0.6, gemini: { ts: NOW }, maxLeverage: 10, status: "open", volSource: "deribit",
   ...overrides,
 });
-const fresh = (): DemoLedger => createLedger("DemoOwner1111111111111111111111111111111111", NOW);
+const fresh = (): DemoLedger => createLedger(demoAccountId(() => 0.5, NOW), NOW);
 const open = (ledger: DemoLedger, overrides: Partial<Parameters<typeof openPosition>[2]> = {}) =>
   openPosition(ledger, market(), { side: "yes", marginE6: usdcE6(100), leverage: 2, maxEntryE6: 990_000, ...overrides }, NOW);
 
 describe("demo ledger", () => {
-  it("starts with $10,000 and survives a JSON round trip", () => {
+  it("starts with a clean local-only account and rejects the old fabricated-history ledger", () => {
     const ledger = fresh();
     expect(BigInt(ledger.usdcE6)).toBe(DEMO_START_USDC_E6);
+    expect(ledger.owner).toMatch(/^demo-account-/);
+    expect(ledger.wickedE6).toBe("0");
+    expect(ledger.positions).toEqual([]);
+    expect(ledger.claims).toEqual([]);
+    expect(ledger.activity).toEqual([]);
     expect(parseLedger(JSON.stringify(ledger))).toEqual(ledger);
+    expect(parseLedger(JSON.stringify({ ...ledger, version: 1 }))).toBeUndefined();
     expect(parseLedger("{bad")).toBeUndefined();
   });
 
+  it("uses unmistakably local receipts rather than Solana-shaped signatures", () => {
+    const receipt = demoReceiptId(() => 0.5, NOW);
+    expect(receipt).toMatch(/^demo-receipt-/);
+    expect(receipt).not.toMatch(/^[1-9A-HJ-NP-Za-km-z]{80,90}$/);
+  });
+
   it("opens a position with the program's math and takes the margin", () => {
-    const { ledger, position, signature } = open(fresh());
-    expect(signature).toHaveLength(88);
+    const { ledger, position, receiptId } = open(fresh());
+    expect(receiptId).toMatch(/^demo-receipt-/);
+    expect(position.address).toMatch(/^demo-position-/);
     expect(position.entryE6).toBe(605_000);
     expect(position.contractsE6).toBe(String(100_000_000n * 2n * 1_000_000n / 605_000n));
     expect(position.liqMarkE6).toBe(302_500);
@@ -60,24 +73,27 @@ describe("demo ledger", () => {
     expect(reconcile(next, [market({ theo: 0.3 })], NOW + 2000)).toBe(next);
   });
 
-  it("settles expired positions against spot, YES above the strike", () => {
+  it("leaves expired positions pending until Gemini's official outcome is supplied", () => {
     const opened = open(fresh(), { leverage: 1 });
-    expect(() => settlePosition(opened.ledger, opened.position.address, 96_000, NOW)).toThrow(/hasn't expired/);
-    const won = reconcile(opened.ledger, [market({ spot: 96_000 })], NOW + 3_600_000);
+    expect(() => settlePosition(opened.ledger, opened.position.address, "yes", NOW)).toThrow(/hasn't expired/);
+    const pending = reconcile(opened.ledger, [market({ spot: 96_000 })], NOW + 3_600_000);
+    expect(pending.positions[0]!.status).toBe("open");
+    expect(() => settlePosition(pending, opened.position.address, undefined, NOW + 3_600_000)).toThrow(/Gemini's official outcome/);
+    const won = settlePosition(pending, opened.position.address, "yes", NOW + 3_600_000).ledger;
     expect(won.positions[0]!.status).toBe("settled");
     expect(BigInt(won.positions[0]!.realizedPnlE6!)).toBeGreaterThan(0n);
-    const lost = settlePosition(opened.ledger, opened.position.address, 94_000, NOW + 3_600_000).ledger;
+    const second = open(fresh(), { leverage: 1 });
+    const lost = settlePosition(second.ledger, second.position.address, "no", NOW + 3_600_000).ledger;
     expect(lost.positions[0]!.paidE6).toBe("0");
   });
 
-  it("stakes, accrues rewards and claims them as USDC", () => {
-    const staked = stake(fresh(), usdcE6(1000), NOW).ledger;
+  it("does not fabricate time-based staking rewards", () => {
+    const funded = { ...fresh(), wickedE6: usdcE6(1000).toString() };
+    const staked = stake(funded, usdcE6(1000), NOW).ledger;
     expect(() => unstake(staked, usdcE6(2000), NOW)).toThrow(/more than you have staked/);
     const day = NOW + 86_400_000;
-    expect(Number(pendingRewardsE6(staked, day))).toBeCloseTo(400_000, -2);
-    const claimed = claimRewards(staked, day).ledger;
-    expect(claimed.rewardsE6).toBe("0");
-    expect(BigInt(claimed.usdcE6)).toBeGreaterThan(DEMO_START_USDC_E6);
+    expect(pendingRewardsE6(staked)).toBe(0n);
+    expect(() => claimRewards(staked, day)).toThrow(/does not fabricate staking rewards/);
   });
 
   it("moves money in and out with the same checks as a transfer", () => {
@@ -90,23 +106,14 @@ describe("demo ledger", () => {
     expect(sent.activity[0]!.kind).toBe("withdraw");
   });
 
-  it("seeds a believable history once, including a queued payout to claim", () => {
-    const seeded = seedHistory(fresh(), 95_000, NOW);
-    expect(seeded.positions.map((position) => position.status).sort()).toEqual(["closed", "closed", "liquidated", "settled"]);
-    expect(seedHistory(seeded, 95_000, NOW)).toBe(seeded);
-    const claim = seeded.claims[0]!;
-    const paid = claimQueue(seeded, claim.address, NOW).ledger;
-    expect(paid.claims[0]!.status).toBe("paid");
-    expect(BigInt(paid.usdcE6) - BigInt(seeded.usdcE6)).toBe(BigInt(claim.amountE6) - BigInt(claim.paidE6));
-  });
 });
 
 describe("DemoClient", () => {
   it("acts like the chain client against the stored ledger", async () => {
     let ledger = fresh();
     const client = new DemoClient({ read: () => ledger, write: (next) => { ledger = next; }, markets: () => [market()] }, 0, () => NOW);
-    const signature = await client.openPosition({ symbol: "BTC-95000", side: "no", marginE6: usdcE6(50), leverage: 3, maxEntryE6: 990_000 });
-    expect(signature).toHaveLength(88);
+    const receiptId = await client.openPosition({ symbol: "BTC-95000", side: "no", marginE6: usdcE6(50), leverage: 3, maxEntryE6: 990_000 });
+    expect(receiptId).toMatch(/^demo-receipt-/);
     expect(ledger.positions[0]!.side).toBe("no");
     await expect(client.openPosition({ symbol: "MISSING", side: "yes", marginE6: 1n, leverage: 1, maxEntryE6: 990_000 })).rejects.toThrow(/isn't available/);
     await client.closePosition({ address: ledger.positions[0]!.address, market: "BTC-95000", owner: ledger.owner }, 10_000);

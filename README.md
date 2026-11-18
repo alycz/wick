@@ -24,7 +24,7 @@ Wick separates price discovery from book depth. It turns the BTC option volatili
 - Implements margin, liquidation, settlement, liability limits, queued payouts, $WICKED emissions, and staking in an Anchor program.
 - Uses a self-bootstrapping pool: trading losses add liquidity rather than requiring an outside LP deposit.
 - Indexes Anchor events into SQLite and exposes positions, activity, leaderboard, and pool history.
-- Provides a responsive Next.js interface with a devnet demo wallet and Phantom/Solflare options.
+- Provides a responsive Next.js interface with a clearly labelled browser-only practice account plus separate local/Phantom/Solflare devnet wallet paths.
 
 Wick does **not** claim to be the first leveraged prediction market. Its differentiation is the combination of:
 
@@ -260,12 +260,13 @@ Do not infer success from a command submission or provider URL. `deploy:verify` 
 
 The repository has strict TypeScript, Vitest suites for pricing, provider parsing/fallbacks, backend/indexer, frontend and scripts, plus native Rust tests. CI also defines Anchor build/test with pinned tooling. Real public API fixtures are kept for Gemini; no fake market data ships in the app.
 
-Public provider verification covers read-only Gemini discovery/quotes and settlement parsing, Deribit, Derive, and a backend pricing run. The CI run linked above also passed the Anchor local-validator tests. This does not verify the deployed devnet lifecycle, Stream latency, faucet, bots, public browser transaction flow or demo recording.
+Public provider verification covers read-only Gemini discovery/quotes and settlement parsing, Deribit, Derive, and a backend pricing run. The CI run linked above also passed the Anchor local-validator tests. The browser practice account uses live market prices with a simulated local balance, starts with no trade/claim history, issues `demo-receipt-*` identifiers, and does not fabricate staking rewards or settle from BTC spot. Those local receipts are never transaction or Stream evidence. This does not verify the deployed devnet lifecycle, Stream latency, faucet, bots, public browser transaction flow or demo recording.
 
 ## Known limitations
 
 - The public frontend exists. An integrated public trading lifecycle, executable devnet Wick program, matching deployed IDL, test mint, backend and real Stream delivery remain unverified; a frontend URL alone does not establish those gates.
 - Real backend/frontend transaction adapters exist, but remain fail-closed until a generated matching IDL, executable devnet program, funded authorities and public configuration are verified.
+- Browser-only practice actions update local storage and show explicit local receipts; they do not transfer test USDC, prove pool solvency, create explorer links, or count as devnet/QuickNode evidence. Expired practice positions stay pending unless an official Gemini outcome becomes available through a verified path.
 - The November 17 WP11 report records historical local checks and findings. The later CI run linked above passed TypeScript and Anchor local-validator checks; public devnet execution and end-to-end acceptance still require separate evidence.
 - Faucet cooldown is best-effort per serverless instance; its global funding bound is finite on-chain inventory. Staking fee shares accrued while payout claims are queued remain reserved without later reward assignment.
 - Source is public at [alycz/wick](https://github.com/alycz/wick); source publication is not evidence of deployed backend or collector operation.

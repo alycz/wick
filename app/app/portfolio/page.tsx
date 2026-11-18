@@ -121,7 +121,7 @@ export default function PortfolioPage() {
 
   return <div className="pf-page">
     <header className="pf-head">
-      <div><h1>Portfolio</h1><p>{demoMode ? "A demo account trading on live prices. Connect a wallet to see your positions on Solana." : "Positions and payouts read from Wick\u2019s on-chain events."}</p></div>
+      <div><h1>Portfolio</h1><p>{demoMode ? "Browser-only practice using live prices. Local activity is not on-chain; connect a wallet for Solana devnet positions." : "Positions and payouts read from Wick\u2019s on-chain events."}</p></div>
       {owner && <div className="pf-wallet"><span>{demoMode ? "Demo account" : "Wallet"}</span><b>{demoMode ? usd(e6(account.ledger.usdcE6)) : compactAddress(owner)}</b></div>}
     </header>
 
@@ -130,7 +130,9 @@ export default function PortfolioPage() {
       {owner && !backendReady && <p className="pf-note">Positions can&apos;t load because the backend isn&apos;t configured.</p>}
       {owner && backendReady && !actions.client && <p className="pf-note">{actions.error ?? "Trading is not configured."}</p>}
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
-      {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
+      {signature && <p className="pf-note pf-ok" role="status">{demoMode
+        ? `Local demo complete · ${signature} · no network transaction`
+        : `Devnet transaction confirmed · ${compactAddress(signature)}`}</p>}
     </div>}
 
     <section className="pf-stats" aria-label="Summary">

@@ -80,7 +80,17 @@ describe("MarketsPage", () => {
     await waitFor(() => expect(state.openPosition).toHaveBeenCalledWith(expect.objectContaining({
       symbol: "BTC-1D-65000", side: "no", marginE6: 25_000_000n, leverage: 4,
     })));
-    expect(await screen.findByText(/Position opened/)).toBeInTheDocument();
+    expect(await screen.findByText(/Devnet position opened/)).toBeInTheDocument();
+  });
+
+  it("labels browser practice with a local receipt and never an explorer transaction", async () => {
+    state.openPosition.mockResolvedValue("demo-receipt-mock-local");
+    state.actions = { client: { openPosition: state.openPosition }, demo: true };
+    render(<MarketsPage symbol="BTC-1D-65000" />);
+    fireEvent.click(screen.getByRole("button", { name: /Open Yes/ }));
+    const status = await screen.findByText(/Local demo position opened · demo-receipt-mock-local · no network transaction/);
+    expect(status.closest("a")).toBeNull();
+    expect(screen.queryByText(/Devnet position opened/)).not.toBeInTheDocument();
   });
 
   it("switches to Easy and remembers it", () => {
