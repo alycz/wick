@@ -59,7 +59,7 @@ describe("MarketsPage", () => {
     const chain = screen.getByRole("region", { name: "Strike chain" });
     expect(within(chain).getByText("$65,000")).toBeInTheDocument();
     const quote = screen.getByRole("region", { name: "Gemini quote" });
-    expect(within(quote).getByText("63.0")).toBeInTheDocument();
+    expect(within(quote).getByText("63.0¢")).toBeInTheDocument();
     expect(screen.queryByText(/order book/i)).not.toBeInTheDocument();
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(screen.getByText("Trading backend unavailable.")).toBeInTheDocument();
