@@ -4,7 +4,7 @@
 
 Wick is a Solana devnet application for leveraged synthetic YES/NO positions on Gemini's live BTC prediction markets. It computes an options-implied fair value for every supported strike, shows that value beside Gemini's bid and ask, and sizes leverage market by market using binary gamma. Trades settle against Gemini's official outcome, never a price invented by Wick.
 
-> **Verification status — November 17, 2026:** WP11 passed 94 TypeScript tests, 15 native Rust tests, lint and the production build. Real public Gemini and volatility reads passed. Seven implementation/validation findings remain open or partial, including the unexecuted Anchor lifecycle suite; see the [WP11 report](docs/WP11_REPORT.md). Wick is **not deployed**: there is no executable devnet Wick program, test-USDC mint, Railway service, Vercel URL, active QuickNode Stream, or demo video. The ID currently present in the source is a build-time identity only. See [HANDOFF](docs/HANDOFF.md), [DEPLOYMENT](docs/DEPLOYMENT.md), and [ELIGIBILITY](docs/ELIGIBILITY.md). No sponsor or working-demo eligibility is claimed before those gates pass.
+> **Verification status — November 18, 2026:** the frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) (HTTP 200 verified). Main CI [44231909011](https://github.com/alycz/wick/actions/runs/44231909011) passed TypeScript lint/tests, Anchor build and `anchor test --skip-build` on commit `052cc678e56f07604a02d15e8a2a1a4920eb7e30`, completing at 03:50:13 UTC. That is local-validator/CI evidence, not proof of devnet execution or a working public trading lifecycle. Deployment and end-to-end acceptance of the Wick program, test mint, backend, active QuickNode Stream, faucet and final demo video remain unverified. Do not claim sponsor or working-demo eligibility until the remaining evidence gates pass. The November 17 UI descriptions and deployment snapshots in the linked runbooks are historical; later redesign changes require fresh recorder and browser verification.
 
 Wick is a UBC Hackathon 2026 project for Track 02, DeFi & Onchain Apps. It is devnet-only software using test assets; it is not audited and is not a real-money product.
 
@@ -34,7 +34,7 @@ Wick does **not** claim to be the first leveraged prediction market. Its differe
 
 ## Architecture
 
-The diagram shows the intended deployed topology. The current public deployment is pending.
+The diagram shows the intended integrated topology. The frontend is public; backend, on-chain and Stream integration remain unverified.
 
 ```mermaid
 flowchart LR
@@ -260,17 +260,17 @@ Do not infer success from a command submission or provider URL. `deploy:verify` 
 
 The repository has strict TypeScript, Vitest suites for pricing, provider parsing/fallbacks, backend/indexer, frontend and scripts, plus native Rust tests. CI also defines Anchor build/test with pinned tooling. Real public API fixtures are kept for Gemini; no fake market data ships in the app.
 
-Current live verification is limited to public, read-only data: Gemini discovery/quotes and settlement parsing, Deribit, Derive, and a read-only backend pricing run. On-chain lifecycle, Stream latency, faucet, bots, public browser flow, and demo recording remain pending deployment.
+Public provider verification covers read-only Gemini discovery/quotes and settlement parsing, Deribit, Derive, and a backend pricing run. The CI run linked above also passed the Anchor local-validator tests. This does not verify the deployed devnet lifecycle, Stream latency, faucet, bots, public browser transaction flow or demo recording.
 
 ## Known limitations
 
-- No public deployment, executable devnet Wick program, generated deployed IDL, test mint, Stream, or video exists yet.
+- The public frontend exists. An integrated public trading lifecycle, executable devnet Wick program, matching deployed IDL, test mint, backend and real Stream delivery remain unverified; a frontend URL alone does not establish those gates.
 - Real backend/frontend transaction adapters exist, but remain fail-closed until a generated matching IDL, executable devnet program, funded authorities and public configuration are verified.
-- Independent WP11 review passed 94 TypeScript and 15 native Rust tests; local-validator/on-chain execution and public lifecycle remain unverified. See [WP11 report](docs/WP11_REPORT.md) for the seven open/partial findings.
+- The November 17 WP11 report records historical local checks and findings. The later CI run linked above passed TypeScript and Anchor local-validator checks; public devnet execution and end-to-end acceptance still require separate evidence.
 - Faucet cooldown is best-effort per serverless instance; its global funding bound is finite on-chain inventory. Staking fee shares accrued while payout claims are queued remain reserved without later reward assignment.
-- Persistent backend collector integration and external source publication remain approval-blocked; the standalone collector is preserved.
+- Source is public at [alycz/wick](https://github.com/alycz/wick); source publication is not evidence of deployed backend or collector operation.
 - The public Solana devnet faucet returned HTTP 410 in this environment; the documented treasury and keeper have zero SOL. The treasury is also the demo-wallet funder; the separate mint-authority key is provisioning-only and is revoked before deployment.
-- QuickNode, Railway, Vercel, and authenticated GitHub credentials/project contexts are absent.
+- Provider access varies by execution environment. The deployed Vercel frontend and public GitHub source are verified; do not infer missing account access from absent local credentials. Final backend/program/mint configuration and real QuickNode Stream evidence still need verification.
 - The self-bootstrapping pool can queue profitable payouts and depends on future losses/liquidity; it is experimental economics.
 - Keeper/oracle trust is not decentralized, the contracts are unaudited, and provider/API availability can interrupt service.
 - Wick supports BTC Up/Down and above-strike ladders only; it does not place Gemini orders, support touch/High-Low contracts, accept external LP deposits, or run on mainnet.
