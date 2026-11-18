@@ -2,13 +2,13 @@
 
 This is an evidence checklist, not a prize or acceptance claim. Verified on November 18, 2026:
 
-- the source repository is public at [github.com/alycz/wick](https://github.com/alycz/wick), with `main` at `80977a098caffb62d466a94eea7c8a31edde1563` and CI run [44279482766](https://github.com/alycz/wick/actions/runs/44279482766) passing;
-- the Next.js frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/);
+- the source repository is public at [github.com/alycz/wick](https://github.com/alycz/wick), with `main` at `0bce1b73264a30e1ad0c487b23c0f12ba1298721` and CI run [44408114681](https://github.com/alycz/wick/actions/runs/44408114681) passing;
+- the Next.js frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/); Landing, Markets, Portfolio, Pool and Stats rendered in the signed-out verification after `d2909723e595b2519f86595e52029f3e9991383b`;
 - the Railway backend is reachable at [wick-backend-production-1e2c4649.up.railway.app](https://wick-backend-production-1e2c4649.up.railway.app/health) and reports Solana devnet, healthy live volatility data and `chainConfigured: true`;
 - program [`GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8`](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet) is executable on devnet, with example confirmed [market creation](https://explorer.solana.com/tx/5DeJQYoUN83WjBd9Lg1itMMdwctdZixyvYfuAo8BepgDaKyznSjs5Qhbm81o7TGiSUa4QYas6RZ178ZzyPSbhcf2?cluster=devnet) and [settlement](https://explorer.solana.com/tx/5DZcdtZrXJVncS5e6eASRoid1xqMXMg7GujHeztBdgVsp7RMBYiUjaaqDVny7CzkCTPehv4KqacLWWVW9M2dSLaW?cluster=devnet);
 - the six-decimal test-USDC mint is live with a fixed 200,000-token supply and revoked mint/freeze authorities.
 
-The public browser trade/faucet lifecycle, active QuickNode Stream delivery, and final demo video remain unverified. Signed-out Portfolio, Pool, Leaderboard and Stats examples are explicitly labelled local simulations and are not chain or sponsor evidence.
+The public browser trade/faucet lifecycle, active QuickNode Stream delivery, and final public demo-video link remain unverified. A local 2:45 public-page review cut exists but has not been uploaded or accepted as the submission video. Signed-out Portfolio, Pool and Stats examples are explicitly labelled local simulations and are not chain or sponsor evidence. Markets displayed a Wick fair price, populated chart, strike table and ticket, but no Gemini bid/ask; the chart's **Live** selector does not prove live protocol or Stream delivery.
 
 Official references:
 
@@ -32,7 +32,7 @@ The backend currently reports `indexerConfigured: false` and `streamEvidencePres
 - [x] **Solana deployment:** the Wick Anchor program and test assets are deployed on devnet, with addresses and explorer links recorded in the README.
 - [x] **Gemini Prediction Markets:** the code and running backend use Gemini's public events, strikes, quotes and official outcomes.
 - [ ] **Track 02 working-demo acceptance:** the public interface and chain-enabled backend exist, but a fresh browser wallet/faucet/open-position lifecycle has not been verified end to end.
-- [ ] **Accessible 2–3 minute demo video:** no final MP4 or public video link has been verified.
+- [ ] **Accessible 2–3 minute demo video:** a 2:45 local WebM review cut exists, but no final reviewed public video link has been verified.
 - [x] **Submission answers:** copy covers what was built, the problem, operation, differentiation, next steps and current limitations.
 - [ ] **Team/account-holder review and Devpost submission:** no form has been submitted by this repository update.
 - [ ] **Submit by Friday, November 20, 2026 at 12:00 PM CST.**

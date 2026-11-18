@@ -20,7 +20,7 @@ We built Wick, a devnet trading interface and Anchor program for leveraged synth
 
 The Solana program implements opening and closing YES/NO positions, liquidation, official-outcome settlement, market/vault exposure limits, FIFO payout claims, a self-bootstrapping pool, $WICKED emissions, and staking. A single Node backend runs market discovery, pricing, keeper/liquidator/settler loops, the QuickNode Streams webhook, SQLite projections, and read APIs. The Next.js interface includes markets, trade previews, portfolio, pool analytics, live activity, a clearly separate browser-only practice account, and local/Phantom/Solflare devnet wallet support. Local practice receipts are not presented as chain or Stream evidence.
 
-Current evidence boundary: public `main` is `80977a098caffb62d466a94eea7c8a31edde1563`, and CI [44279482766](https://github.com/alycz/wick/actions/runs/44279482766) passed its TypeScript and Anchor jobs. Program `GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8` is executable on devnet. The deployed backend reports healthy live volatility data and `chainConfigured: true`, and confirmed market-create/settle transactions exist. It also reports `indexerConfigured: false` and `streamEvidencePresent: false`; the public browser faucet/trade flow and final video still require acceptance evidence.
+Current evidence boundary: public `main` is `0bce1b73264a30e1ad0c487b23c0f12ba1298721`, with CI [44408114681](https://github.com/alycz/wick/actions/runs/44408114681) passing. Signed-out UI verification after `d2909723e595b2519f86595e52029f3e9991383b` confirmed Landing, Markets, Portfolio, Pool and Stats rendered. Markets showed a populated Wick price chart, strike table, ticket and Wick fair price; no Gemini bid/ask was visible, and the chart's **Live** selector is not chain or Stream evidence. Program `GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8` is executable on devnet. The deployed backend reports healthy live volatility data and `chainConfigured: true`, and confirmed market-create/settle transactions exist. It also reports `indexerConfigured: false` and `streamEvidencePresent: false`; the public browser faucet/trade flow remains unverified, and the local public-page review cut still requires review and upload before it can become the final demo-video link.
 
 ## 2. What problem does it solve?
 
@@ -88,7 +88,7 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 ## Links to enter only after verification
 
-- Public source repository: [github.com/alycz/wick](https://github.com/alycz/wick); verified `main` baseline `80977a098caffb62d466a94eea7c8a31edde1563`
+- Public source repository: [github.com/alycz/wick](https://github.com/alycz/wick); verified public `main` baseline `0bce1b73264a30e1ad0c487b23c0f12ba1298721`
 - Deployed frontend: [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/)
 - Backend health/API: [wick-backend-production-1e2c4649.up.railway.app/health](https://wick-backend-production-1e2c4649.up.railway.app/health)
 - Solana program: [`GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8`](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet)
