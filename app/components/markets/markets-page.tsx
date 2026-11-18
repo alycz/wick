@@ -149,6 +149,20 @@ interface ViewProps {
 }
 
 const refFor = (group: ExpiryGroup, market: PricerMarket) => group.upDown ? { value: market.strike, label: "Target" } : { value: market.strike, label: `${(market.strike / 1000).toFixed(market.strike % 1000 ? 1 : 0)}k` };
+
+/* The main chart. Strike markets chart BTC. Up/down markets chart the live Up price by default, like the BTC view, with BTC one tap away. */
+function MarketChart({ group, selected, spotTrail, theoTrail, height }: { group: ExpiryGroup; selected: PricerMarket; spotTrail: ChartPoint[]; theoTrail: ChartPoint[]; height: number }) {
+  const [source, setSource] = useState<"up" | "btc">("up");
+  const toggle = group.upDown ? <Seg className="wc-tabs mc-src" buttonClass="wc-tab" label="Chart source" value={source} onChange={setSource}
+    options={[{ value: "up", label: "Up price" }, { value: "btc", label: "BTC" }]} /> : undefined;
+  if (group.upDown && source === "up") {
+    return <WickChart key="up" series={[{ id: "up", label: "Up", color: "#22c55e", data: theoTrail }]} format="cents" windows={WINDOWS} height={height}
+      refLine={{ value: .5, label: "50¢" }} legend={toggle} />;
+  }
+  return <WickChart key="btc" series={[{ id: "btc", label: "BTC", color: "#f7931a", data: spotTrail }]} format="usd" windows={WINDOWS} height={height}
+    refLine={refFor(group, selected)} {...(toggle ? { legend: toggle } : {})} />;
+}
+
 const edgeClass = (edge: number | undefined) => edge === undefined || Math.abs(edge * 100) < .5 ? "gm" : edge > 0 ? "up" : "down";
 const edgeText = (edge: number | undefined) => edge === undefined ? "–" : signed(edge * 100, (v) => v.toFixed(1));
 
@@ -170,8 +184,8 @@ function Pro(props: ViewProps) {
     {error && <p className="mk-notice" role="status">{error}</p>}
     <div className="p-grid">
       <div className="p-left">
-        <section className="p p-chart" aria-label="BTC chart">
-          <WickChart series={[{ id: "btc", label: "BTC", color: "#f7931a", data: spotTrail }]} format="usd" windows={WINDOWS} height={220} refLine={refFor(group, selected)} />
+        <section className="p p-chart" aria-label={group.upDown ? "Up/down chart" : "BTC chart"}>
+          <MarketChart group={group} selected={selected} spotTrail={spotTrail} theoTrail={theoTrail} height={220} />
         </section>
         <section className="p chain" aria-label="Strike chain">
           <div className="chain-top">
@@ -316,6 +330,8 @@ function Easy(props: ViewProps) {
   const title = up ? "BTC Up or Down · 15 minutes" : `Bitcoin above ___ ${when}?`;
   const first = spotTrail[0]?.value;
   const change = first ? spot - first : undefined;
+  const upFirst = theoTrail[0]?.value;
+  const upMove = up && upFirst !== undefined && theoTrail.length > 1 && Math.abs(selected.theo - upFirst) >= .0005 ? selected.theo - upFirst : undefined;
   const spanMins = spotTrail.length > 1 ? Math.round((spotTrail[spotTrail.length - 1]!.time - spotTrail[0]!.time) / 60) : 0;
   const pickMode = !up && view === "pick";
   const visible = showAll ? rows : rows.filter((row) => row.theo > .03 && row.theo < .97);
@@ -353,9 +369,11 @@ function Easy(props: ViewProps) {
         <div><span>Price to beat</span><b>{usd(selected.strike)}</b></div>
         <div className="sep" />
         <div className="cur"><span>Current price <span className={spot >= selected.strike ? "up" : "down"}>{spot >= selected.strike ? "▲" : "▼"} {usd(Math.abs(spot - selected.strike), 0)}</span></span><b>{usd(spot)}</b></div>
+        <div className="sep" />
+        <div className="upx"><span>Up price{upMove !== undefined && <span className={upMove >= 0 ? "up" : "down"}> {upMove >= 0 ? "▲" : "▼"} {Math.abs(upMove * 100).toFixed(1)}¢</span>}</span><b>{cents(selected.theo)}</b></div>
       </div>}
-      <section className="p e-chartp" aria-label="BTC chart">
-        <WickChart series={[{ id: "btc", label: "BTC", color: "#f7931a", data: spotTrail }]} format="usd" windows={WINDOWS} height={260} refLine={refFor(group, selected)} />
+      <section className="p e-chartp" aria-label={group.upDown ? "Up/down chart" : "BTC chart"}>
+        <MarketChart group={group} selected={selected} spotTrail={spotTrail} theoTrail={theoTrail} height={260} />
       </section>
       {!up && <div className="pk-bar">
         <h2>Where will BTC be at {timeLabel(group.expiryTs)}{group.id === "1h" ? "" : ` on ${dateLabel(group.expiryTs)}`}?</h2>

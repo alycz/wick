@@ -205,6 +205,9 @@
 .mk-page .ud span { font-size: 13px; color: var(--muted); }
 .mk-page .ud b { font-size: 26px; font-weight: 600; letter-spacing: -.01em; }
 .mk-page .ud .cur span, .mk-page .ud .cur b { color: var(--btc); }
+.mk-page .ud .upx b { color: var(--yes-hi); }
+.mk-page .ud span.up { color: var(--yes-hi); }
+.mk-page .ud span.down { color: var(--no-hi); }
 .mk-page .ud .sep { width: 1px; height: 44px; background: var(--line); }
 
 /* ================= PRO markets ================= */

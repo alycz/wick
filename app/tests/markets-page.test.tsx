@@ -19,7 +19,10 @@ vi.mock("@/hooks/use-markets", () => ({
   ] }),
 }));
 vi.mock("@/hooks/use-wick-actions", () => ({ useWickActions: () => state.actions }));
-vi.mock("@/components/wick-chart", () => ({ WickChart: () => <div data-testid="chart" /> }));
+vi.mock("@/components/wick-chart", () => ({
+  WickChart: ({ series, format, legend }: { series: Array<{ id: string; data: unknown[] }>; format: string; legend?: React.ReactNode }) =>
+    <div data-testid="chart" data-format={format} data-series={series.map((item) => `${item.id}:${item.data.length}`).join()}>{legend}</div>,
+}));
 import { MarketsPage } from "@/components/markets/markets-page";
 
 const now = Date.now();
@@ -97,5 +100,30 @@ describe("MarketsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Easy" }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Bitcoin above/);
     expect(window.localStorage.getItem("wick:markets-mode")).toBe("easy");
+  });
+
+  it("charts the live Up price for up/down markets, with BTC one tap away", () => {
+    render(<MarketsPage symbol="BTC-15M-UP" />);
+    const region = screen.getByRole("region", { name: "Up/down chart" });
+    const chart = within(region).getByTestId("chart");
+    expect(chart).toHaveAttribute("data-format", "cents");
+    expect(chart.getAttribute("data-series")).toMatch(/^up:\d+$/);
+    expect(Number(chart.getAttribute("data-series")!.split(":")[1])).toBeGreaterThanOrEqual(2);
+    fireEvent.click(within(region).getByRole("button", { name: "BTC" }));
+    expect(within(region).getByTestId("chart")).toHaveAttribute("data-format", "usd");
+  });
+
+  it("keeps the BTC chart, with no source switch, for strike markets", () => {
+    render(<MarketsPage symbol="BTC-1D-65000" />);
+    const region = screen.getByRole("region", { name: "BTC chart" });
+    expect(within(region).getByTestId("chart")).toHaveAttribute("data-format", "usd");
+    expect(within(region).queryByRole("button", { name: "Up price" })).not.toBeInTheDocument();
+  });
+
+  it("shows the Up price beside the price to beat in Easy", () => {
+    window.localStorage.setItem("wick:markets-mode", "easy");
+    render(<MarketsPage symbol="BTC-15M-UP" />);
+    expect(screen.getByText("Price to beat")).toBeInTheDocument();
+    expect(document.querySelector(".ud .upx")).toHaveTextContent(/^Up price\s*55\.0¢$/);
   });
 });
