@@ -22,14 +22,6 @@ const LIVE_QUOTE_MAX_AGE_MS = 30_000;
 
 const seconds = (ms: number) => Math.floor(ms / 1000);
 
-function isLive(market: PricerMarket | undefined, health: HealthView | undefined, now: number, error?: string) {
-  const age = market ? now - market.gemini.ts : undefined;
-  const pricingAge = health?.pricingAgeMs ?? health?.markAgeMs;
-  return Boolean(market && !error && health?.ok && health.volHealthy
-    && pricingAge !== undefined && pricingAge <= LIVE_MARK_MAX_AGE_MS
-    && age !== undefined && age >= -5_000 && age <= LIVE_QUOTE_MAX_AGE_MS);
-}
-
 function marketName(group: ExpiryGroup, market: PricerMarket) {
   return group.upDown ? `Up/Down ${market.duration}` : `> ${usd(market.strike, 0)} · ${group.label}`;
 }
@@ -258,10 +250,12 @@ function Markets({ markets, health, symbol, error, sample, observedAt }: { marke
     const market = rows.find((item) => item.symbol === next);
     if (market) setLeverage((value) => Math.min(value, market.maxLeverage));
   };
-  const live = isLive(selected, health, now, error);
   const pricingAge = health?.pricingAgeMs ?? health?.markAgeMs;
-  const liveChartAt = !error && health?.ok && health.volHealthy && pricingAge !== undefined && pricingAge <= LIVE_MARK_MAX_AGE_MS
-    && observedAt !== undefined && now - observedAt <= LIVE_MARK_MAX_AGE_MS ? observedAt : undefined;
+  const elapsed = observedAt === undefined ? undefined : now - observedAt;
+  const live = !error && health?.ok === true && health.volHealthy && health.volSource === "deribit"
+    && pricingAge !== undefined && pricingAge <= LIVE_MARK_MAX_AGE_MS
+    && (elapsed === undefined || (elapsed >= -5_000 && elapsed <= LIVE_MARK_MAX_AGE_MS));
+  const liveChartAt = live ? observedAt : undefined;
   const shared = { group, rows, selected, spot, sigma, now, health, live, error, history, historyError, liveChartAt, ticket, choose, mode, setMode, spotTrail };
   return <>
     {board}

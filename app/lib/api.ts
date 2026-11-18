@@ -59,7 +59,7 @@ const healthSchema = z.object({
   ok: z.boolean(),
   chainConfigured: z.boolean(),
   volHealthy: z.boolean(),
-  volSource: z.enum(["deribit", "derive", "realized"]),
+  volSource: z.enum(["deribit", "derive", "realized", "unavailable"]),
   geminiHealthy: z.boolean().optional(),
   unpricedMarkets: z.array(archivedContractSchema.extend({ eventTicker: z.string() })).optional(),
   lastTickTs: z.number().optional(),

@@ -258,12 +258,12 @@ export class HostedMarketData {
           replay.theo IS NOT NULL AS reconstructed, sample.gemini_mid, sample.gemini_bid, sample.gemini_ask
         FROM wick_market_data.market_theo_minutes sample
         LEFT JOIN wick_market_data.ladder_theo_replays replay USING (sampled_at, symbol)
-        WHERE sample.model = 'ladder_v1' AND sample.symbol = ${symbol} AND sample.expiry_at >= ${new Date(now - LADDER_ARCHIVE_MS)}
+        WHERE sample.model = 'ladder_v1' AND sample.vol_source = 'deribit' AND sample.symbol = ${symbol} AND sample.expiry_at >= ${new Date(now - LADDER_ARCHIVE_MS)}
         UNION ALL
         SELECT b.sampled_at, b.priced_at, b.theo, b.spot, true, NULL, NULL, NULL
         FROM wick_market_data.ladder_history_backfills b
         WHERE b.symbol = ${symbol} AND b.expiry_at >= ${new Date(now - LADDER_ARCHIVE_MS)}
-          AND NOT EXISTS (SELECT FROM wick_market_data.market_theo_minutes s WHERE s.symbol = b.symbol AND s.sampled_at = b.sampled_at)
+          AND NOT EXISTS (SELECT FROM wick_market_data.market_theo_minutes s WHERE s.symbol = b.symbol AND s.sampled_at = b.sampled_at AND s.vol_source = 'deribit')
       )
       SELECT DISTINCT ON (bucket) priced_at AS "pricedAt", theo, spot, reconstructed,
         gemini_mid AS "geminiMid", gemini_bid AS "geminiBid", gemini_ask AS "geminiAsk",

@@ -1,5 +1,5 @@
 import { GeminiClient, GeminiQuoteStream } from "@wick/gemini";
-import { AutoVolSource, DeribitVolSource, DeriveVolSource, RealizedVolSource } from "@wick/vol";
+import { AutoVolSource, DeribitVolSource } from "@wick/vol";
 import { createCollectorWorkerFromEnvironment } from "./collector/service.js";
 import { IndexerService, registerIndexerRoutes } from "./indexer/index.js";
 import { createBackendLogger } from "./logging.js";
@@ -38,9 +38,7 @@ const deribit = new DeribitVolSource({
     hosted.queueOptions(snapshot.capturedAt, selectOptionSnapshots(snapshot, marketStore.markets()), snapshot);
   } } : {}),
 });
-const derive = new DeriveVolSource({ logger: volLogger });
-const realized = new RealizedVolSource();
-const vol = new AutoVolSource({ sources: [deribit, derive, realized], logger: volLogger });
+const vol = new AutoVolSource({ sources: [deribit], mode: "deribit", logger: volLogger });
 
 const chain = await createChainPort();
 if (chain.configured()) logger.info({ programId: process.env.PROGRAM_ID }, "Wick Anchor chain adapter verified on Solana devnet");

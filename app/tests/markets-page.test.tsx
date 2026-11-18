@@ -202,6 +202,12 @@ describe("MarketsPage", () => {
     expect(screen.getByRole("button", { name: /Open Yes/ })).toBeDisabled();
   });
 
+  it("keeps a fresh Deribit fair price live when Gemini quotes are old", () => {
+    state.markets.markets = ladder.map((row) => ({ ...row, gemini: { ts: now - 60_000 } }));
+    render(<MarketsPage />);
+    expect(screen.getByText("Live")).toBeInTheDocument();
+  });
+
   it("marks prices stale when the confirmed mark is old", () => {
     state.health = { health: { ok: true, chainConfigured: true, volHealthy: true, volSource: "deribit", markAgeMs: 10_001 } };
     render(<MarketsPage />);

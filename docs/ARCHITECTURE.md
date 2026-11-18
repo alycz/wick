@@ -61,7 +61,7 @@ The service stays deliberately compact: one Node process and one SQLite writer r
 | Anchor program | Enforce fixed-point position math, signer permissions, fresh marks, cutoffs, leverage/liability limits, liquidations, settlement, queue, emissions and staking | `programs/wick/` |
 | Pricing library | Pure Up/Down and ladder theo, volatility interpolation, binary-gamma leverage caps and liquidation distance | `packages/pricing/` |
 | Gemini client | Strict public REST/WS parsing, BTC market classification, quotes, strikes and official outcomes | `packages/gemini/` |
-| Volatility sources | Deribit surface, Derive fallback and realized-volatility fallback with health switching | `packages/vol/` |
+| Volatility sources | Deribit BTC index and options surface for live pricing | `packages/vol/` |
 | Pricer engine | Discover contracts, calculate theo/caps each second, batch marks, liquidate and settle | `services/backend/src/pricer/` |
 | Streams indexer | Authenticate deliveries, decode Anchor events, idempotently project state, rebuild/reconcile gaps | `services/backend/src/indexer/` |
 | Web application | Markets, trade preview/actions, portfolio, pool, live activity and devnet wallet/faucet UX | `app/` |
@@ -71,7 +71,7 @@ The service stays deliberately compact: one Node process and one SQLite writer r
 
 1. Every ten seconds, discovery reads active Gemini BTC events and selects current/next short windows and all open strikes across the dated BTC ladders.
 2. Gemini `bookTicker` updates quotes in real time. A rejected or unavailable socket falls back to the active-events endpoint every two seconds.
-3. Deribit supplies the primary BTC composite spot and options IV surface. Derive is second priority; one-second-return EWMA realized volatility is last. Data older than five seconds is unhealthy.
+3. Deribit supplies the BTC index and options IV surface for every live mark. Data older than five seconds is unhealthy.
 4. The pricing package interpolates smile and total variance, calculates YES theo, clamps it to 1–99¢, and derives a five-second binary-gamma leverage cap.
 5. The pricer computes every second. A deployed keeper would submit a batched mark only after a 0.1¢ move, cap change, or four-second heartbeat.
 6. If volatility is unhealthy, it stops marks. The program's stale-mark check then rejects new positions.
@@ -127,7 +127,7 @@ The “Try it now” devnet flow creates a local browser keypair and calls a ser
 | Failure | Behavior |
 |---|---|
 | Gemini WebSocket unavailable | Logged switch to two-second public REST polling |
-| Deribit unhealthy/stale | Derive, then realized-vol fallback; marks stop if no healthy source |
+| Deribit unhealthy/stale | New marks pause until Deribit recovers |
 | Keeper mark stale | Program rejects new opens |
 | Stream duplicate | Unique `(signature,event_index)` makes ingestion idempotent |
 | Stream gap/pause | 60-second public-RPC reconciliation backfills recent signatures |
@@ -139,7 +139,7 @@ The “Try it now” devnet flow creates a local browser keypair and calls a ser
 ## Trust and security boundaries
 
 - The program trusts the configured keeper to relay marks and Gemini outcomes, subject to program checks.
-- Gemini is trusted for contract definitions and final outcome; Deribit/Derive are trusted inputs to theo, not settlement authorities.
+- Gemini is trusted for contract definitions and final outcome; Deribit supplies market data for theo.
 - QuickNode is transport, not state authority. Every event corresponds to Solana logs and reconciliation can recover gaps.
 - Railway owns backend secrets and the persistent volume; Vercel owns faucet secrets. Logs redact authorization, webhook and key fields.
 - Public RPC is primary for regular reads/writes to protect QuickNode credits; QuickNode RPC is failover.

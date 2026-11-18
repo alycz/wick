@@ -101,7 +101,7 @@ export default function LandingPage() {
     <section className="split">
       <div><h2>Questions</h2><p>Wick runs on Solana. Prices come from Deribit options and markets settle on Gemini.</p></div>
       <div className="faq">
-        <details open><summary>Where do prices come from?</summary><p>Wick&apos;s fair price comes from BTC spot and Deribit&apos;s options volatility, with Derive and realized volatility as fallbacks.</p></details>
+        <details open><summary>Where do prices come from?</summary><p>Wick&apos;s fair price comes from Deribit’s BTC index and options volatility. Fair-price updates pause when the Deribit feed is stale.</p></details>
         <details><summary>How is the leverage cap set?</summary><p>From binary gamma: how sharply a contract&apos;s value can swing for a small BTC move. The sharper the swing, the lower the cap.</p></details>
         <details><summary>Who pays winners?</summary><p>The pool. It fills up from losing trades rather than outside deposits. If the pool runs short, payouts wait in a first-in, first-out queue.</p></details>
       </div>

@@ -32,7 +32,7 @@ Hackathon: UBC 2026 Hackathon. Track 02 (DeFi & Onchain Apps); chain award "Best
 | Database | SQLite file (`better-sqlite3`) on a Railway volume mounted at `/data` | $0 |
 | RPC + Streams | QuickNode free trial (Solana Streams follow the chain tip) | $0 |
 | Chain | Solana devnet (airdropped SOL) | $0 |
-| Market data | Gemini + Deribit public APIs (Derive fallback) | $0 |
+| Market data | Gemini contract metadata and settlement, Deribit market data | $0 |
 | Repo + CI | GitHub + GitHub Actions | $0 |
 
 No Supabase, Render, Fly or separate database service. Keep the backend's RAM under 512 MB and its CPU light (batched writes, no busy loops) so it stays well inside the trial credit and would also fit Railway's smaller Free-plan limits.
@@ -262,7 +262,7 @@ interface VolSource { name: 'deribit'|'derive'|'realized'; spot(): {px:number, t
 - `DeribitVolSource` (default): WS index + `markprice.options.btc_usd`, instruments via REST.
 - `DeriveVolSource`: `public/get_tickers` per expiry every 5 s.
 - `RealizedVolSource`: EWMA (λ = 0.94 per minute) of 1-second log returns from the spot feed, annualized; flat smile.
-- `VOL_SOURCE=auto`: probe Deribit at startup and every 60 s; on failure or stale data (> 5 s), switch to Derive, then Realized; switch back when Deribit recovers. Log every switch. Expose the active source in `/health` and `/markets`.
+- The live pricer uses Deribit exclusively for BTC spot and option IV. Pause new marks if the feed is unhealthy and resume when Deribit recovers. The standalone volatility tools also support other providers.
 
 ---
 

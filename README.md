@@ -124,7 +124,7 @@ liq_mark  = entry · [1 - (1-mm)/leverage]
 
 - **Trusted keeper:** an authorized keeper creates markets, posts marks, and submits Gemini's official settlement. On-chain signer checks, staleness checks, slippage bounds, cutoffs, leverage caps, and liability caps constrain it, but a production system would need decentralized oracle/keeper governance.
 - **Outcome oracle:** Gemini's `resolutionSide` is authoritative. Wick does not infer outcomes from Deribit, spot, or its own theo. An `invalid` Gemini event is voided.
-- **Price/volatility oracle:** Deribit is primary for index and IV; Derive and then realized volatility are fallbacks. If all are unhealthy or data is stale, marks stop and the on-chain stale-mark check halts new trading.
+- **Price/volatility oracle:** Deribit supplies the BTC index and options IV. If its data is unavailable or stale, marks stop and the on-chain stale-mark check halts new trading.
 - **Pool solvency:** profitable claims can queue. Exposure limits reduce insolvency risk but cannot promise instant payout or eliminate model/oracle/keeper risk.
 - **Smart-contract risk:** checked integer math and tests reduce implementation risk; they do not replace an audit.
 - **Environment:** devnet, self-minted test USDC, no real funds, no mainnet support.
