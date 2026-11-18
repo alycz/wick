@@ -7,18 +7,6 @@ import { kLabel, signed, usd } from "@/lib/markets";
 
 /* Wick's chance curve across strikes, Gemini's bid to ask as bands, BTC spot, and the edge strip below. */
 
-function smooth(points: Array<[number, number]>): string {
-  if (points.length < 2) return points.length ? `M${points[0]![0]},${points[0]![1]}` : "";
-  let d = `M${points[0]![0].toFixed(1)},${points[0]![1].toFixed(1)}`;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const p0 = points[i - 1] ?? points[i]!; const p1 = points[i]!; const p2 = points[i + 1]!; const p3 = points[i + 2] ?? p2;
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += ` C${c1[0]!.toFixed(1)},${c1[1]!.toFixed(1)} ${c2[0]!.toFixed(1)},${c2[1]!.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-  }
-  return d;
-}
-
 const cssPath = (d: string) => ({ d: `path("${d}")` }) as CSSProperties;
 
 export function ChainGraph({ rows, selected, onSelect, spot, upDown }: {
@@ -44,7 +32,7 @@ export function ChainGraph({ rows, selected, onSelect, spot, upDown }: {
   const y = (p: number) => T + (1 - p) * (B - T);
   const e0 = B + 14 + EB / 2; const eS = (EB / 2 - 2) / 3;
   const pts = rows.map((row, i) => [x(i), y(row.theo)] as [number, number]);
-  const curve = smooth(pts);
+  const curve = pts.map(([px, py], index) => `${index === 0 ? "M" : "L"}${px},${py}`).join(" ");
   let sx = L;
   for (let i = 0; i < n - 1; i += 1) if (spot >= rows[i]!.strike && spot <= rows[i + 1]!.strike) sx = x(i) + (spot - rows[i]!.strike) / (rows[i + 1]!.strike - rows[i]!.strike) * stepX;
   if (n && spot > rows[n - 1]!.strike) sx = x(n - 1);

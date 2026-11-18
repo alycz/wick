@@ -1,4 +1,4 @@
-import { marketsResponseSchema, type IndexedEvent, type MarketHistoryPoint, type PositionView, type PricerMarket } from "@wick/shared";
+import { marketsResponseSchema, type ArchivedLadderContract, type ArchivedUpDownContract, type IndexedEvent, type MarketHistoryPoint, type PositionView, type PricerMarket } from "@wick/shared";
 import { z } from "zod";
 
 /** Accepts "host", "host/" or "https://host"; a bare host gets https://. */
@@ -10,12 +10,24 @@ export function normalizeBackendUrl(raw: string | undefined): string {
 
 const BACKEND = normalizeBackendUrl(process.env.NEXT_PUBLIC_BACKEND_URL);
 
+const MARKET_DATA = normalizeBackendUrl(process.env.NEXT_PUBLIC_MARKET_DATA_URL) || BACKEND;
+
 const historySchema = z.array(z.object({
   ts: z.number(),
   theo: z.number(),
+  reconstructed: z.boolean().optional(),
   geminiMid: z.number().optional(),
+  geminiBid: z.number().min(0).max(1).optional(),
+  geminiAsk: z.number().min(0).max(1).optional(),
   spot: z.number(),
 }));
+
+const archivedContractSchema = z.object({
+  symbol: z.string(),
+  strike: z.number(),
+  expiryTs: z.number(),
+});
+const upDownContractsSchema = z.array(archivedContractSchema.extend({ duration: z.string(), openTs: z.number() }));
 
 const positionSchema = z.object({
   address: z.string(), owner: z.string(), market: z.string(), side: z.enum(["yes", "no"]),
@@ -49,8 +61,10 @@ const healthSchema = z.object({
   volHealthy: z.boolean(),
   volSource: z.enum(["deribit", "derive", "realized"]),
   geminiHealthy: z.boolean().optional(),
+  unpricedMarkets: z.array(archivedContractSchema.extend({ eventTicker: z.string() })).optional(),
   lastTickTs: z.number().optional(),
   markAgeMs: z.number().nonnegative().optional(),
+  pricingAgeMs: z.number().nonnegative().optional(),
   discoveryAgeMs: z.number().nonnegative().optional(),
 }).passthrough();
 
@@ -59,22 +73,30 @@ export interface LpPoint { blockTime: number; balanceE6: string; queueOwedE6: st
 export type HealthView = z.infer<typeof healthSchema>;
 
 export function backendConfigured(): boolean { return BACKEND.length > 0; }
-export function backendUrl(path: string): string {
-  if (!BACKEND) throw new Error("Backend is not configured. Set NEXT_PUBLIC_BACKEND_URL.");
-  return `${BACKEND}${path}`;
+export function marketDataConfigured(): boolean { return MARKET_DATA.length > 0; }
+export function backendUrl(path: string, marketData = false): string {
+  const base = marketData ? MARKET_DATA : BACKEND;
+  if (!base) throw new Error("Backend is not configured. Set NEXT_PUBLIC_BACKEND_URL.");
+  return `${base}${path}`;
 }
 
-async function json(path: string, signal?: AbortSignal): Promise<unknown> {
-  const response = await fetch(backendUrl(path), { cache: "no-store", ...(signal ? { signal } : {}) });
+async function json(path: string, signal?: AbortSignal, marketData = false): Promise<unknown> {
+  const response = await fetch(backendUrl(path, marketData), { cache: "no-store", ...(signal ? { signal } : {}) });
   if (!response.ok) throw new Error(`Backend request failed (${response.status})`);
   return response.json();
 }
 
 export async function getMarkets(signal?: AbortSignal): Promise<PricerMarket[]> {
-  return marketsResponseSchema.parse(await json("/markets", signal)) as unknown as PricerMarket[];
+  return marketsResponseSchema.parse(await json("/markets", signal, true)) as unknown as PricerMarket[];
 }
 export async function getHistory(symbol: string, signal?: AbortSignal): Promise<MarketHistoryPoint[]> {
-  return historySchema.parse(await json(`/markets/${encodeURIComponent(symbol)}/history`, signal)) as unknown as MarketHistoryPoint[];
+  return historySchema.parse(await json(`/markets/${encodeURIComponent(symbol)}/history`, signal, true)) as unknown as MarketHistoryPoint[];
+}
+export async function getUpDownContracts(signal?: AbortSignal): Promise<ArchivedUpDownContract[]> {
+  return upDownContractsSchema.parse(await json("/markets/up-down-history", signal, true));
+}
+export async function getLadderContracts(signal?: AbortSignal): Promise<ArchivedLadderContract[]> {
+  return z.array(archivedContractSchema).parse(await json("/markets/ladder-history", signal, true));
 }
 export async function getPositions(owner: string, signal?: AbortSignal): Promise<Array<PositionView & Record<string, unknown>>> {
   return z.array(positionSchema).parse(await json(`/positions?owner=${encodeURIComponent(owner)}`, signal)) as Array<PositionView & Record<string, unknown>>;
@@ -89,6 +111,6 @@ export async function getFeed(signal?: AbortSignal): Promise<IndexedEvent[]> {
   return z.array(indexedEventSchema).parse(await json("/feed?limit=50", signal));
 }
 export function parseIndexedEvent(value: unknown): IndexedEvent { return indexedEventSchema.parse(value); }
-export async function getHealth(signal?: AbortSignal): Promise<HealthView> {
-  return healthSchema.parse(await json("/health", signal));
+export async function getHealth(signal?: AbortSignal, marketData = false): Promise<HealthView> {
+  return healthSchema.parse(await json("/health", signal, marketData));
 }

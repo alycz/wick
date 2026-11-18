@@ -268,7 +268,7 @@ interface VolSource { name: 'deribit'|'derive'|'realized'; spot(): {px:number, t
 
 ## 6. Pricer (`services/backend/src/pricer`, same process as the indexer)
 
-- **Discovery (every 10 s):** list active BTC events; select the current and next **15-min Up/Down**, the current and next **5-min** (secondary), the nearest **hourly**, **daily**, **weekly** and **month-end** ladders, with ladder strikes within ±10% of spot. Skip touch/High-Low contracts and any non-BTC asset (ETH/SOL behind `ENABLE_ALTS`).
+- **Discovery (every 10 s):** list active BTC events; select the current and next **15-min Up/Down**, the current and next **5-min** (secondary), all unexpired **hourly**, **daily**, **weekly** and **month-end** ladders and every active above strike. Skip touch/High-Low contracts and any non-BTC asset (ETH/SOL behind `ENABLE_ALTS`).
 - **Strike watch:** for Up/Down, wait until `strike.value` is non-null (at `startTime`), then `create_market` with `open_ts = startTime`, `expiry_ts = expiryDate`.
 - **Quotes:** public `bookTicker` per listed symbol; REST polling fallback.
 - **Marks (adaptive, to save devnet SOL and RPC credits):** compute theo + cap every 1 s, but send a batched `update_marks` tx only when any listed market's theo moved ≥ 0.1¢ since its last posted mark, its cap changed, or 4 s passed (heartbeat). Set `stale_after_secs = 6`. Priority fee 0 on devnet unless a tx fails to land for 3 s, then add a small one. If the vol source is unhealthy, skip (the on-chain staleness check halts trading).

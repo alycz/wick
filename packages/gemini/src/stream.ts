@@ -1,5 +1,5 @@
 import type { GeminiQuote } from "@wick/shared";
-import { GeminiClient } from "./client.js";
+import { GeminiClient, listActiveBtcEvents } from "./client.js";
 import { parseBookTicker, parseContractStatus, quoteFromContract } from "./quotes.js";
 import type { ContractStatusMessage } from "./schemas.js";
 
@@ -126,10 +126,10 @@ export class GeminiQuoteStream {
   }
 
   private async pollOnce(): Promise<void> {
-    const response = await this.client.listEvents({ status: "active", search: "BTC", limit: 500 });
-    if (this.stopped) return;
-    const bySymbol = new Map(response.data.flatMap((event) => event.contracts.map((contract) => [contract.instrumentSymbol, contract] as const)));
     const now = Date.now();
+    const events = await listActiveBtcEvents(this.client);
+    if (this.stopped) return;
+    const bySymbol = new Map(events.flatMap((event) => event.contracts.map((contract) => [contract.instrumentSymbol, contract] as const)));
     for (const symbol of this.options.symbols) {
       const contract = bySymbol.get(symbol);
       if (contract) this.options.onQuote(symbol, quoteFromContract(contract, now));

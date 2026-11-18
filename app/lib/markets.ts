@@ -4,6 +4,7 @@ import type { PricerMarket } from "@wick/shared";
 
 export interface ExpiryGroup {
   id: string;
+  duration: string;
   /** Short label for pills and the dropdown: "15 min", "5:00 PM", "Nov 18". */
   label: string;
   /** Longer name: "15 min", "Hourly", "Daily", "Weekly", "Month-end". */
@@ -14,32 +15,44 @@ export interface ExpiryGroup {
 }
 
 const YEAR_MS = 31_536e6;
-const NAMES: Record<string, string> = { "15m": "15 min", "1h": "Hourly", "1d": "Daily", "1w": "Weekly", "month-end": "Month-end" };
-const ORDER = ["15m", "1h", "1d", "1w", "month-end"];
+const NAMES: Record<string, string> = { "15m": "15 min", "5m": "5 min", "1h": "Hourly", "1d": "Daily", "1w": "Weekly", "month-end": "Month-end" };
+const ORDER = ["15m", "5m", "1h", "1d", "1w", "month-end"];
 
-export const timeLabel = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+export const timeLabel = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 export const dateLabel = (ms: number) => new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-/** One group per duration, at its nearest open expiry, 15 minute first; strikes sorted low to high. */
-export function expiryGroups(markets: readonly PricerMarket[]): ExpiryGroup[] {
-  const byDuration = new Map<string, PricerMarket[]>();
+const utcSettlement = new Intl.DateTimeFormat("en-US", {
+  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC", timeZoneName: "short",
+});
+export const settlementUtc = (ms: number) => utcSettlement.format(ms);
+
+export function validQuote(bid?: number, ask?: number, mid?: number) {
+  const valid = (p?: number) => p === undefined || (Number.isFinite(p) && p >= 0 && p <= 1);
+  return valid(bid) && valid(ask) && valid(mid) && (bid === undefined || ask === undefined || bid <= ask);
+}
+
+/** Group dated strikes by event and show the nearest open window for each Up/Down duration. */
+export function expiryGroups(markets: readonly PricerMarket[], now = Date.now()): ExpiryGroup[] {
+  const byEvent = new Map<string, PricerMarket[]>();
   for (const market of markets) {
-    if (market.status !== "open") continue;
-    const list = byDuration.get(market.duration) ?? [];
+    if (market.status !== "open" || market.expiryTs <= now || (market.kind === "up_down" && market.openTs > now)) continue;
+    const id = market.kind === "up_down" ? market.duration : `${market.eventTicker}:${market.expiryTs}`;
+    const list = byEvent.get(id) ?? [];
     list.push(market);
-    byDuration.set(market.duration, list);
+    byEvent.set(id, list);
   }
   const groups: ExpiryGroup[] = [];
-  for (const [duration, list] of byDuration) {
+  for (const [id, list] of byEvent) {
+    const { duration, kind } = list[0]!;
     const expiryTs = Math.min(...list.map((market) => market.expiryTs));
-    const upDown = list.some((market) => market.kind === "up_down");
+    const upDown = kind === "up_down";
     const current = list.filter((market) => market.expiryTs === expiryTs).sort((a, b) => a.strike - b.strike);
-    const chosen = upDown ? current.filter((market) => market.kind === "up_down").slice(0, 1) : current;
-    const label = upDown ? "15 min" : duration === "1h" ? timeLabel(expiryTs) : dateLabel(expiryTs);
-    groups.push({ id: duration, label, name: NAMES[duration] ?? duration, expiryTs, upDown, markets: chosen });
+    const chosen = upDown ? current.slice(0, 1) : current;
+    const label = upDown ? NAMES[duration] ?? duration : duration === "1h" ? timeLabel(expiryTs) : dateLabel(expiryTs);
+    groups.push({ id, duration, label, name: NAMES[duration] ?? duration, expiryTs, upDown, markets: chosen });
   }
   const rank = (id: string) => { const index = ORDER.indexOf(id); return index < 0 ? ORDER.length : index; };
-  return groups.sort((a, b) => rank(a.id) - rank(b.id) || a.expiryTs - b.expiryTs);
+  return groups.sort((a, b) => rank(a.duration) - rank(b.duration) || a.expiryTs - b.expiryTs);
 }
 
 /** The strike closest to an even chance. */

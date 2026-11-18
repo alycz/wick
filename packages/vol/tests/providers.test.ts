@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { DeribitVolSource } from "../src/deribit.js";
+import { describe, expect, it, vi } from "vitest";
+import { DeribitVolSource, type DeribitOptions } from "../src/deribit.js";
 import { DeriveVolSource } from "../src/derive.js";
 import { RealizedVolSource } from "../src/realized.js";
 import type { FetchLike } from "../src/types.js";
@@ -22,15 +22,32 @@ describe("live provider parsers", () => {
       ] });
       return jsonResponse({ result: [
         { instrument_name: "BTC-X-60000-C", mark_iv: 55, underlying_price: 65_000 },
-        { instrument_name: "BTC-X-65000-C", mark_iv: 50, underlying_price: 65_000 },
+        { instrument_name: "BTC-X-65000-C", mark_iv: 50, underlying_price: 65_000, bid_price: null, ask_price: .012, mark_price: .01, creation_timestamp: now - 1_000 },
         { instrument_name: "BTC-X-70000-C", mark_iv: 52, underlying_price: 65_000 },
       ] });
     };
-    const source = new DeribitVolSource({ fetchImpl, now: () => now, websocket: false, timers: false });
+    const onOptionSnapshot = vi.fn();
+    const socket: ReturnType<NonNullable<DeribitOptions["socketFactory"]>> = {
+      onopen: null, onmessage: null, onerror: null, onclose: null, send: vi.fn(), close: vi.fn(),
+    };
+    const source = new DeribitVolSource({ fetchImpl, now: () => now, socketFactory: () => socket, timers: false, onOptionSnapshot });
     await source.start();
     expect(source.spot().px).toBe(65_000);
     expect(source.vol(expiry, 65_000)).toBeCloseTo(0.5, 8);
     expect(source.healthy()).toBe(true);
+    socket.onmessage?.(new MessageEvent("message", { data: JSON.stringify({
+      params: { channel: "markprice.options.btc_usd", data: [{ instrument_name: "BTC-X-65000-C", iv: .52, timestamp: now }] },
+    }) }));
+    expect(source.vol(expiry, 65_000)).toBeCloseTo(.52, 8);
+    await source.probe();
+    expect(onOptionSnapshot).toHaveBeenCalledTimes(2);
+    expect(onOptionSnapshot).toHaveBeenLastCalledWith({
+      capturedAt: now, spot: 65_000,
+      quotes: expect.arrayContaining([{
+        instrumentName: "BTC-X-65000-C", expiryMs: expiry, strike: 65_000, optionType: "call", quoteCurrency: "BTC",
+        providerAt: now - 1_000, bidPrice: null, askPrice: .012, markPrice: .01, markIvPct: 50, underlyingPrice: 65_000,
+      }]),
+    });
   });
 
   it("parses Derive v3 compact option_pricing fields", async () => {

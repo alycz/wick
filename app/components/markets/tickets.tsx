@@ -73,7 +73,7 @@ export function EasyTicket({ market, upDown, expiryLabel, history, state }: {
   const word = state.side === "yes" ? yes : no;
   const [text, setText] = useState<string>();
   const strike = market.strike.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  const name = upDown ? "BTC Up or Down 15m" : `Bitcoin above ${strike} · ${expiryLabel}`;
+  const name = upDown ? `BTC Up or Down ${market.duration}` : `Bitcoin above ${strike} · ${expiryLabel}`;
   return <div className="card tk-easy" aria-label="Order ticket">
     <div className="t-id"><div className="coin sm" aria-hidden="true">₿</div><div><small>{name}</small>
       <b>{upDown ? "" : `${strike} · `}<em className={state.side === "yes" ? "up" : "down"}>{word}</em></b></div></div>

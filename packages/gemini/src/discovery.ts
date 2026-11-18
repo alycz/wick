@@ -38,14 +38,13 @@ export function classifyEvent(event: GeminiEvent, nowMs = Date.now()): GeminiMar
   return "month_end";
 }
 
-function relevantContracts(event: GeminiEvent, spot: number): GeminiContract[] {
-  if (event.type === "binary") return event.contracts.filter((contract) => contract.ticker === "UP");
-  const lower = spot * 0.9;
-  const upper = spot * 1.1;
+function relevantContracts(event: GeminiEvent): GeminiContract[] {
   return event.contracts.filter((contract) => {
+    if (contract.status !== "active" || contract.marketState === "closed") return false;
+    if (event.type === "binary") return contract.ticker === "UP";
     if (contract.strike.type !== "above" || contract.strike.value == null) return false;
     const strike = Number(contract.strike.value);
-    return strike >= lower && strike <= upper;
+    return Number.isFinite(strike) && strike > 0;
   });
 }
 
@@ -53,7 +52,6 @@ function chooseCurrentAndNext(events: GeminiEvent[], bucket: "five_minute" | "fi
   return events
     .filter((event) => classifyEvent(event, nowMs) === bucket && Date.parse(event.expiryDate) > nowMs)
     .sort((left, right) => Date.parse(left.startTime) - Date.parse(right.startTime))
-    .filter((event) => Date.parse(event.startTime) <= nowMs || Date.parse(event.startTime) > nowMs)
     .slice(0, 2);
 }
 
@@ -63,20 +61,15 @@ export function discoverBtcMarkets(events: GeminiEvent[], spot: number, nowMs = 
   const selected: GeminiEvent[] = [
     ...chooseCurrentAndNext(btc, "fifteen_minute", nowMs),
     ...chooseCurrentAndNext(btc, "five_minute", nowMs),
+    ...btc.filter((event) => event.type === "categorical" && Date.parse(event.expiryDate) > nowMs),
   ];
-  for (const bucket of ["hourly", "daily", "weekly", "month_end"] as const) {
-    const nearest = btc
-      .filter((event) => classifyEvent(event, nowMs) === bucket && Date.parse(event.expiryDate) > nowMs)
-      .sort((left, right) => Date.parse(left.expiryDate) - Date.parse(right.expiryDate))[0];
-    if (nearest) selected.push(nearest);
-  }
   const seen = new Set<string>();
   return selected.flatMap((event): DiscoveredEvent[] => {
     if (seen.has(event.ticker)) return [];
     seen.add(event.ticker);
     const bucket = classifyEvent(event, nowMs);
     if (bucket === "unsupported") return [];
-    const contracts = relevantContracts(event, spot);
+    const contracts = relevantContracts(event);
     return contracts.length > 0 ? [{ bucket, event, contracts }] : [];
   });
 }

@@ -81,11 +81,13 @@ export interface ChainPort {
 
 export interface PricerSnapshot {
   markets: PricerMarket[];
+  unpricedMarkets: Pick<PricerMarket, "symbol" | "eventTicker" | "strike" | "expiryTs">[];
   volSource: VolSource["name"] | "unavailable";
   volHealthy: boolean;
   chainConfigured: boolean;
   running: boolean;
   lastDiscoveryAt?: number;
   lastMarkAt?: number;
+  lastPricingAt?: number;
   lastError?: string;
 }

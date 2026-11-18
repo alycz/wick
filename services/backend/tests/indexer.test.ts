@@ -90,7 +90,9 @@ afterEach(async () => {
 describe("QuickNode Streams indexer", () => {
   it("applies the provenance and durable inbox migration", async () => {
     const { indexer } = await makeServer();
-    expect(indexer.store.database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([{ version: 1 }, { version: 2 }]);
+    expect(indexer.store.database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([
+      { version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 },
+    ]);
     expect((indexer.store.database.pragma("table_info(events)") as Array<{ name: string }>).map((column) => column.name)).toContain("provenance");
     expect(indexer.store.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='stream_delivery_inbox'").get())
       .toEqual({ name: "stream_delivery_inbox" });

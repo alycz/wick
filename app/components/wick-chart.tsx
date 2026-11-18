@@ -26,7 +26,7 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
   const chart = useRef<IChartApi>();
   const lines = useRef<Array<ISeriesApi<"Line">>>([]);
   const ref = useRef<IPriceLine>();
-  const fitted = useRef(false);
+  const earliestFitted = useRef<number>();
   const shape = series.map((item) => item.id).join();
 
   useEffect(() => {
@@ -35,14 +35,25 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: TEXT, fontFamily: "Inter, system-ui, sans-serif", fontSize: 11 },
       grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
-      rightPriceScale: { borderColor: GRID },
+      rightPriceScale: { borderColor: GRID, ...(format === "cents" ? { scaleMargins: { top: .04, bottom: .04 } } : {}) },
       timeScale: { borderColor: GRID, timeVisible: true, secondsVisible: false },
       crosshair: { mode: CrosshairMode.Normal },
       localization: { priceFormatter: format === "cents" ? cents : (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 }) },
     });
     chart.current = instance;
-    lines.current = series.map((item) => instance.addSeries(LineSeries, { color: item.color, lineWidth: 2, title: item.label, priceLineVisible: false }));
-    fitted.current = false;
+    lines.current = series.map((item) => {
+      const sampledQuote = format === "cents" && item.id !== "theo" && item.id !== "wick";
+      return instance.addSeries(LineSeries, {
+        color: item.color, lineWidth: 2, title: item.label, priceLineVisible: false,
+        lineVisible: !sampledQuote, pointMarkersVisible: sampledQuote, pointMarkersRadius: 2,
+        lastValueVisible: !sampledQuote,
+        ...(format === "cents" ? {
+          priceFormat: { type: "custom", formatter: cents, minMove: .001 },
+          autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 1 } }),
+        } : {}),
+      });
+    });
+    earliestFitted.current = undefined;
     return () => { instance.remove(); chart.current = undefined; ref.current = undefined; };
     // the series list (not its data) decides the chart's structure
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,7 +66,11 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
       if (ref.current) { first.removePriceLine(ref.current); ref.current = undefined; }
       if (refLine) ref.current = first.createPriceLine({ price: refLine.value, color: TEXT, lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true, title: refLine.label ?? "" });
     }
-    if (!fitted.current && series.some((item) => item.data.length > 1)) { chart.current?.timeScale().fitContent(); fitted.current = true; }
+    const earliest = Math.min(...series.map((item) => item.data[0]?.time ?? Infinity));
+    if (series.some((item) => item.data.length > 1) && Number.isFinite(earliest) && (earliestFitted.current === undefined || earliest < earliestFitted.current)) {
+      chart.current?.timeScale().fitContent();
+      earliestFitted.current = earliest;
+    }
   });
 
   return <div ref={box} className="wc-tv" />;
@@ -85,7 +100,7 @@ function HoverCard({ hover, series, fmt, formatTime, width }: { hover: { time: n
   </div>;
 }
 
-export function WickChart({ series, format, windows, height = 220, refLine, legend, color, formatTime, initialWindow }: {
+export function WickChart({ series, format, windows, height = 220, refLine, legend, color, formatTime, initialWindow, followFullWindow = false, historical = false }: {
   series: ChartSeries[];
   format: "usd" | "cents";
   windows: ChartWindow[];
@@ -95,17 +110,25 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
   color?: string;
   formatTime?: (time: number) => string;
   initialWindow?: number;
+  followFullWindow?: boolean;
+  historical?: boolean;
 }) {
   const [mode, setMode] = useState<"live" | "tv">("live");
-  const [win, setWin] = useState(initialWindow ?? windows[Math.min(1, windows.length - 1)]?.secs ?? 300);
+  const [range, setRange] = useState<number | undefined>(followFullWindow ? undefined : initialWindow ?? windows[Math.min(1, windows.length - 1)]?.secs);
+  const full = windows.at(-1);
+  const win = range ?? full?.secs ?? 300;
   const fmt = format === "cents" ? cents : usd;
   const single = series.length === 1 ? series[0] : undefined;
   const empty = series.every((item) => item.data.length < 2);
+  const animated = format === "usd" && !historical && mode === "live";
   const [hover, setHover] = useState<{ time: number; x: number }>();
   const area = useRef<HTMLDivElement>(null);
   const onHover = (point: { time: number; x: number } | null) => setHover(point ? { time: point.time, x: point.x } : undefined);
   /* Liveline draws its own one-line readout; push it off the canvas and show the hover card instead */
   const hoverProps = { onHover, tooltipY: -10_000 };
+  const latest = Math.max(...series.map((item) => item.data.at(-1)?.time ?? 0));
+  const displayed = !historical && !animated && range !== undefined
+    ? series.map((item) => ({ ...item, data: item.data.filter((point) => point.time >= latest - win) })) : series;
 
   // keep a reference line only when it sits near the visible values, so a far strike does not flatten the line
   let ref = refLine;
@@ -118,25 +141,28 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
   }
 
   return <div className="wc">
-    <div className="wc-bar">
+    {!historical && <div className="wc-bar">
       <div className="wc-tabs" role="group" aria-label="Time window">
-        {windows.map((item) => <button type="button" key={item.secs} className="wc-tab" aria-pressed={win === item.secs} onClick={() => setWin(item.secs)}>{item.label}</button>)}
+        {windows.map((item) => {
+          const choice = followFullWindow && item === full ? undefined : item.secs;
+          return <button type="button" key={item.label} className="wc-tab" aria-pressed={range === choice} onClick={() => setRange(choice)}>{item.label}</button>;
+        })}
       </div>
       {legend ? <div className="wc-legend">{legend}</div> : null}
-      <div className="wc-tabs" role="group" aria-label="Chart type">
+      {format === "usd" ? <div className="wc-tabs" role="group" aria-label="Chart type">
         <button type="button" className="wc-tab" aria-pressed={mode === "live"} onClick={() => setMode("live")}>Live</button>
         <button type="button" className="wc-tab" aria-pressed={mode === "tv"} onClick={() => setMode("tv")}>TradingView</button>
-      </div>
-    </div>
+      </div> : <small>Chart times in UTC</small>}
+    </div>}
     <div className="wc-area" style={{ height }} ref={area} onMouseLeave={() => setHover(undefined)}>
-      {empty ? <div className="wc-empty">Waiting for live prices.</div> : mode === "live"
+      {empty ? <div className="wc-empty">{historical ? "Too few recorded prices to draw a chart." : "Waiting for live prices."}</div> : animated
         ? single
           ? <Liveline data={single.data} value={single.data[single.data.length - 1]!.value} color={color ?? single.color} theme="dark" formatValue={fmt} window={win} {...(formatTime ? { formatTime } : {})}
             {...(ref ? { referenceLine: ref } : {})} badgeVariant="default" {...hoverProps} />
           : <Liveline data={series[0]!.data} value={series[0]!.data[series[0]!.data.length - 1]?.value ?? 0} theme="dark" formatValue={fmt} window={win} grid {...(formatTime ? { formatTime } : {})}
             series={series.map((item) => ({ id: item.id, label: item.label, color: item.color, data: item.data, value: item.data[item.data.length - 1]?.value ?? 0 }))} {...hoverProps} />
-        : <TradingView series={series} format={format} {...(ref ? { refLine: ref } : {})} />}
-      {mode === "live" && hover && !empty ? <HoverCard hover={hover} series={series} fmt={fmt} width={area.current?.clientWidth ?? 0} {...(formatTime ? { formatTime } : {})} /> : null}
+        : <TradingView key={range ?? "all"} series={displayed} format={format} {...(ref ? { refLine: ref } : {})} />}
+      {animated && hover && !empty ? <HoverCard hover={hover} series={series} fmt={fmt} width={area.current?.clientWidth ?? 0} {...(formatTime ? { formatTime } : {})} /> : null}
     </div>
   </div>;
 }

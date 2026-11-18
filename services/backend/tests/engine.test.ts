@@ -2,7 +2,9 @@ import activeFixture from "../../../packages/gemini/fixtures/active-btc.json" wi
 import { geminiContractSchema, geminiEventsResponseSchema, type GeminiEvent, type GeminiEventsResponse, type GeminiStrike } from "@wick/gemini";
 import type { VolSource } from "@wick/vol";
 import { describe, expect, it } from "vitest";
+import { historyPoint, upDownHistoryQuote } from "../src/pricer/up-down-history.js";
 import { PricerEngine } from "../src/pricer/engine.js";
+import { replayTheo, type MarketTheoInput } from "../src/pricer/theo-replay.js";
 import type {
   BackendLogger,
   ChainPort,
@@ -122,6 +124,41 @@ describe("PricerEngine", () => {
     await engine.stop();
   });
 
+  it("exposes the exact contract when its price is unavailable and clears it on recovery", async () => {
+    const now = Date.parse("2026-11-16T22:50:00.000Z");
+    const contract = fixture.data[0]!.contracts[0]!;
+    const strike = Number(contract.strike.value!);
+    const source = new FixedVol(() => now);
+    let failed = true;
+    source.vol = (_expiry?: number, target?: number) => {
+      if (failed && target === strike) throw new Error("missing volatility");
+      return .5;
+    };
+    const engine = new PricerEngine({
+      gemini: new FixtureGemini(), vol: source, chain: new RecordingChain(), logger: quietLogger,
+      now: () => now, timers: false,
+    });
+    try {
+      await engine.start();
+      expect(engine.snapshot().unpricedMarkets).toContainEqual({
+        symbol: contract.instrumentSymbol, eventTicker: fixture.data[0]!.ticker, strike, expiryTs: Date.parse(fixture.data[0]!.expiryDate),
+      });
+      expect(engine.store.market(contract.instrumentSymbol)).toBeUndefined();
+      failed = false;
+      await engine.markOnce();
+      expect(engine.snapshot().unpricedMarkets).toEqual([]);
+      expect(engine.store.market(contract.instrumentSymbol)).toBeDefined();
+    } finally { await engine.stop(); }
+  });
+
+  it("drops crossed historical quotes while preserving the fair-price observation", () => {
+    const point = { ts: 123, spot: 63000, theo: .04 };
+    expect(upDownHistoryQuote({ ts: 123, bid: .5, ask: .03 }, 123)).toEqual({});
+    expect(historyPoint({ ...point, geminiBid: .5, geminiAsk: .03, geminiMid: .265 })).toEqual(point);
+    expect(historyPoint({ ...point, geminiBid: null, geminiAsk: .03, geminiMid: null }))
+      .toEqual({ ...point, geminiAsk: .03 });
+  });
+
   it("liquidates exactly when the side mark is at or below the stored threshold", async () => {
     const now = Date.parse("2026-11-16T22:50:00.000Z");
     const chain = new RecordingChain();
@@ -139,6 +176,36 @@ describe("PricerEngine", () => {
     expect(chain.liquidations).toContain("must-liquidate");
     expect(chain.liquidations).not.toContain("safe");
     await engine.stop();
+  });
+
+  it("records replayable inputs for every listed contract once per minute", async () => {
+    let now = Date.parse("2026-11-16T22:50:00.000Z");
+    class SkewedVol extends FixedVol {
+      override vol(_expiry = 0, strike = 65_500) { return .3 + strike / 400_000; }
+    }
+    const batches: MarketTheoInput[][] = [];
+    const engine = new PricerEngine({
+      gemini: new FixtureGemini(), vol: new SkewedVol(() => now), chain: new RecordingChain(),
+      logger: quietLogger, now: () => now, timers: false,
+      onTheoInputs: (_pricedAt, inputs) => { batches.push(inputs); },
+    });
+    try {
+      await engine.start();
+      const markets = engine.store.markets().filter((market) => market.status === "open");
+      expect(batches).toHaveLength(1);
+      const captured = batches[0]!;
+      expect(captured.map((input) => input.symbol).sort()).toEqual(markets.map((market) => market.symbol).sort());
+      expect(new Set(captured.map((input) => input.model))).toEqual(new Set(["up_down_v1", "ladder_v1"]));
+      for (const input of captured) {
+        expect(replayTheo(input)).toBe(input.theo);
+        if (input.model === "ladder_v1") expect(input.lowerVolatility).toBeLessThan(input.upperVolatility);
+      }
+      await engine.markOnce();
+      expect(batches).toHaveLength(1);
+      now += 60_000;
+      await engine.markOnce();
+      expect(batches).toHaveLength(2);
+    } finally { await engine.stop(); }
   });
 
   it("uses Gemini resolutionSide and official settlement value after expiry", async () => {

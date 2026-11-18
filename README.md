@@ -238,6 +238,12 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:3000 pnpm --filter @wick/app dev
 
 Open the URL printed by the app. Real Gemini/volatility data needs outbound network access. Chain actions and the faucet fail closed until a deployed program, generated IDL, mint, and funded devnet authorities are configured.
 
+### Hosted market history
+
+Apply the numbered [market-data migrations](services/backend/sql/) in order to the hosted PostgreSQL project. Set the backend's `DATABASE_URL` to a TLS connection for a login with the `wick_market_writer` privileges. Keep `SQLITE_PATH` on a persistent volume because SQLite stores the indexer state and queues samples until Postgres acknowledges them.
+
+With `DATABASE_URL` set, the backend archives five-second Up/Down prices, the complete Deribit BTC chain as gzip-compressed minute snapshots, and minute-by-minute pricing inputs for each listed contract. Pricing inputs include the actual time to expiry, price reference, model version, volatility, and the two volatility inputs used by the ladder call spread. The options archive also keeps selected calls and puts as queryable rows. Premiums from the inverse BTC options are stored in BTC. Hosted market data retains seven days. The trading page reads live prices, market health, history and the price stream from the same backend. Set `NEXT_PUBLIC_MARKET_DATA_URL` to select a dedicated feed. The production Vercel build defaults to the VPS market-data feed. Account, indexer and funding requests use `NEXT_PUBLIC_BACKEND_URL`.
+
 ### Deploy and verify the full devnet system
 
 Follow [Deployment](docs/DEPLOYMENT.md) in order. The non-negotiable gates are:

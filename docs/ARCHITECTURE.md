@@ -69,7 +69,7 @@ The service stays deliberately compact: one Node process and one SQLite writer r
 
 ## Market-data and pricing flow
 
-1. Every ten seconds, discovery reads active Gemini BTC events and selects current/next short windows plus the nearest hourly, daily, weekly and month-end ladders within ±10% of spot.
+1. Every ten seconds, discovery reads active Gemini BTC events and selects current/next short windows and all open strikes across the dated BTC ladders.
 2. Gemini `bookTicker` updates quotes in real time. A rejected or unavailable socket falls back to the active-events endpoint every two seconds.
 3. Deribit supplies the primary BTC composite spot and options IV surface. Derive is second priority; one-second-return EWMA realized volatility is last. Data older than five seconds is unhealthy.
 4. The pricing package interpolates smile and total variance, calculates YES theo, clamps it to 1–99¢, and derives a five-second binary-gamma leverage cap.

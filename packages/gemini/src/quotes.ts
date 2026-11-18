@@ -8,7 +8,7 @@ import {
 function optionalDecimal(value: string | undefined): number | undefined {
   if (value === undefined || value.trim() === "") return undefined;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return parsed >= 0 && parsed <= 1 ? parsed : undefined;
 }
 
 interface RawQuote {
@@ -20,18 +20,19 @@ interface RawQuote {
 
 function normalizeQuote(quote: RawQuote): GeminiQuote {
   const result: GeminiQuote = { ts: quote.ts };
+  if (quote.last !== undefined) result.last = quote.last;
+  if (quote.bid !== undefined && quote.ask !== undefined && quote.bid > quote.ask) return result;
   if (quote.bid !== undefined) result.bid = quote.bid;
   if (quote.ask !== undefined) result.ask = quote.ask;
-  if (quote.bid !== undefined && quote.ask !== undefined && quote.bid <= quote.ask) {
+  if (quote.bid !== undefined && quote.ask !== undefined) {
     result.mid = (quote.bid + quote.ask) / 2;
   }
-  if (quote.last !== undefined) result.last = quote.last;
   return result;
 }
 
 export function quoteFromContract(contract: GeminiContract, ts = Date.now()): GeminiQuote {
-  const bid = optionalDecimal(contract.prices.bestBid ?? contract.prices.sell?.yes);
-  const ask = optionalDecimal(contract.prices.bestAsk ?? contract.prices.buy?.yes);
+  const bid = optionalDecimal(contract.prices.bestBid);
+  const ask = optionalDecimal(contract.prices.bestAsk);
   const last = optionalDecimal(contract.prices.lastTradePrice);
   return normalizeQuote({ bid, ask, last, ts });
 }

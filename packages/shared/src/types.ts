@@ -34,9 +34,15 @@ export interface PricerMarket {
 export interface MarketHistoryPoint {
   ts: number;
   theo: number;
+  reconstructed?: boolean;
   geminiMid?: number;
+  geminiBid?: number;
+  geminiAsk?: number;
   spot: number;
 }
+
+export type ArchivedUpDownContract = Pick<PricerMarket, "symbol" | "duration" | "strike" | "openTs" | "expiryTs">;
+export type ArchivedLadderContract = Pick<PricerMarket, "symbol" | "strike" | "expiryTs">;
 
 export interface HealthResponse {
   ok: boolean;

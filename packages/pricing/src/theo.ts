@@ -3,6 +3,8 @@ import { normalCdf } from "./normal.js";
 export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 export const MIN_PROBABILITY = 0.01;
 export const MAX_PROBABILITY = 0.99;
+export const BINARY_TWAP_WINDOW_SECONDS = 60;
+export const LADDER_HALF_WIDTH_FRACTION = 0.0025;
 
 export interface BinaryTheoInput {
   spot: number;
@@ -32,7 +34,7 @@ export function effectiveVariance(
   volatility: number,
   timeYears: number,
   twapAdjustment = true,
-  twapWindowSeconds = 60,
+  twapWindowSeconds = BINARY_TWAP_WINDOW_SECONDS,
 ): number {
   requirePositive(volatility, "volatility");
   if (!Number.isFinite(timeYears) || timeYears < 0) throw new RangeError("timeYears must be non-negative");
@@ -53,7 +55,7 @@ export function binaryD2(input: BinaryTheoInput): { d2: number; variance: number
     input.volatility,
     input.timeYears,
     input.twapAdjustment ?? true,
-    input.twapWindowSeconds ?? 60,
+    input.twapWindowSeconds ?? BINARY_TWAP_WINDOW_SECONDS,
   );
   if (variance === 0) {
     if (input.spot === input.strike) return { d2: 0, variance };
@@ -100,7 +102,7 @@ export function ladderTheo(input: LadderTheoInput): number {
   requirePositive(input.forward, "forward");
   requirePositive(input.strike, "strike");
   if (!Number.isFinite(input.timeYears) || input.timeYears < 0) throw new RangeError("timeYears must be non-negative");
-  const halfWidth = input.strike * (input.halfWidthFraction ?? 0.0025);
+  const halfWidth = input.strike * (input.halfWidthFraction ?? LADDER_HALF_WIDTH_FRACTION);
   requirePositive(halfWidth, "call-spread half-width");
   const lowerStrike = input.strike - halfWidth;
   const upperStrike = input.strike + halfWidth;

@@ -16,6 +16,26 @@ describe("backend URL and failures", () => {
     expect(normalizeBackendUrl("  ")).toBe("");
   });
 
+  it("routes marks and archives to the market feed while preserving account endpoints", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MARKET_DATA_URL", "https://quotes.example");
+    const api = await loadApi("https://accounts.example");
+    const fetcher = vi.fn().mockImplementation(async () => new Response("[]"));
+    vi.stubGlobal("fetch", fetcher);
+    await api.getMarkets();
+    await api.getHistory("BTC");
+    await api.getUpDownContracts();
+    await api.getLadderContracts();
+    await api.getPositions("owner");
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "https://quotes.example/markets",
+      "https://quotes.example/markets/BTC/history",
+      "https://quotes.example/markets/up-down-history",
+      "https://quotes.example/markets/ladder-history",
+      "https://accounts.example/positions?owner=owner",
+    ]);
+    expect(api.backendUrl("/stream", true)).toBe("https://quotes.example/stream");
+  });
+
   it("surfaces network failures instead of fabricating market data", async () => {
     const api = await loadApi("wick-backend.railway.internal");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
