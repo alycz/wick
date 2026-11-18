@@ -2,7 +2,7 @@ import { AnchorProvider, BN, Program, type Idl } from "@coral-xyz/anchor";
 import type { Wallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { Connection, PublicKey, SystemProgram, type Commitment, type TransactionSignature } from "@solana/web3.js";
-import { WICK_IDL } from "@wick/shared";
+import { DEVNET_PROGRAM_ID, DEVNET_USDC_TEST_MINT, PUBLIC_DEVNET_RPC, WICK_IDL } from "@wick/shared";
 
 const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value);
@@ -39,9 +39,9 @@ function browserChainEnvironment(): ChainEnvironmentVariables {
   // Keep these as literal property reads so Next.js replaces NEXT_PUBLIC values
   // in the browser bundle. Passing `process.env` through an alias is not inlined.
   return {
-    NEXT_PUBLIC_PROGRAM_ID: process.env.NEXT_PUBLIC_PROGRAM_ID,
-    NEXT_PUBLIC_USDC_TEST_MINT: process.env.NEXT_PUBLIC_USDC_TEST_MINT,
-    NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
+    NEXT_PUBLIC_PROGRAM_ID: process.env.NEXT_PUBLIC_PROGRAM_ID || DEVNET_PROGRAM_ID,
+    NEXT_PUBLIC_USDC_TEST_MINT: process.env.NEXT_PUBLIC_USDC_TEST_MINT || DEVNET_USDC_TEST_MINT,
+    NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL || PUBLIC_DEVNET_RPC,
   };
 }
 

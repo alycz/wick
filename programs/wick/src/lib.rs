@@ -13,7 +13,7 @@ use events::*;
 use math::*;
 use state::*;
 
-declare_id!("HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN");
+declare_id!("GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8");
 
 #[program]
 pub mod wick {

@@ -3,6 +3,7 @@ import bs58 from "bs58";
 import { readFileSync } from "node:fs";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { DEVNET_USDC_TEST_MINT, PUBLIC_DEVNET_RPC } from "@wick/shared";
 import { FaucetInventoryDepletedError, sendFaucetGrant } from "@/lib/faucet";
 
 export const runtime = "nodejs";
@@ -38,8 +39,8 @@ export async function POST(request: NextRequest) {
     if (faucet.inFlight.has(rateKey)) return NextResponse.json({ message: "A funding request is already in progress." }, { status: 409 });
     faucet.inFlight.add(rateKey);
 
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
-    const mintAddress = process.env.USDC_TEST_MINT ?? process.env.NEXT_PUBLIC_USDC_TEST_MINT;
+    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || PUBLIC_DEVNET_RPC;
+    const mintAddress = process.env.USDC_TEST_MINT || process.env.NEXT_PUBLIC_USDC_TEST_MINT || DEVNET_USDC_TEST_MINT;
     if (!rpcUrl || !mintAddress) throw new Error("Devnet faucet is not configured");
     const treasury = keypair(process.env.TREASURY_KEYPAIR, "TREASURY_KEYPAIR");
     const mint = new PublicKey(mintAddress);
