@@ -21,9 +21,12 @@
     "@wick/pricing": "workspace:*",
     "@wick/shared": "workspace:*",
     "bs58": "6.0.0",
+    "lightweight-charts": "5.0.9",
+    "liveline": "0.0.7",
     "next": "14.2.33",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "skullet": "0.0.3",
     "zod": "3.25.76"
   },
   "devDependencies": {
