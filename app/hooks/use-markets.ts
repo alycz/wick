@@ -17,16 +17,15 @@ export function useMarkets(): { markets: PricerMarket[]; loading: boolean; error
       setLoading(false);
       return () => controller.abort();
     }
-    void getMarkets(controller.signal)
-      .then((value) => { setMarkets(value); setError(undefined); })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    if (!liveBackend()) {
-      /* demo data: refresh the simulated snapshot every second */
-      const timer = window.setInterval(() => void getMarkets(controller.signal).then(setMarkets).catch(() => undefined), 1000);
-      return () => { controller.abort(); window.clearInterval(timer); };
-    }
-    try {
+    let timer: number | undefined;
+    const openStream = () => {
+      if (controller.signal.aborted) return;
+      if (!liveBackend()) {
+        /* demo data: refresh the simulated snapshot every second */
+        timer = window.setInterval(() => void getMarkets(controller.signal).then(setMarkets).catch(() => undefined), 1000);
+        return;
+      }
+      try {
       const url = new URL(backendUrl("/stream"));
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
       socket = new WebSocket(url);
@@ -40,8 +39,14 @@ export function useMarkets(): { markets: PricerMarket[]; loading: boolean; error
         } catch { /* REST snapshot remains authoritative on malformed frames */ }
       });
       socket.addEventListener("error", () => setError("Live market stream disconnected; showing the last verified snapshot."));
-    } catch { /* initial REST request still provides data */ }
-    return () => { controller.abort(); socket?.close(); };
+      } catch { /* initial REST request still provides data */ }
+    };
+    /* the first snapshot decides the source: the backend's stream, or demo data if the backend is unreachable */
+    void getMarkets(controller.signal)
+      .then((value) => { setMarkets(value); setError(undefined); })
+      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); })
+      .finally(() => { if (!controller.signal.aborted) { setLoading(false); openStream(); } });
+    return () => { controller.abort(); socket?.close(); if (timer !== undefined) window.clearInterval(timer); };
   }, []);
 
   return error === undefined ? { markets, loading } : { markets, loading, error };

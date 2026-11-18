@@ -39,25 +39,30 @@ function useFeedSource(): FeedState {
         });
       return refreshInFlight;
     };
-    void refresh();
-    if (!liveBackend()) {
-      setConnected(true);
-      const timer = window.setInterval(() => void refresh(), 15_000);
-      return () => { controller.abort(); window.clearInterval(timer); };
-    }
-    source = new EventSource(backendUrl("/events/stream"));
-    source.addEventListener("open", () => { setConnected(true); void refresh(); });
-    source.addEventListener("error", () => {
-      setConnected(false);
-      setError((current) => current ?? "Live indexer connection interrupted; reconnecting.");
-    });
-    source.addEventListener("wick", (message) => {
-      try {
-        const event = parseIndexedEvent(JSON.parse((message as MessageEvent<string>).data));
-        setEvents((current) => mergeIndexedEvents(current, [event]));
-      } catch { /* ignore malformed event frames */ }
-    });
-    return () => { controller.abort(); source?.close(); };
+    let timer: number | undefined;
+    const openSource = () => {
+      if (controller.signal.aborted) return;
+      if (!liveBackend()) {
+        setConnected(true);
+        timer = window.setInterval(() => void refresh(), 15_000);
+        return;
+      }
+      source = new EventSource(backendUrl("/events/stream"));
+      source.addEventListener("open", () => { setConnected(true); void refresh(); });
+      source.addEventListener("error", () => {
+        setConnected(false);
+        setError((current) => current ?? "Live indexer connection interrupted; reconnecting.");
+      });
+      source.addEventListener("wick", (message) => {
+        try {
+          const event = parseIndexedEvent(JSON.parse((message as MessageEvent<string>).data));
+          setEvents((current) => mergeIndexedEvents(current, [event]));
+        } catch { /* ignore malformed event frames */ }
+      });
+    };
+    /* the first snapshot decides the source: the backend's event stream, or demo data if the backend is unreachable */
+    void refresh().then(openSource);
+    return () => { controller.abort(); source?.close(); if (timer !== undefined) window.clearInterval(timer); };
   }, [configured]);
   return { events, connected, loading, ...(error === undefined ? {} : { error }) };
 }
