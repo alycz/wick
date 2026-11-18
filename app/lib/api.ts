@@ -1,7 +1,17 @@
 import { marketsResponseSchema, type IndexedEvent, type MarketHistoryPoint, type PositionView, type PricerMarket } from "@wick/shared";
 import { z } from "zod";
+import { simulate } from "@/lib/demo/market-sim";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
+/** Accepts "host", "host/" or "https://host"; a bare host gets https://. */
+export function normalizeBackendUrl(raw: string | undefined): string {
+  const value = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!value) return "";
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+const BACKEND = normalizeBackendUrl(process.env.NEXT_PUBLIC_BACKEND_URL);
+/* set once the configured backend can't be reached or answers with errors; the app then shows demo data */
+let backendDown = false;
 
 const historySchema = z.array(z.object({
   ts: z.number(),
@@ -51,14 +61,26 @@ export interface ClaimView { address: string; claimIndex: string; owner: string;
 export interface LpPoint { blockTime: number; balanceE6: string; queueOwedE6: string; feesE6: string; signature: string }
 export type HealthView = z.infer<typeof healthSchema>;
 
-export function backendConfigured(): boolean { return BACKEND.length > 0; }
+/** Market data is always available: from the backend when NEXT_PUBLIC_BACKEND_URL is set, otherwise simulated. */
+export function backendConfigured(): boolean { return true; }
+/** True when data comes from a real backend; false when the app is showing simulated demo data. */
+export function liveBackend(): boolean { return BACKEND.length > 0 && !backendDown; }
 export function backendUrl(path: string): string {
   if (!BACKEND) throw new Error("Backend is not configured. Set NEXT_PUBLIC_BACKEND_URL.");
   return `${BACKEND}${path}`;
 }
 
 async function json(path: string, signal?: AbortSignal): Promise<unknown> {
-  const response = await fetch(backendUrl(path), { cache: "no-store", ...(signal ? { signal } : {}) });
+  if (!liveBackend()) return simulate(path);
+  let response: Response;
+  try {
+    response = await fetch(backendUrl(path), { cache: "no-store", ...(signal ? { signal } : {}) });
+  } catch (reason) {
+    if (signal?.aborted) throw reason;
+    backendDown = true; // network error, DNS failure or CORS: fall back to demo data
+    return simulate(path);
+  }
+  if (response.status === 404 || response.status >= 500) { backendDown = true; return simulate(path); }
   if (!response.ok) throw new Error(`Backend request failed (${response.status})`);
   return response.json();
 }

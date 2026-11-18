@@ -5,7 +5,7 @@ import { Skeleton } from "skullet/react";
 import type { MarketHistoryPoint, PositionSide, PricerMarket } from "@wick/shared";
 import { WickChart, type ChartPoint, type ChartWindow } from "@/components/wick-chart";
 import { useHealth, useMarketHistory, useMarkets } from "@/hooks/use-markets";
-import type { HealthView } from "@/lib/api";
+import { liveBackend, type HealthView } from "@/lib/api";
 import { cents } from "@/lib/format";
 import { dateLabel, defaultStrike, expiryGroups, impliedVol, shortLeft, signed, timeLabel, usd, type ExpiryGroup } from "@/lib/markets";
 import { ChainGraph } from "./chain-graph";
@@ -163,7 +163,7 @@ function Pro(props: ViewProps) {
       <div className="st"><span>Spot</span><b>{usd(spot)}</b></div>
       <div className="st"><span>Implied vol</span><b>{(sigma * 100).toFixed(1)}% · {cap(selected.volSource)}</b></div>
       <div className="st"><span>Mark age</span><b>{health?.markAgeMs === undefined ? "—" : `${(health.markAgeMs / 1000).toFixed(1)}s`}</b></div>
-      <div className="st"><span>Prices</span><b className={live ? "live" : "stale"}>{live ? "Live" : "Stale"}</b></div>
+      <div className="st"><span>Prices</span>{liveBackend() ? <b className={live ? "live" : "stale"}>{live ? "Live" : "Stale"}</b> : <b>Demo</b>}</div>
       <div className="st"><span>Strikes</span><b>{rows.length}</b></div>
       <ModeSwitch mode={mode} onChange={setMode} />
     </div>
@@ -295,7 +295,7 @@ function Easy(props: ViewProps) {
           <div className="st"><span>Implied vol</span><b>{(sigma * 100).toFixed(1)}%</b></div>
           <div className="st"><span>Vol source</span><b>{cap(selected.volSource)}</b></div>
           <div className="st"><span>Strikes</span><b>{rows.length}</b></div>
-          <div className="st"><span>Prices</span><b className={live ? "live" : "stale"}>{live ? "Live" : "Stale"}</b></div>
+          <div className="st"><span>Prices</span>{liveBackend() ? <b className={live ? "live" : "stale"}>{live ? "Live" : "Stale"}</b> : <b>Demo</b>}</div>
         </div>
       </div>
       <ModeSwitch mode={mode} onChange={setMode} />

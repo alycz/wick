@@ -41,7 +41,8 @@ describe("Shell navigation", () => {
     pathnameMock.mockReturnValue("/trade");
     render(<Shell><div>Terminal</div></Shell>);
 
-    expect(screen.getByText("Prices: Deribit options · Settlement: Gemini")).toBeInTheDocument();
+    // no NEXT_PUBLIC_BACKEND_URL in tests, so the footer says the prices are simulated
+    expect(screen.getByText("Demo prices: simulated from the Wick pricing model")).toBeInTheDocument();
     expect(screen.queryByText(/devnet|test USDC|real-money/i)).not.toBeInTheDocument();
   });
 });
