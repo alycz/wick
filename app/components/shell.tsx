@@ -12,6 +12,8 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: "/trade", label: "Markets", active: pathname === "/trade" || pathname.startsWith("/m/") },
     { href: "/portfolio", label: "Portfolio", active: pathname.startsWith("/portfolio") },
     { href: "/pool", label: "Pool", active: pathname.startsWith("/pool") },
+    { href: "/leaderboard", label: "Leaderboard", active: pathname.startsWith("/leaderboard") },
+    { href: "/stats", label: "Stats", active: pathname.startsWith("/stats") },
   ];
 
   return (

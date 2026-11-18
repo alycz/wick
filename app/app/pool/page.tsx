@@ -13,7 +13,8 @@ import "@/styles/portfolio.css";
 
 type Tab = "stake" | "unstake" | "claim";
 const POOL_EVENTS = new Set(["LpUpdated", "Staked", "Unstaked", "RewardsClaimed", "ClaimPaid"]);
-const WINDOWS = [{ label: "1D", secs: 86_400 }, { label: "1W", secs: 604_800 }, { label: "1M", secs: 2_592_000 }, { label: "All", secs: 31_536_000 }];
+/* "All" spans exactly the history on hand */
+const windowsFor = (span: number) => [{ label: "1D", secs: 86_400 }, { label: "1W", secs: 604_800 }, { label: "1M", secs: 2_592_000 }, { label: "All", secs: Math.max(3_600, Math.ceil(span * 1.04)) }];
 const EVENT_NAMES: Record<string, [string, string]> = {
   LpUpdated: ["Pool updated", "var(--wick)"], Staked: ["Staked", "var(--muted)"], Unstaked: ["Unstaked", "var(--muted)"],
   RewardsClaimed: ["Rewards claimed", "var(--yes-hi)"], ClaimPaid: ["Payout paid", "var(--no-hi)"], ClaimQueued: ["Payout queued", "#f2c14e"],
@@ -53,6 +54,7 @@ export default function PoolPage() {
     return { balance, queue: e6(latest.queueOwedE6), fees: e6(latest.feesE6), change: dayAgo ? balance - e6(dayAgo.balanceE6) : undefined };
   }, [history, latest]);
   const series = useMemo(() => history.map((point) => ({ time: point.blockTime, value: e6(point.balanceE6) })), [history]);
+  const span = series.length > 1 ? series[series.length - 1]!.time - series[0]!.time : 0;
   const poolEvents = feed.events.filter((event) => EVENT_NAMES[event.name]).slice(0, 8);
 
   const action = async (name: string, operation: () => Promise<string>) => {
@@ -86,7 +88,7 @@ export default function PoolPage() {
     <div className="pl-grid">
       <div className="pl-main">
         <section className="card pl-chart" aria-label="Pool liquidity chart">
-          <WickChart series={[{ id: "pool", label: "Pool liquidity", color: "#5fd4cc", data: series }]} format="usd" windows={WINDOWS} height={260} initialWindow={31_536_000}
+          <WickChart key={span ? "ready" : "empty"} series={[{ id: "pool", label: "Pool liquidity", color: "#5fd4cc", data: series }]} format="usd" windows={windowsFor(span)} height={260} initialWindow={windowsFor(span)[3]!.secs}
             formatTime={(time) => new Date(time * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
         </section>
         <div className="flow">
