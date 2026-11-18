@@ -4,19 +4,28 @@ import type { Wallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import { useWallet } from "@solana/wallet-adapter-react";
 import type { Transaction, VersionedTransaction } from "@solana/web3.js";
 import { useMemo } from "react";
+import { useDemoAccount } from "@/components/demo-account";
 import { useDemoWallet } from "@/components/wallet-panel";
-import { chainConfigurationError, createWickClient, type WickBrowserClient } from "@/lib/chain";
+import { chainConfigurationError, createWickClient } from "@/lib/chain";
+import type { WickClient } from "@/lib/demo/client";
 
 export interface WickActionsState {
-  client?: WickBrowserClient;
+  client?: WickClient;
   error?: string;
   owner?: string;
+  /* true when actions go to the browser demo account instead of DevNet */
+  demo?: boolean;
 }
 
 export function useWickActions(): WickActionsState {
   const demo = useDemoWallet();
   const connected = useWallet();
+  const account = useDemoAccount();
+  const demoActive = account?.active === true && account.ready;
+  const demoClient = account?.client;
+  const demoOwner = account?.ledger.owner;
   return useMemo(() => {
+    if (demoActive && demoClient && demoOwner) return { client: demoClient, owner: demoOwner, demo: true };
     const configured = chainConfigurationError();
     if (configured) return { error: configured };
     const externalWallet: Wallet | undefined = connected.publicKey && connected.signTransaction ? {
@@ -33,5 +42,5 @@ export function useWickActions(): WickActionsState {
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
-  }, [demo.anchorWallet, connected.publicKey, connected.signTransaction, connected.signAllTransactions]);
+  }, [demoActive, demoClient, demoOwner, demo.anchorWallet, connected.publicKey, connected.signTransaction, connected.signAllTransactions]);
 }

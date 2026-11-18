@@ -95,3 +95,12 @@
   .pf-stats b { font-size: 21px; }
   .pf-wallet { text-align: left; }
 }
+
+/* demo account balances on the stake card */
+.pl-bal { display: grid; gap: 8px; padding: 12px 0 4px; border-bottom: 1px solid var(--line); }
+.pl-bal div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+.pl-bal span { color: var(--muted); }
+.pl-bal b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.pl-unit { align-items: baseline; gap: 10px; }
+.pl-max { border: 0; padding: 0; background: none; color: var(--wick); font: 600 13px var(--font); cursor: pointer; }
+.pl-max:hover { color: var(--aqua-strong); }

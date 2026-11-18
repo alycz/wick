@@ -7,6 +7,7 @@ import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { PUBLIC_DEVNET_RPC } from "@wick/shared";
 import { useMemo, type ReactNode } from "react";
 import { SkulletProvider } from "skullet/react";
+import { DemoAccountProvider } from "./demo-account";
 import { DemoWalletProvider } from "./wallet-panel";
 
 /* skeleton loading (skullet.lochie.me), tuned to the dark palette */
@@ -26,7 +27,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
-          <DemoWalletProvider><SkulletProvider mode="dark" theme={SKELETON_THEME}>{children}</SkulletProvider></DemoWalletProvider>
+          <DemoWalletProvider><DemoAccountProvider><SkulletProvider mode="dark" theme={SKELETON_THEME}>{children}</SkulletProvider></DemoAccountProvider></DemoWalletProvider>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
