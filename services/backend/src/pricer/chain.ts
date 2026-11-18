@@ -1,5 +1,8 @@
 import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { AnchorProvider, BN, Program, Wallet, type Idl, web3 } from "@coral-xyz/anchor";
+import anchor, { AnchorProvider, Program, Wallet, type Idl, web3 } from "@coral-xyz/anchor";
+
+// Node ESM cannot see BN as a named export of anchor's CJS build, so read it off the default export.
+const { BN } = anchor;
 import { WICK_IDL } from "@wick/shared";
 import bs58 from "bs58";
 import { createHash } from "node:crypto";
