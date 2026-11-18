@@ -37,11 +37,12 @@ describe("Shell navigation", () => {
     expect(screen.getByRole("link", { name: "Markets" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("shows the price sources in the footer and no test-money copy", () => {
+  it("reports market data unavailable when the backend is not configured", () => {
     pathnameMock.mockReturnValue("/trade");
     render(<Shell><div>Terminal</div></Shell>);
 
-    expect(screen.getByText("Prices: Deribit options · Settlement: Gemini")).toBeInTheDocument();
+    expect(screen.getByText("Market data unavailable · Backend not configured")).toBeInTheDocument();
+    expect(screen.queryByText(/Deribit|Gemini|simulated/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/devnet|test USDC|real-money/i)).not.toBeInTheDocument();
   });
 });
