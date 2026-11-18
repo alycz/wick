@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Seg } from "@/components/markets/controls";
 import { WickChart } from "@/components/wick-chart";
+import { useDemoAccount } from "@/components/demo-account";
 import { useFeed } from "@/hooks/use-feed";
 import { useWickActions } from "@/hooks/use-wick-actions";
 import { backendConfigured, getLpHistory, type LpPoint } from "@/lib/api";
+import { pendingRewardsE6 } from "@/lib/demo/ledger";
 import { latestIndexerEventKey } from "@/lib/feed";
 import { compactAddress, e6 } from "@/lib/format";
 import { timeLabel, usd } from "@/lib/markets";
@@ -31,6 +33,14 @@ export default function PoolPage() {
   const [signature, setSignature] = useState<string>();
   const [refreshNonce, setRefreshNonce] = useState(0);
   const actions = useWickActions();
+  const account = useDemoAccount();
+  const demoMode = actions.demo === true && account !== undefined;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!demoMode) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [demoMode]);
   const feed = useFeed();
   const backendReady = backendConfigured();
   const refreshKey = latestIndexerEventKey(feed.events, POOL_EVENTS);
@@ -64,16 +74,21 @@ export default function PoolPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(undefined); }
   };
-  const disabled = busy !== undefined || !backendReady || !metrics || !actions.client;
+  /* the demo account stakes against its own ledger, so it doesn't wait on pool history */
+  const disabled = busy !== undefined || !actions.client || (!demoMode && (!backendReady || !metrics));
+  const demoBalances = demoMode ? {
+    wallet: e6(account.ledger.wickedE6), staked: e6(account.ledger.stakedE6), rewards: Number(pendingRewardsE6(account.ledger, now)) / 1_000_000,
+  } : undefined;
+  const wicked = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   const amountE6 = BigInt(Math.round(amount * 1_000_000));
 
   return <div className="pl-page">
     <header className="pf-head">
       <div><h1>Pool</h1><p>Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear.</p></div>
     </header>
-    {(error || signature || (backendReady && !actions.client)) && <div className="pf-alerts">
+    {(error || signature || (backendReady && !actions.client && !demoMode)) && <div className="pf-alerts">
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
-      {backendReady && !actions.client && <p className="pf-note">{actions.error ?? "Staking is not configured."}</p>}
+      {backendReady && !actions.client && !demoMode && <p className="pf-note">{actions.error ?? "Staking is not configured."}</p>}
       {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
     </div>}
 
@@ -109,6 +124,11 @@ export default function PoolPage() {
       <aside className="ticket"><div className="card pl-card" aria-label="Stake $WICKED">
         <Seg className="pl-tabs" label="Staking action" value={tab} onChange={setTab}
           options={[{ value: "stake", label: "Stake" }, { value: "unstake", label: "Unstake" }, { value: "claim", label: "Claim" }]} />
+        {demoBalances && <div className="pl-bal" aria-label="Your $WICKED">
+          <div><span>In wallet</span><b>{wicked(demoBalances.wallet)} $WICKED</b></div>
+          <div><span>Staked</span><b>{wicked(demoBalances.staked)} $WICKED</b></div>
+          <div><span>Rewards</span><b className={demoBalances.rewards > 0 ? "up" : ""}>{usd(demoBalances.rewards)}</b></div>
+        </div>}
         {tab === "claim" ? <>
           <div className="pf-val"><span>Rewards</span><b>$WICKED fee share</b>
             <span>{metrics && metrics.queue > 0 ? `Rewards resume once the ${usd(metrics.queue)} payout queue is cleared.` : "The payout queue is clear, so rewards are flowing."}</span></div>
@@ -120,7 +140,7 @@ export default function PoolPage() {
               onFocus={() => setText(String(amount))} onChange={(event) => setText(event.target.value.replace(/[^0-9.]/g, ""))}
               onBlur={() => { if (text !== undefined) setAmount(Math.max(0, Number(text) || 0)); setText(undefined); }} />
           </div>
-          <div className="pl-unit"><span>$WICKED</span></div>
+          <div className="pl-unit">{demoBalances && <button type="button" className="pl-max" onClick={() => setAmount(Math.floor((tab === "stake" ? demoBalances.wallet : demoBalances.staked) * 100) / 100)}>Max</button>}<span>$WICKED</span></div>
           <button type="button" className="cta" disabled={disabled || amount <= 0}
             onClick={() => void action(tab, () => tab === "stake" ? actions.client!.stake(amountE6) : actions.client!.unstake(amountE6))}>
             {busy === tab ? "Confirming…" : `${tab === "stake" ? "Stake" : "Unstake"} ${amount.toLocaleString("en-US")} $WICKED`}

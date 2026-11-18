@@ -336,3 +336,17 @@
   .chrome-nav { overflow-x: auto; }
   .chrome-nav-link { font-size: 13px; }
 }
+
+/* demo account: balance pill beside Connect wallet, and the demo side of the transfer dialog */
+.chrome-wallet:has(.chrome-wallet-demo) { display: flex; align-items: center; gap: 8px; }
+.chrome-wallet-demo { gap: 8px; font-variant-numeric: tabular-nums; }
+.chrome-wallet-demo small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.chrome-wallet-avatar--demo { background: conic-gradient(from 200deg, var(--wick), #8b8cf7, var(--wick)); }
+.chrome-wallet-or { margin: 4px 4px 0; color: var(--faint); font-size: 12px; }
+.dw-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: -6px; }
+.dw-chips button { padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--fg); font: 600 13px var(--font); cursor: pointer; }
+.dw-chips button:hover { background: var(--panel-3); }
+.dw-go:not(:disabled) { cursor: pointer; }
+.dw-res { margin: -4px 0 0; font-size: 13px; }
+.dw-res.up { color: var(--yes-hi); }
+.dw-res.down { color: var(--no-hi); }
