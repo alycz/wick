@@ -1,6 +1,6 @@
 # Wick — Devpost submission copy
 
-> **Submission operator note:** the prose below describes the implemented project, but Wick is not yet publicly deployed. Do not submit it as a working demo until `pnpm deploy:verify` passes, the final URLs and video are accessible, and the evidence selections below are satisfied. As of November 17, QuickNode must **not** be selected.
+> **Submission operator note — November 18, 2026:** the frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) (HTTP 200 verified). The prose below describes the implemented project, not a verified end-to-end trading deployment. Do not submit it as a working demo until `pnpm deploy:verify` passes, the final URLs and video are accessible, and the evidence selections below are satisfied. As of November 17, QuickNode must **not** be selected.
 
 ## Project name
 
@@ -20,7 +20,7 @@ We built Wick, a devnet trading interface and Anchor program for leveraged synth
 
 The Solana program implements opening and closing YES/NO positions, liquidation, official-outcome settlement, market/vault exposure limits, FIFO payout claims, a self-bootstrapping pool, $WICKED emissions, and staking. A single Node backend runs market discovery, pricing, keeper/liquidator/settler loops, the QuickNode Streams webhook, SQLite projections, and read APIs. The Next.js interface includes markets, trade previews, portfolio, pool analytics, live activity, browser-local demo wallets, and Phantom/Solflare support.
 
-Current evidence boundary: local TypeScript/native checks and real public Gemini/volatility reads pass. WP11 still has open implementation and validation blockers; the public program/services/Stream and final video are pending. We will not present a build-time program ID or local UI as a deployed product.
+Current evidence boundary: the public source and deployed frontend are available. Main CI [44236165665](https://github.com/alycz/wick/actions/runs/44236165665) passed on `f189083807f913c31faf5ca2571447ab99a00d1f` at 04:26:30 UTC on November 18, including TypeScript and Anchor local-validator checks. This does not verify a public devnet trading lifecycle. Program/mint, backend, actual Stream delivery, working faucet/trades and final video still require deployment and acceptance evidence. We will not present a build-time program ID or a reachable frontend as end-to-end completion.
 
 ## 2. What problem does it solve?
 
@@ -64,7 +64,7 @@ On the product side, we would add richer portfolio risk, historical model calibr
 - Gemini Prediction Markets public REST and WebSocket APIs
 - Deribit public REST/WebSocket, Derive v3, EWMA realized-vol fallback
 - QuickNode Streams REST/filter/webhook implementation; live Stream evidence pending
-- Railway and Vercel deployment definitions; public deployments pending
+- Railway backend and Vercel deployment definitions; frontend deployed, integrated backend/on-chain acceptance unverified
 - Vitest, Cargo tests, Playwright, ffmpeg
 
 ## Sponsor-tool details
@@ -88,8 +88,8 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 ## Links to enter only after verification
 
-- Public source repository: pending public URL/commit in `docs/HANDOFF.md`
-- Working application: pending Vercel production URL
+- Public source repository: [github.com/alycz/wick](https://github.com/alycz/wick); tested frontend baseline `f189083807f913c31faf5ca2571447ab99a00d1f`
+- Deployed frontend: [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/). URL availability is verified, but this is not yet a verified working trading demo.
 - Backend health/API: pending Railway HTTPS URL
 - Solana program: pending actual devnet program ID and explorer link
 - Demo video: pending accessible 2–3 minute upload
