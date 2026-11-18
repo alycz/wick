@@ -114,16 +114,13 @@ export function WalletPanel() {
       });
       const result = await response.json() as { message?: string; signature?: string };
       if (!response.ok) throw new Error(result.message ?? `Faucet failed (${response.status})`);
-      setMessage(`Funded on devnet · ${result.signature ? compactAddress(result.signature) : "confirmed"}`);
+      setMessage(`Funds added · ${result.signature ? compactAddress(result.signature) : "confirmed"}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setFunding(false); }
   };
 
-  const entryLabel = wallet.publicKey
-    ? compactAddress(wallet.publicKey)
-    : connected.publicKey
-      ? compactAddress(connected.publicKey.toBase58())
-      : "Wallet";
+  const address = wallet.publicKey ?? connected.publicKey?.toBase58();
+  const source = wallet.publicKey ? "Local wallet · this browser" : connected.wallet ? `${connected.wallet.adapter.name} · Solana` : "";
 
   return (
     <div className="chrome-wallet" ref={walletPanelRef} onKeyDown={(event) => {
@@ -133,28 +130,27 @@ export function WalletPanel() {
         walletEntryRef.current?.focus();
       }
     }}>
-      <button className="chrome-primary chrome-wallet-entry" ref={walletEntryRef} type="button"
+      <button className={address ? "chrome-wallet-entry" : "chrome-wallet-entry chrome-wallet-entry--connect"} ref={walletEntryRef} type="button"
         aria-haspopup="dialog" aria-expanded={open} aria-controls="wallet-options"
         onClick={() => setOpen((value) => !value)}>
-        {entryLabel}<span aria-hidden="true">⌄</span>
+        {address && <i className="chrome-wallet-dot" aria-hidden="true" />}
+        {address ? compactAddress(address) : "Connect wallet"}
+        <svg className="chrome-wallet-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
-      {open && <div className="chrome-wallet-popover" id="wallet-options" role="dialog" aria-label="Wallet options">
-        <div className="chrome-wallet-popover-head"><strong>Wallet</strong><span>Test assets only</span></div>
-        {wallet.publicKey ? <div className="chrome-wallet-demo" role="status" aria-label="Local test wallet">
-          <div><span>Local test wallet</span><strong className="chrome-wallet-address">{compactAddress(wallet.publicKey)}</strong></div>
-          <div className="chrome-wallet-actions">
-            {fundingAvailable && <button data-wallet-option className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}
-            <button data-wallet-option className="chrome-wallet-link" type="button" onClick={wallet.exportKey}>Export</button>
-            <button data-wallet-option className="chrome-wallet-link chrome-wallet-link--danger" type="button" onClick={wallet.reset}>Reset</button>
-          </div>
-        </div> : <button data-wallet-option className="chrome-wallet-option" type="button" onClick={wallet.create}>
-          <strong>Create test wallet</strong><span>Stored only in this browser</span>
+      {open && <div className="chrome-wallet-popover" id="wallet-options" role="dialog" aria-label="Wallet">
+        {address && <div className="chrome-wallet-head">
+          <span className="chrome-wallet-avatar" aria-hidden="true" />
+          <div><b>{compactAddress(address)}</b><small>{source}</small></div>
+        </div>}
+        {!wallet.publicKey && <div className="chrome-wallet-external"><WalletMultiButton data-wallet-option>Connect Phantom or Solflare</WalletMultiButton></div>}
+        {!address && <button data-wallet-option className="chrome-wallet-option" type="button" onClick={wallet.create}>
+          <strong>Create a local wallet</strong><span>Stored only in this browser</span>
         </button>}
-        <div className="chrome-wallet-external">
-          <span>Browser wallet</span>
-          <WalletMultiButton data-wallet-option>Connect browser wallet</WalletMultiButton>
-        </div>
-        {fundingAvailable && !wallet.publicKey && connected.publicKey && <button data-wallet-option className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Funding…" : "Faucet"}</button>}
+        {address && <div className="chrome-wallet-items">
+          {fundingAvailable && <button data-wallet-option className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Adding funds…" : "Add funds"}</button>}
+          {wallet.publicKey && <button data-wallet-option className="chrome-wallet-link" type="button" onClick={wallet.exportKey}>Export key</button>}
+        </div>}
+        {wallet.publicKey && <button data-wallet-option className="chrome-wallet-link chrome-wallet-link--danger" type="button" onClick={wallet.reset}>Remove local wallet</button>}
       </div>}
       {message && <p className="chrome-wallet-message" aria-live="polite">{message}</p>}
     </div>

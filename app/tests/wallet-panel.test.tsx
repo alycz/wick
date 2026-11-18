@@ -23,29 +23,29 @@ describe("WalletPanel availability", () => {
   });
   afterEach(cleanup);
 
-  it("hydrates as one wallet entry with both wallet choices and no unavailable funding action", () => {
+  it("starts as one connect button with both wallet choices and no unavailable funding action", () => {
     render(<DemoWalletProvider><WalletPanel /></DemoWalletProvider>);
-    const entry = screen.getByRole("button", { name: "Wallet" });
+    const entry = screen.getByRole("button", { name: "Connect wallet" });
 
     expect(entry).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: "Create test wallet" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Connect browser wallet" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Create a local wallet/i })).not.toBeInTheDocument();
     fireEvent.click(entry);
-    expect(screen.getByRole("dialog", { name: "Wallet options" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Create test wallet/i })).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Connect browser wallet" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Faucet" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Wallet" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect Phantom or Solflare" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /Create a local wallet/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add funds" })).not.toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(entry).toHaveFocus();
   });
 
-  it("restores faucet access only after the backend verifies chain execution", () => {
+  it("offers Add funds only after the backend verifies chain execution", () => {
     healthState.value = { health: { chainConfigured: true } };
     render(<DemoWalletProvider><WalletPanel /></DemoWalletProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Wallet" }));
-    fireEvent.click(screen.getByRole("button", { name: /Create test wallet/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect wallet" }));
+    fireEvent.click(screen.getByRole("button", { name: /Create a local wallet/i }));
 
-    expect(screen.getByRole("button", { name: "Faucet" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add funds" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove local wallet" })).toBeInTheDocument();
   });
 });
