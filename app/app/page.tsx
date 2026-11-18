@@ -1,148 +1,112 @@
+"use client";
+
 import Link from "next/link";
-import "../styles/landing.css";
+import { useEffect, useMemo, useState } from "react";
+import type { PricerMarket } from "@wick/shared";
+import { WickChart, type ChartPoint } from "@/components/wick-chart";
+import { useMarketHistory, useMarkets } from "@/hooks/use-markets";
+import { cents } from "@/lib/format";
+import { defaultStrike, expiryGroups, shortLeft, usd } from "@/lib/markets";
 
-const principles = [
-  {
-    index: "01",
-    visual: "ladder",
-    title: "Price discovery beyond the book",
-    copy: "Every supported Gemini strike gets an options-implied theoretical price, including tails where the visible book can be thin.",
-  },
-  {
-    index: "02",
-    visual: "cap",
-    title: "Risk that changes with the market",
-    copy: "Binary gamma drives a per-market leverage cap, so sharp contracts receive less leverage and calmer contracts can receive more.",
-  },
-  {
-    index: "03",
-    visual: "liquidity",
-    title: "Liquidity that starts with trading",
-    copy: "Losses bootstrap the experimental pool instead of requiring an outside LP deposit. Profitable claims remain subject to available vault liquidity.",
-  },
-] as const;
+/* Landing page, ported from the redesign prototype's home view. Live pieces use real market data and stay empty without it. */
 
-function PrincipleVisual({ visual }: { visual: typeof principles[number]["visual"] }) {
-  if (visual === "ladder") return <div className="landing-principle-visual landing-principle-visual-ladder" role="img" aria-label="Venue quotes cover the center while the model extends across tail strikes">
-    <div aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div>
-    <span>Venue center</span><b>Model reach</b>
-  </div>;
-  if (visual === "cap") return <div className="landing-principle-visual landing-principle-visual-cap" role="img" aria-label="As binary gamma rises, the leverage cap falls">
-    <div><span>Binary gamma</span><i aria-hidden="true" /></div><b aria-hidden="true">↓</b><div><span>Leverage cap</span><i aria-hidden="true" /></div>
-  </div>;
-  return <div className="landing-principle-visual landing-principle-visual-liquidity" role="img" aria-label="Trading losses flow into the experimental vault, which gates profitable claims">
-    <span>Trading losses</span><i aria-hidden="true">→</i><strong>Vault</strong><i aria-hidden="true">→</i><span>Claims</span>
+function LiveCard({ market, now }: { market?: PricerMarket; now?: number }) {
+  const { history } = useMarketHistory(market?.symbol ?? "");
+  const series = useMemo<ChartPoint[]>(() => {
+    const points = history.map((point) => ({ time: Math.floor(point.ts / 1000), value: point.spot }));
+    if (market && now) points.push({ time: Math.floor(now / 1000), value: market.spot });
+    return points;
+  }, [history, market, now]);
+  const href = market ? `/m/${encodeURIComponent(market.symbol)}` : "/trade";
+  const upDown = market?.kind === "up_down";
+  return <div className="live-card rise" aria-label="Live market">
+    <div className="lc-head">
+      <div className="ev-id"><div className="coin" aria-hidden="true">₿</div>
+        <div><b>{market ? upDown ? `BTC Up or Down · ${market.duration === "15m" ? "15 min" : market.duration}` : `BTC above ${usd(market.strike, 0)}` : "BTC markets"}</b>
+          <small>{market ? `${upDown ? "Price to beat" : "Spot"} ${usd(upDown ? market.strike : market.spot)}` : "Waiting for live prices"}</small></div>
+      </div>
+      <span className="lc-clock">{market && now ? shortLeft(market.expiryTs - now) : "—"}</span>
+    </div>
+    <div className="lc-chart">
+      {series.length > 1
+        ? <WickChart series={[{ id: "btc", label: "BTC", color: "#f7931a", data: series }]} format="usd" height={230} windows={[{ label: "5m", secs: 300 }]} initialWindow={300}
+          {...(upDown && market ? { refLine: { value: market.strike, label: "Target" } } : {})} />
+        : <div className="lc-empty">Live BTC chart appears when prices load.</div>}
+    </div>
+    <div className="lc-yn">
+      <Link href={href} className="by">{upDown ? "Up" : "Yes"} {market ? cents(market.theo) : "—"}</Link>
+      <Link href={href} className="bn">{upDown ? "Down" : "No"} {market ? cents(1 - market.theo) : "—"}</Link>
+    </div>
   </div>;
 }
 
 export default function LandingPage() {
-  return <div className="landing-page">
-    <section className="landing-hero" aria-labelledby="landing-title">
-      <div className="landing-hero-copy">
-        <p className="landing-kicker">GEMINI PREDICTION MARKETS</p>
-        <h1 id="landing-title">Every strike.<br /><em>One fair surface.</em></h1>
-        <p className="landing-lede">Wick turns Gemini&apos;s BTC prediction markets into risk-capped synthetic YES/NO positions, priced from the options volatility surface.</p>
-        <div className="landing-actions">
-          <Link className="landing-primary" href="/trade">Open trading terminal <span aria-hidden="true">↗</span></Link>
-          <Link className="landing-secondary" href="/pool">Explore the pool <span aria-hidden="true">→</span></Link>
-        </div>
-        <div className="landing-proof" aria-label="Product principles">
-          <div><b>Gemini</b><span>Official outcomes</span></div>
-          <div><b>Options IV</b><span>Independent fair value</span></div>
-          <div><b>Execution</b><span>Test assets only</span></div>
-        </div>
-      </div>
+  const { markets } = useMarkets();
+  const [now, setNow] = useState<number>();
+  useEffect(() => { setNow(Date.now()); const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  const groups = useMemo(() => expiryGroups(markets), [markets]);
+  const featured = groups[0] ? defaultStrike(groups[0].markets) : undefined;
+  const ladderGroup = groups.find((group) => !group.upDown && group.markets.length > 2);
+  const near = useMemo(() => {
+    if (!ladderGroup) return [];
+    const middle = defaultStrike(ladderGroup.markets);
+    const index = middle ? ladderGroup.markets.indexOf(middle) : 0;
+    return ladderGroup.markets.slice(Math.max(0, index - 2), index + 3);
+  }, [ladderGroup]);
+  const strikeCount = groups.reduce((sum, group) => sum + (group.upDown ? 0 : group.markets.length), 0);
+  const levRange = markets.length ? `${Math.min(...markets.map((m) => m.maxLeverage))}–${Math.max(...markets.map((m) => m.maxLeverage))}x` : "2–300x";
 
-      <div className="landing-surface" aria-label="Wick pricing surface illustration">
-        <div className="landing-surface-head">
-          <div><span className="landing-surface-mark" /> WICK PRICING SURFACE</div>
-          <span>SYSTEM MAP · NO LIVE VALUES</span>
-        </div>
-        <div className="landing-surface-inputs">
-          <div>
-            <span>1 · VENUE INPUT</span>
-            <strong>Gemini outcome + strike</strong>
-            <small>Official contract reference</small>
-          </div>
-          <div>
-            <span>2 · MARKET INPUT</span>
-            <strong>BTC spot + options IV</strong>
-            <small>Independent pricing inputs</small>
-          </div>
-        </div>
-        <div className="landing-flow" aria-hidden="true"><i /><i /><i /><i /><i /></div>
-        <div className="landing-surface-engine">
-          <span>3 · WICK RISK ENGINE</span>
-          <div><b>Fair probability</b><b>Dynamic leverage cap</b></div>
-        </div>
-        <div className="landing-surface-foot">
-          <span>Source-backed only. Live state appears after health checks pass.</span>
-          <Link href="/trade">View markets →</Link>
-        </div>
+  return <div className="hm">
+    <section className="hero">
+      <div className="rise">
+        <h1>Every Bitcoin strike, <span>priced fairly.</span></h1>
+        <p>Trade Gemini&apos;s BTC prediction markets with leverage. Wick prices every strike from the options market, including the tails where Gemini&apos;s book is thin, and caps leverage for each market by how fast it can move.</p>
+        <div className="hero-cta"><Link className="a1" href="/trade">Start trading</Link><Link className="a2" href="/pool">See the pool</Link></div>
+      </div>
+      <LiveCard {...(featured ? { market: featured } : {})} {...(now ? { now } : {})} />
+    </section>
+
+    <section className="numbers" aria-label="Wick in numbers">
+      <div><b>{strikeCount || "—"}</b><span>BTC strikes priced right now</span></div>
+      <div><b>{levRange}</b><span>Leverage cap, set per market</span></div>
+      <div><b>{groups.length || 5}</b><span>Expiries, from 15 minutes to month-end</span></div>
+      <div><b>Gemini</b><span>Settles every market</span></div>
+    </section>
+
+    <section className="split">
+      <div>
+        <h2>A fair price where the order book runs out.</h2>
+        <p>Gemini&apos;s book is deep near the money and thin in the tails. Wick turns Deribit&apos;s BTC options volatility into a fair chance for every strike, and shows it beside Gemini&apos;s bid and ask.</p>
+        <p>When Wick&apos;s price and Gemini&apos;s disagree, you can see it before you trade.</p>
+        <Link className="ghost" href="/trade">Open the strike ladder</Link>
+      </div>
+      <div className="mini" aria-label="Strikes near the money">
+        <div className="mrow hd"><span>BTC above{ladderGroup ? ` · ${ladderGroup.label}` : ""}</span><span>Wick</span><span>Gemini</span><span>Leverage cap</span></div>
+        {near.length === 0 ? <div className="mini-empty">Strikes appear here when live prices load.</div> : near.map((market) =>
+          <Link className="mrow" key={market.symbol} href={`/m/${encodeURIComponent(market.symbol)}`}>
+            <div><b>{market.strike.toLocaleString("en-US")}</b><div className="bar"><i style={{ width: `${Math.round(market.theo * 100)}%` }} /></div></div>
+            <b style={{ color: "var(--wick)" }}>{Math.round(market.theo * 100)}%</b>
+            <span className="mu">{market.gemini.bid !== undefined ? Math.round(market.gemini.bid * 100) : "—"}–{market.gemini.ask !== undefined ? Math.round(market.gemini.ask * 100) : "—"}¢</span>
+            <span>{market.maxLeverage}x</span>
+          </Link>)}
       </div>
     </section>
 
-    <section className="landing-feature" aria-labelledby="landing-feature-title">
-      <div className="landing-section-copy">
-        <p className="landing-kicker">THE WHOLE LADDER</p>
-        <h2 id="landing-feature-title">A reference price where the order book goes quiet.</h2>
-        <p>Wick places the model beside Gemini—not over it—so traders can compare the venue quote, independent theo, edge, and live cap in one dense surface.</p>
-        <Link href="/trade">Inspect the live ladder <span aria-hidden="true">→</span></Link>
-      </div>
-      <div className="landing-compare" aria-label="Market and model comparison illustration">
-        <div className="landing-compare-head"><span>Source</span><span>Signal</span><span>Use</span></div>
-        <div className="landing-compare-row">
-          <div><i className="landing-gemini" /> Gemini outcome market</div><strong>Bid / ask</strong><span>Venue reference</span>
-        </div>
-        <div className="landing-compare-join" aria-hidden="true"><i /><i /><i /></div>
-        <div className="landing-compare-row landing-compare-row-accent">
-          <div><i className="landing-wick" /> Wick options model</div><strong>Fair probability</strong><span>Independent comparison</span>
-        </div>
-        <div className="landing-compare-note">No invented liquidity. No fabricated live state.</div>
+    <section>
+      <div className="steps">
+        <div><span>1</span><b>Pick a strike and a side</b><p>Choose any BTC strike and expiry. Wick shows its fair price and Gemini&apos;s quote side by side.</p></div>
+        <div><span>2</span><b>Size it with leverage</b><p>Each market has its own cap. Contracts near the money with minutes left get less leverage than far tails.</p></div>
+        <div><span>3</span><b>Settle on Gemini&apos;s result</b><p>At expiry the market settles on Gemini&apos;s official outcome. Winnings are paid from the pool, in order.</p></div>
       </div>
     </section>
 
-    <section className="landing-principles" aria-labelledby="landing-principles-title">
-      <div className="landing-principles-head">
-        <div><p className="landing-kicker">BUILT FOR THE TAILS</p><h2 id="landing-principles-title">A prediction market risk engine, visible at every step.</h2></div>
-        <p>From the first quote to official settlement, Wick keeps the source, model, cap, and current system state in view.</p>
+    <section className="split">
+      <div><h2>Questions</h2><p>Wick runs on Solana. Prices come from Deribit options and markets settle on Gemini.</p></div>
+      <div className="faq">
+        <details open><summary>Where do prices come from?</summary><p>Wick&apos;s fair price comes from BTC spot and Deribit&apos;s options volatility, with Derive and realized volatility as fallbacks. Gemini&apos;s bid and ask are shown next to it.</p></details>
+        <details><summary>How is the leverage cap set?</summary><p>From binary gamma: how sharply a contract&apos;s value can swing for a small BTC move. The sharper the swing, the lower the cap.</p></details>
+        <details><summary>Who pays winners?</summary><p>The pool. It fills up from losing trades rather than outside deposits. If the pool runs short, payouts wait in a first-in, first-out queue.</p></details>
       </div>
-      <div className="landing-principle-grid">
-        {principles.map((principle) => <article className="landing-principle" key={principle.index}>
-          <span>{principle.index}</span>
-          <PrincipleVisual visual={principle.visual} />
-          <h3>{principle.title}</h3>
-          <p>{principle.copy}</p>
-        </article>)}
-      </div>
-    </section>
-
-    <section className="landing-faq" aria-labelledby="landing-faq-title">
-      <div className="landing-faq-head">
-        <p className="landing-kicker">QUESTIONS, ANSWERED</p>
-        <h2 id="landing-faq-title">What Wick shows. And what it never invents.</h2>
-      </div>
-      <div className="landing-faq-list">
-        <details open>
-          <summary>Where does the market data come from?</summary>
-          <p>Wick displays Gemini market outcomes beside an independent options-implied theoretical price. If those sources are unavailable or stale, the terminal says so.</p>
-        </details>
-        <details>
-          <summary>Are these real-money positions?</summary>
-          <p>No. The current product is an experimental Solana devnet experience using test USDC only.</p>
-        </details>
-        <details>
-          <summary>How are leverage limits set?</summary>
-          <p>Each market receives a dynamic cap derived from binary gamma, so riskier contracts allow less leverage.</p>
-        </details>
-      </div>
-    </section>
-
-    <section className="landing-final">
-      <p className="landing-kicker landing-terminal-kicker"><span className="wick-logo-mark" aria-hidden="true" /> WICK TERMINAL</p>
-      <h2>See the real surface.<br /><em>Trade the verified state.</em></h2>
-      <p>Open the terminal for current Gemini markets, options-implied theo, and backend health. If live data is unavailable or stale, Wick says so.</p>
-      <Link className="landing-primary" href="/trade">Enter the terminal <span aria-hidden="true">↗</span></Link>
     </section>
   </div>;
 }

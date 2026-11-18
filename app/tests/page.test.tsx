@@ -1,33 +1,26 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import React from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import LandingPage from "@/app/page";
+
+const markets = { markets: [], loading: false };
+const history = { history: [] };
+vi.mock("@/hooks/use-markets", () => ({ useMarkets: () => markets, useMarketHistory: () => history }));
 
 describe("LandingPage", () => {
   afterEach(cleanup);
 
-  it("introduces Wick without presenting illustrative market values as live data", () => {
-    const { container } = render(<LandingPage />);
-
-    expect(screen.getByRole("heading", { name: /Every strike.*One fair surface/i })).toBeInTheDocument();
-    expect(screen.queryByText(/Solana devnet · Gemini prediction markets/i)).not.toBeInTheDocument();
-    expect(screen.getByText("GEMINI PREDICTION MARKETS")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /A prediction market risk engine/i }).querySelector("br")).toBeNull();
-    expect(screen.getByText(/Live state appears after health checks pass/i)).toBeInTheDocument();
-    expect(screen.getByText(/No invented liquidity/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Live BTC/i)).not.toBeInTheDocument();
-    expect(container.querySelectorAll(".landing-kicker > span:not(.wick-logo-mark)")).toHaveLength(0);
-    expect(container.querySelector(".landing-terminal-kicker .wick-logo-mark")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /model extends across tail strikes/i })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /gamma rises.*leverage cap falls/i })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /Trading losses flow into the experimental vault/i })).toBeInTheDocument();
+  it("shows the redesigned hero without inventing market values", () => {
+    render(<LandingPage />);
+    expect(screen.getByRole("heading", { name: /Every Bitcoin strike, priced fairly/i })).toBeInTheDocument();
+    expect(screen.getByText(/Strikes appear here when live prices load/i)).toBeInTheDocument();
+    expect(screen.getByText(/Live BTC chart appears when prices load/i)).toBeInTheDocument();
   });
 
   it("links the primary product paths", () => {
     render(<LandingPage />);
-
-    expect(screen.getByRole("link", { name: /Open trading terminal/i })).toHaveAttribute("href", "/trade");
-    expect(screen.getByRole("link", { name: /Explore the pool/i })).toHaveAttribute("href", "/pool");
-    expect(screen.getAllByRole("link", { name: /terminal|markets|ladder/i }).some((link) => link.getAttribute("href") === "/trade")).toBe(true);
+    expect(screen.getByRole("link", { name: "Start trading" })).toHaveAttribute("href", "/trade");
+    expect(screen.getByRole("link", { name: "See the pool" })).toHaveAttribute("href", "/pool");
+    expect(screen.getByRole("link", { name: /Open the strike ladder/i })).toHaveAttribute("href", "/trade");
   });
 });
