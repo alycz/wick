@@ -287,4 +287,11 @@ describe("MarketsPage", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Bitcoin above/);
     expect(window.localStorage.getItem("wick:markets-mode")).toBe("easy");
   });
+
+  it("shows the live Up price beside the price to beat in Easy", () => {
+    window.localStorage.setItem("wick:markets-mode", "easy");
+    render(<MarketsPage symbol="BTC-15M-UP" />);
+    expect(screen.getByText("Price to beat")).toBeInTheDocument();
+    expect(document.querySelector(".ud .upx")).toHaveTextContent(/^Up price\s*55\.0¢$/);
+  });
 });
