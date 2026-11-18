@@ -18,7 +18,7 @@ const app = () => render(<DemoWalletProvider><DemoAccountProvider><WalletPanel /
 
 describe("WalletPanel demo account", () => {
   beforeEach(() => window.localStorage.clear());
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
   it("shows a $10,000 demo balance next to Connect wallet before any wallet is connected", async () => {
     app();
@@ -40,6 +40,28 @@ describe("WalletPanel demo account", () => {
     const migrated = JSON.parse(window.localStorage.getItem(DEMO_STORAGE_KEY)!);
     expect(migrated).toMatchObject({ version: 2, usdcE6: "9123000000", rewardsE6: "0" });
     expect(migrated.legacyMigration).toMatchObject({ sourceVersion: 1, legacySyntheticRewardsE6: "400000" });
+  });
+
+  it("keeps the active version-1 value untouched when quota prevents a verified backup", async () => {
+    const legacy = JSON.stringify({
+      version: 1, owner: "LegacyOwner", createdTs: 1000, usdcE6: "9123000000", wickedE6: "1250000000", stakedE6: "0",
+      rewardsE6: "400000", rewardsTs: 1000, nextClaimIndex: 1, seeded: true, positions: [], claims: [], activity: [],
+    });
+    window.localStorage.setItem(DEMO_STORAGE_KEY, legacy);
+    const originalSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === DEMO_LEGACY_BACKUP_KEY) throw new DOMException("Storage quota exceeded", "QuotaExceededError");
+      return originalSetItem.call(this, key, value);
+    });
+
+    app();
+    fireEvent.click(await screen.findByRole("button", { name: "Demo account, $9,123.00" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset demo" }));
+
+    expect(await screen.findByRole("button", { name: "Demo account, $10,000.00" })).toBeInTheDocument();
+    expect(window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY)).toBeNull();
+    expect(window.localStorage.getItem(DEMO_STORAGE_KEY)).toBe(legacy);
+    expect(setItem).not.toHaveBeenCalledWith(DEMO_STORAGE_KEY, expect.any(String));
   });
 
   it("deposits into and withdraws from the demo balance", async () => {

@@ -23,18 +23,26 @@ export interface DemoAccountValue {
 
 const DemoAccountContext = createContext<DemoAccountValue | undefined>(undefined);
 
-function load(): DemoLedger {
+interface LoadedLedger { ledger: DemoLedger; allowPersistence: boolean }
+
+function load(): LoadedLedger {
   let stored: string | null = null;
   try { stored = window.localStorage.getItem(DEMO_STORAGE_KEY); } catch { /* storage blocked */ }
   const parsed = parseLedger(stored);
-  if (parsed && stored && isLegacyDemoStorage(stored)) {
+  const legacy = isLegacyDemoStorage(stored);
+  if (parsed && stored && legacy) {
     try {
-      /* Keep the untouched v1 value recoverable while the active key receives the safe migration. */
+      /* Never replace the active v1 value until its exact bytes are recoverable. */
       if (window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY) === null) window.localStorage.setItem(DEMO_LEGACY_BACKUP_KEY, stored);
+      if (window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY) !== stored) return { ledger: parsed, allowPersistence: false };
       window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(parsed));
-    } catch { /* storage blocked or full; the in-memory migration still preserves the records */ }
+      return { ledger: parsed, allowPersistence: true };
+    } catch {
+      /* Keep using the migrated view in memory, but fail closed: no later commit may overwrite v1. */
+      return { ledger: parsed, allowPersistence: false };
+    }
   }
-  return parsed ?? createLedger(demoAccountId(), Date.now());
+  return { ledger: parsed ?? createLedger(demoAccountId(), Date.now()), allowPersistence: !legacy };
 }
 
 export function DemoAccountProvider({ children }: { children: ReactNode }) {
@@ -44,6 +52,7 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
   const [ledger, setLedger] = useState<DemoLedger>(() => createLedger("", 0));
   const [ready, setReady] = useState(false);
   const ledgerRef = useRef(ledger);
+  const allowPersistenceRef = useRef(true);
   const marketsRef = useRef<readonly PricerMarket[]>(markets);
   marketsRef.current = markets;
 
@@ -51,10 +60,17 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
     if (next === ledgerRef.current) return;
     ledgerRef.current = next;
     setLedger(next);
+    if (!allowPersistenceRef.current) return;
     try { window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(next)); } catch { /* storage blocked or full */ }
   }, []);
 
-  useEffect(() => { ledgerRef.current = load(); setLedger(ledgerRef.current); setReady(true); }, []);
+  useEffect(() => {
+    const loaded = load();
+    ledgerRef.current = loaded.ledger;
+    allowPersistenceRef.current = loaded.allowPersistence;
+    setLedger(loaded.ledger);
+    setReady(true);
+  }, []);
 
   /* Local keeper pass: only mark-based liquidation. Settlement waits for an official outcome. */
   useEffect(() => {
