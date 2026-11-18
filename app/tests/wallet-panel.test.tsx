@@ -48,4 +48,16 @@ describe("WalletPanel availability", () => {
     expect(screen.getByRole("button", { name: "Add funds" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove local wallet" })).toBeInTheDocument();
   });
+
+  it("opens a deposit dialog with the wallet's address and a withdraw placeholder", () => {
+    healthState.value = { health: { chainConfigured: false } };
+    render(<DemoWalletProvider><WalletPanel /></DemoWalletProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Connect wallet" }));
+    fireEvent.click(screen.getByRole("button", { name: /Create a local wallet/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    expect(screen.getByRole("dialog", { name: "Deposit" })).toHaveTextContent(/Send USDC on Solana/);
+    expect(screen.queryByRole("button", { name: "Add funds" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    expect(screen.getByRole("dialog", { name: "Withdraw" })).toHaveTextContent(/aren't available yet/);
+  });
 });

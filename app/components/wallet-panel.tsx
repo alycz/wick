@@ -7,6 +7,7 @@ import { Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useHealth } from "@/hooks/use-markets";
+import { Seg } from "@/components/markets/controls";
 import { compactAddress } from "@/lib/format";
 
 const WalletMultiButton = dynamic(
@@ -91,6 +92,7 @@ export function WalletPanel() {
   const [open, setOpen] = useState(false);
   const [funding, setFunding] = useState(false);
   const [message, setMessage] = useState<string>();
+  const [transfer, setTransfer] = useState<"deposit" | "withdraw">();
   const walletPanelRef = useRef<HTMLDivElement>(null);
   const walletEntryRef = useRef<HTMLButtonElement>(null);
 
@@ -146,6 +148,10 @@ export function WalletPanel() {
         {!address && <button data-wallet-option className="chrome-wallet-option" type="button" onClick={wallet.create}>
           <strong>Create a local wallet</strong><span>Stored only in this browser</span>
         </button>}
+        {address && <div className="chrome-wallet-acts">
+          <button data-wallet-option className="chrome-wallet-dep" type="button" onClick={() => { setOpen(false); setTransfer("deposit"); }}>Deposit</button>
+          <button className="chrome-wallet-wd" type="button" onClick={() => { setOpen(false); setTransfer("withdraw"); }}>Withdraw</button>
+        </div>}
         {address && <div className="chrome-wallet-items">
           {fundingAvailable && <button data-wallet-option className="chrome-wallet-link" type="button" onClick={() => void fund()} disabled={funding}>{funding ? "Adding funds…" : "Add funds"}</button>}
           {wallet.publicKey && <button data-wallet-option className="chrome-wallet-link" type="button" onClick={wallet.exportKey}>Export key</button>}
@@ -153,6 +159,48 @@ export function WalletPanel() {
         {wallet.publicKey && <button data-wallet-option className="chrome-wallet-link chrome-wallet-link--danger" type="button" onClick={wallet.reset}>Remove local wallet</button>}
       </div>}
       {message && <p className="chrome-wallet-message" aria-live="polite">{message}</p>}
+      {transfer && address && <TransferDialog mode={transfer} onMode={setTransfer} onClose={() => { setTransfer(undefined); walletEntryRef.current?.focus(); }}
+        address={address} source={source} funding={funding} {...(fundingAvailable ? { onFund: () => void fund() } : {})} />}
     </div>
   );
+}
+
+/* Deposit and withdraw. Positions draw margin straight from the wallet's USDC, so a deposit is USDC sent to this address.
+   Withdrawals have no backend support yet, so that side is a placeholder. */
+function TransferDialog({ mode, onMode, onClose, address, source, funding, onFund }: {
+  mode: "deposit" | "withdraw"; onMode: (mode: "deposit" | "withdraw") => void; onClose: () => void;
+  address: string; source: string; funding: boolean; onFund?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const dialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    dialog.current?.querySelector<HTMLElement>("button")?.focus();
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
+  };
+  return <div className="dw-scrim" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="dw" role="dialog" aria-modal="true" aria-label={mode === "deposit" ? "Deposit" : "Withdraw"} ref={dialog}>
+      <div className="dw-hd">
+        <Seg className="wc-tabs" buttonClass="wc-tab" label="Action" value={mode} onChange={onMode}
+          options={[{ value: "deposit", label: "Deposit" }, { value: "withdraw", label: "Withdraw" }]} />
+        <button type="button" className="dw-x" aria-label="Close" onClick={onClose}>×</button>
+      </div>
+      {mode === "deposit" ? <>
+        <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Your wallet</small><b>{compactAddress(address)}</b></div><div className="r"><small>Network</small><b>Solana</b></div></div>
+        <p className="dw-txt">Send USDC on Solana to this address. Wick takes margin straight from this wallet when you open a position, so there&apos;s nothing else to move.</p>
+        <div className="dw-addr"><code>{address}</code><button type="button" className="dw-copy" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button></div>
+        {onFund && <button type="button" className="dw-go" disabled={funding} onClick={onFund}>{funding ? "Adding funds…" : "Add funds"}</button>}
+        <small className="dw-foot">{source}</small>
+      </> : <>
+        <div className="dw-fld"><label htmlFor="dw-amt">Amount</label><input id="dw-amt" inputMode="decimal" placeholder="0.00 USDC" disabled /></div>
+        <div className="dw-fld"><label htmlFor="dw-to">Send to</label><input id="dw-to" placeholder="Solana address" disabled /></div>
+        <p className="dw-txt">Withdrawals aren&apos;t available yet. This will open once the backend supports them.</p>
+        <button type="button" className="dw-go" disabled>Withdraw</button>
+      </>}
+    </div>
+  </div>;
 }
