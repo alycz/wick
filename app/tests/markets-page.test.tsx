@@ -20,6 +20,7 @@ vi.mock("@/hooks/use-markets", () => ({
 }));
 vi.mock("@/hooks/use-wick-actions", () => ({ useWickActions: () => state.actions }));
 vi.mock("@/components/wick-chart", () => ({ WickChart: () => <div data-testid="chart" /> }));
+vi.mock("@/lib/api", async (original) => ({ ...(await original<typeof import("@/lib/api")>()), liveBackend: () => true }));
 
 import { MarketsPage } from "@/components/markets/markets-page";
 

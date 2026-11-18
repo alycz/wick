@@ -1,5 +1,6 @@
 import { marketsResponseSchema, type IndexedEvent, type MarketHistoryPoint, type PositionView, type PricerMarket } from "@wick/shared";
 import { z } from "zod";
+import { simulate } from "@/lib/demo/market-sim";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
 
@@ -51,13 +52,17 @@ export interface ClaimView { address: string; claimIndex: string; owner: string;
 export interface LpPoint { blockTime: number; balanceE6: string; queueOwedE6: string; feesE6: string; signature: string }
 export type HealthView = z.infer<typeof healthSchema>;
 
-export function backendConfigured(): boolean { return BACKEND.length > 0; }
+/** Market data is always available: from the backend when NEXT_PUBLIC_BACKEND_URL is set, otherwise simulated. */
+export function backendConfigured(): boolean { return true; }
+/** True when data comes from a real backend; false when the app is showing simulated demo data. */
+export function liveBackend(): boolean { return BACKEND.length > 0; }
 export function backendUrl(path: string): string {
   if (!BACKEND) throw new Error("Backend is not configured. Set NEXT_PUBLIC_BACKEND_URL.");
   return `${BACKEND}${path}`;
 }
 
 async function json(path: string, signal?: AbortSignal): Promise<unknown> {
+  if (!liveBackend()) return simulate(path);
   const response = await fetch(backendUrl(path), { cache: "no-store", ...(signal ? { signal } : {}) });
   if (!response.ok) throw new Error(`Backend request failed (${response.status})`);
   return response.json();

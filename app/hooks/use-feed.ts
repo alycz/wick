@@ -2,7 +2,7 @@
 
 import type { IndexedEvent } from "@wick/shared";
 import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
-import { backendConfigured, backendUrl, getFeed, parseIndexedEvent } from "@/lib/api";
+import { backendConfigured, backendUrl, liveBackend, getFeed, parseIndexedEvent } from "@/lib/api";
 import { mergeIndexedEvents } from "@/lib/feed";
 
 export interface FeedState { events: IndexedEvent[]; connected: boolean; loading: boolean; error?: string }
@@ -40,6 +40,11 @@ function useFeedSource(): FeedState {
       return refreshInFlight;
     };
     void refresh();
+    if (!liveBackend()) {
+      setConnected(true);
+      const timer = window.setInterval(() => void refresh(), 15_000);
+      return () => { controller.abort(); window.clearInterval(timer); };
+    }
     source = new EventSource(backendUrl("/events/stream"));
     source.addEventListener("open", () => { setConnected(true); void refresh(); });
     source.addEventListener("error", () => {

@@ -2,7 +2,7 @@
 
 import { marketsResponseSchema, type MarketHistoryPoint, type PricerMarket } from "@wick/shared";
 import { useEffect, useMemo, useState } from "react";
-import { backendConfigured, backendUrl, getHealth, getHistory, getMarkets, type HealthView } from "@/lib/api";
+import { backendConfigured, backendUrl, liveBackend, getHealth, getHistory, getMarkets, type HealthView } from "@/lib/api";
 
 export function useMarkets(): { markets: PricerMarket[]; loading: boolean; error?: string } {
   const [markets, setMarkets] = useState<PricerMarket[]>([]);
@@ -21,6 +21,11 @@ export function useMarkets(): { markets: PricerMarket[]; loading: boolean; error
       .then((value) => { setMarkets(value); setError(undefined); })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    if (!liveBackend()) {
+      /* demo data: refresh the simulated snapshot every second */
+      const timer = window.setInterval(() => void getMarkets(controller.signal).then(setMarkets).catch(() => undefined), 1000);
+      return () => { controller.abort(); window.clearInterval(timer); };
+    }
     try {
       const url = new URL(backendUrl("/stream"));
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
