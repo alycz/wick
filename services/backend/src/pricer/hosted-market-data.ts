@@ -218,6 +218,13 @@ export class HostedMarketData {
     return rows.map((row) => ({ ...row, openTs: Number(row.openTs), expiryTs: Number(row.expiryTs) }));
   }
 
+  async hasUpDownContract(symbol: string, now: number): Promise<boolean> {
+    const rows = await this.sql`
+      SELECT 1 FROM wick_market_data.up_down_contracts WHERE symbol = ${symbol} AND expiry_ts >= ${now - MARKET_HISTORY_RETENTION_MS}
+    `;
+    return rows.length > 0;
+  }
+
   async prices(symbol: string, now: number): Promise<MarketHistoryPoint[]> {
     const rows = await this.sql<Array<Omit<Parameters<typeof historyPoint>[0], "ts"> & { ts: string }>>`
       SELECT prices.ts, coalesce(r.theo, prices.theo) AS theo, (r.theo IS NOT NULL) AS reconstructed, prices.spot, prices.gemini_mid AS "geminiMid",
@@ -228,7 +235,7 @@ export class HostedMarketData {
         AND prices.symbol = ${symbol} AND contracts.expiry_ts >= ${now - MARKET_HISTORY_RETENTION_MS}
       ORDER BY prices.bucket
     `;
-    return rows.map((row) => historyPoint({ ...row, ts: Number(row.ts) }));
+    return rows.map(({ ts, reconstructed, ...row }) => historyPoint({ ...row, ts: Number(ts), ...(reconstructed ? { reconstructed } : {}) }));
   }
 
   async expiredLadderContracts(now: number): Promise<ArchivedLadderContract[]> {

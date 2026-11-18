@@ -12,7 +12,7 @@ export interface BuildServerOptions {
   telemetryIntervalMs?: number;
   registerAdditionalRoutes?: (server: BackendFastifyInstance) => Promise<void> | void;
   healthSupplement?: () => Record<string, unknown>;
-  hostedMarketData?: Pick<HostedMarketData, "prices" | "expiredContracts" | "ladderPrices" | "expiredLadderContracts" | "lastSync">;
+  hostedMarketData?: Pick<HostedMarketData, "prices" | "hasUpDownContract" | "expiredContracts" | "ladderPrices" | "expiredLadderContracts" | "lastSync">;
   allowedOrigins?: string[];
   allowLocalhostOrigins?: boolean;
 }
@@ -114,6 +114,7 @@ export async function buildServer(options: BuildServerOptions): Promise<BackendF
           const points = new Map([...history, ...archived].map((point) => [point.ts, point]));
           return [...points.values()].sort((left, right) => left.ts - right.ts);
         }
+        if (!market && !history.length && await options.hostedMarketData.hasUpDownContract(symbol, now)) return [];
       } catch (error) {
         server.log.warn({ code: databaseErrorCode(error) }, "Could not read hosted contract prices");
         if (!history.length && !market) {
@@ -121,7 +122,7 @@ export async function buildServer(options: BuildServerOptions): Promise<BackendF
         }
       }
     }
-    if (!history.length && !market) {
+    if (!history.length && !market && !options.engine.store.upDownHistory?.hasContract(symbol, now)) {
       return reply.code(404).send({ code: "MARKET_NOT_FOUND", message: "Unknown Gemini market symbol" });
     }
     return history;

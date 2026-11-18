@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { GeminiClient } from "@wick/gemini";
 import { BINARY_TWAP_WINDOW_SECONDS, SECONDS_PER_YEAR, ladderTheo, upDownTheo } from "@wick/pricing";
-import { VolSurface } from "@wick/vol";
+import { VolSurface, type VolPoint } from "@wick/vol";
 import { decodeChain, MAX_CHAIN_AGE_MS, type Chain } from "./replay-chain.js";
 import { SHORT_REPLAY_START, SHORT_REPLAY_END } from "./up-down-history.js";
 
@@ -59,7 +59,7 @@ async function main() {
       WHERE captured_at >= ${new Date(SHORT_REPLAY_START - MAX_CHAIN_AGE_MS)} AND captured_at < ${end}
       ORDER BY captured_at
     `;
-    const shortRows: {symbol: string; bucket: string; option_captured_at: Date; theo: number}[] = [];
+    const shortRows: {symbol: string; bucket: string; option_captured_at: Date | null; option_sampled_at: Date | null; theo: number}[] = [];
     const datedRows: {symbol: string; sampled_at: Date; priced_at: Date; expiry_at: Date; option_captured_at: Date; strike: number; spot: number; theo: number}[] = [];
     let clock = 0;
     function visit<T>(samples: T[], time: (sample: T) => number, consume: (sample: T, surface: VolSurface, chainTime: Date) => void) {
@@ -75,13 +75,47 @@ async function main() {
         if (surface.pointCount()) consume(sample, surface, c.captured_at);
       }
     }
+    const shortTheo = (s: ShortPoint, volatility: number) => upDownTheo({
+      spot: s.spot, strike: s.strike, volatility,
+      timeYears: Math.max(1, (Number(s.expiry_ts) - Number(s.ts)) / 1_000) / SECONDS_PER_YEAR,
+      twapWindowSeconds: BINARY_TWAP_WINDOW_SECONDS,
+    }).probability;
     visit(short, (s) => Number(s.ts), (s, surface, captured) => {
-      const expiry = Number(s.expiry_ts);
-      const theo = upDownTheo({ spot: s.spot, strike: s.strike, volatility: surface.vol(expiry, s.strike),
-        timeYears: Math.max(1, (expiry - clock) / 1_000) / SECONDS_PER_YEAR,
-        twapWindowSeconds: BINARY_TWAP_WINDOW_SECONDS }).probability;
-      shortRows.push({ symbol: s.symbol, bucket: s.bucket, option_captured_at: captured, theo });
+      shortRows.push({ symbol: s.symbol, bucket: s.bucket, option_captured_at: captured, option_sampled_at: null,
+        theo: shortTheo(s, surface.vol(Number(s.expiry_ts), s.strike)) });
     });
+    // The first collector retained a strike subset before it began capturing whole chains.
+    // Its observation time is rounded down. Use only completed buckets, with real IV on both sides.
+    const firstComplete = chains[0]?.captured_at;
+    if (firstComplete) {
+      const earlyOptions = await sql<{sampled_at: Date; expires_at: Date; strike: number; iv: number; forward: number}[]>`
+        SELECT sampled_at, expires_at, strike, mark_iv_pct / 100 AS iv, underlying_price AS forward
+        FROM wick_market_data.option_chain_snapshots
+        WHERE sampled_at >= ${new Date(SHORT_REPLAY_START - 60_000)} AND sampled_at < ${firstComplete}
+          AND mark_iv_pct > 0 AND mark_iv_pct <= 500 AND underlying_price > 0
+      `;
+      const buckets = new Map<number, VolPoint[]>();
+      for (const option of earlyOptions) {
+        const ts = option.sampled_at.getTime();
+        const points = buckets.get(ts) ?? [];
+        points.push({ ts, expiryMs: option.expires_at.getTime(), strike: option.strike, vol: option.iv, forward: option.forward });
+        buckets.set(ts, points);
+      }
+      for (const sample of short) {
+        const ts = Number(sample.ts);
+        if (ts >= firstComplete.getTime()) break;
+        const bucket = Math.floor(ts / 60_000) * 60_000 - 60_000;
+        const points = buckets.get(bucket) ?? [];
+        const nearest = Math.min(...points.filter((p) => p.expiryMs > ts).map((p) => p.expiryMs));
+        const smile = points.filter((p) => p.expiryMs === nearest);
+        if (nearest < Number(sample.expiry_ts) || !smile.some(p => p.strike <= sample.strike)
+          || !smile.some(p => p.strike >= sample.strike)) continue;
+        const surface = new VolSurface(() => ts);
+        surface.replace(smile);
+        shortRows.push({ symbol: sample.symbol, bucket: sample.bucket, option_captured_at: null, option_sampled_at: new Date(bucket),
+          theo: shortTheo(sample, surface.vol(nearest, sample.strike)) });
+      }
+    }
     visit(minutes, (m) => m.priced_at.getTime(), (m, surface, captured) => {
       const recorded = new Set(m.symbols);
       for (const c of contracts) {

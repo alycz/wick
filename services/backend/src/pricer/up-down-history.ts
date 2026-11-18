@@ -46,6 +46,7 @@ export function historyPoint({ geminiMid, geminiBid, geminiAsk, ...point }: Pric
 export class UpDownHistory {
   private readonly write;
   private readonly expired;
+  private readonly lookup;
   private readonly samples;
   private readonly prune;
   private lastBucket: number | undefined;
@@ -79,6 +80,7 @@ export class UpDownHistory {
       FROM up_down_contracts WHERE expiry_ts BETWEEN ? AND ?
       ORDER BY expiry_ts DESC, symbol LIMIT 100
     `);
+    this.lookup = database.prepare<[string, number]>("SELECT 1 FROM up_down_contracts WHERE symbol = ? AND expiry_ts >= ?");
     this.samples = database.prepare<[string, number], PriceRow>(`
       SELECT ts, theo, spot, gemini_mid AS geminiMid, gemini_bid AS geminiBid, gemini_ask AS geminiAsk
       FROM up_down_prices JOIN up_down_contracts USING (symbol)
@@ -100,6 +102,10 @@ export class UpDownHistory {
 
   expiredContracts(now = Date.now()): ArchivedUpDownContract[] {
     return this.expired.all(now - MARKET_HISTORY_RETENTION_MS, now);
+  }
+
+  hasContract(symbol: string, now = Date.now()): boolean {
+    return this.lookup.get(symbol, now - MARKET_HISTORY_RETENTION_MS) !== undefined;
   }
 
   prices(symbol: string, now = Date.now()): MarketHistoryPoint[] {

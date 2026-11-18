@@ -3,7 +3,9 @@ BEGIN;
 CREATE TABLE wick_market_data.up_down_theo_replays (
   symbol text NOT NULL,
   bucket bigint NOT NULL,
-  option_captured_at timestamptz NOT NULL,
+  option_captured_at timestamptz,
+  option_sampled_at timestamptz,
+  CONSTRAINT up_down_replay_source CHECK (num_nonnulls(option_captured_at, option_sampled_at) = 1),
   theo double precision NOT NULL CHECK (theo BETWEEN 0 AND 1),
   PRIMARY KEY (symbol, bucket),
   FOREIGN KEY (symbol, bucket) REFERENCES wick_market_data.up_down_prices (symbol, bucket) ON DELETE CASCADE

@@ -80,7 +80,7 @@ describe("shared Fastify server", () => {
     let readFrame!: (frame: string) => void;
     const frame = new Promise<string>((resolve) => { readFrame = resolve; });
     const stream = await server.injectWS("/stream", {}, {
-      onInit(socket) { socket.once("message", (data) => readFrame(data.toString())); },
+      onInit(socket) { socket.once("message", (data: Buffer) => readFrame(data.toString())); },
     });
     try {
       expect(JSON.parse(await frame)).toMatchObject({ type: "markets", ts: now });
@@ -115,6 +115,7 @@ describe("shared Fastify server", () => {
       hostedMarketData: {
         expiredContracts: async () => [market],
         prices: async (symbol) => symbol === market.symbol ? history : [],
+        hasUpDownContract: async (symbol) => symbol === "KNOWN-NO-RECONSTRUCTION",
         expiredLadderContracts: async () => [ladder],
         ladderPrices: async (symbol) => symbol === ladder.symbol ? ladderHistory : [],
         lastSync: () => now,
@@ -123,6 +124,9 @@ describe("shared Fastify server", () => {
     try {
       expect((await server.inject("/markets/up-down-history")).json()).toEqual([market]);
       expect((await server.inject(`/markets/${market.symbol}/history`)).json()).toEqual(history);
+      const empty = await server.inject("/markets/KNOWN-NO-RECONSTRUCTION/history");
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json()).toEqual([]);
       expect((await server.inject("/markets/ladder-history")).json()).toEqual([ladder]);
       expect((await server.inject(`/markets/${ladder.symbol}/history`)).json()).toEqual(ladderHistory);
     } finally { await server.close(); }
