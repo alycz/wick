@@ -38,5 +38,20 @@ jobs:
       - run: solana-keygen new --no-bip39-passphrase --silent --force --outfile ~/.config/solana/id.json
       - run: solana-keygen new --no-bip39-passphrase --silent --force --outfile target/deploy/wick-keypair.json
       - run: anchor keys sync
+      # anchor keys sync (0.31.1) rewrites only the first [programs.*] section of Anchor.toml,
+      # leaving [programs.localnet] on the old id, so the validator loads the program at an
+      # address that doesn't match its declare_id. Point every cluster at the CI keypair.
+      - name: Point all Anchor.toml clusters at the CI program id
+        run: |
+          PROGRAM_ID=$(solana address -k target/deploy/wick-keypair.json)
+          sed -i -E "s/^wick = \".*\"/wick = \"$PROGRAM_ID\"/" Anchor.toml
+          grep -n '^wick = ' Anchor.toml
+          grep -n 'declare_id!' programs/wick/src/lib.rs
       - run: anchor build
+      - name: Check program ids match
+        run: |
+          PROGRAM_ID=$(solana address -k target/deploy/wick-keypair.json)
+          test "$(jq -r .address target/idl/wick.json)" = "$PROGRAM_ID"
+          test "$(grep -c "^wick = \"$PROGRAM_ID\"" Anchor.toml)" = "$(grep -c '^wick = ' Anchor.toml)"
+          grep -q "declare_id!(\"$PROGRAM_ID\")" programs/wick/src/lib.rs
       - run: anchor test --skip-build
