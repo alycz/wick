@@ -1,6 +1,6 @@
 // Generated from target/idl/wick.json by scripts/sync-idl.ts.
 export const WICK_IDL = {
-  "address": "HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN",
+  "address": "GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8",
   "metadata": {
     "name": "wick",
     "version": "0.1.0",
