@@ -17,7 +17,7 @@ const open = (ledger: DemoLedger, overrides: Partial<Parameters<typeof openPosit
   openPosition(ledger, market(), { side: "yes", marginE6: usdcE6(100), leverage: 2, maxEntryE6: 990_000, ...overrides }, NOW);
 
 describe("demo ledger", () => {
-  it("starts with a clean local-only account and rejects the old fabricated-history ledger", () => {
+  it("starts new users with a clean local-only account and rejects unknown ledger versions", () => {
     const ledger = fresh();
     expect(BigInt(ledger.usdcE6)).toBe(DEMO_START_USDC_E6);
     expect(ledger.owner).toMatch(/^demo-account-/);
@@ -26,8 +26,42 @@ describe("demo ledger", () => {
     expect(ledger.claims).toEqual([]);
     expect(ledger.activity).toEqual([]);
     expect(parseLedger(JSON.stringify(ledger))).toEqual(ledger);
-    expect(parseLedger(JSON.stringify({ ...ledger, version: 1 }))).toBeUndefined();
+    expect(parseLedger(JSON.stringify({ ...ledger, version: 3 }))).toBeUndefined();
     expect(parseLedger("{bad")).toBeUndefined();
+  });
+
+  it("migrates version-1 records without loss while marking them local and unverified", () => {
+    const owner = "DemoOwner1111111111111111111111111111111111";
+    const legacyPosition = {
+      address: "LegacyPosition1111111111111111111111111111111", owner, market: "BTC-DEMO-95000", side: "yes", marginE6: "250000000",
+      leverage: 3, entryE6: 580000, contractsE6: "1293103448", liqMarkE6: 290000, status: "settled", realizedPnlE6: "10000000",
+      paidE6: "260000000", openedTs: NOW - 7200, closedTs: NOW - 3600,
+      snapshot: { symbol: "BTC-DEMO-95000", kind: "ladder", duration: "1d", title: "Legacy example", strike: 95000, expiryTs: NOW - 3600 },
+    };
+    const legacy = {
+      version: 1, owner, createdTs: NOW - 10_000, usdcE6: "9876000000", wickedE6: "1250000000", stakedE6: "500000000",
+      rewardsE6: "400000", rewardsTs: NOW - 5000, nextClaimIndex: 2, seeded: true,
+      positions: [legacyPosition],
+      claims: [{ address: "LegacyClaim111111111111111111111111111111111", claimIndex: "1", owner, amountE6: "64180000", paidE6: "21400000", status: "queued" }],
+      activity: [{ signature: "4".repeat(88), ts: NOW - 3600, kind: "settle", amountE6: "260000000", detail: "BTC-DEMO-95000" }],
+    };
+    const migrated = parseLedger(JSON.stringify(legacy), NOW)!;
+
+    expect(migrated.version).toBe(2);
+    expect(migrated.usdcE6).toBe(legacy.usdcE6);
+    expect(migrated.wickedE6).toBe(legacy.wickedE6);
+    expect(migrated.stakedE6).toBe(legacy.stakedE6);
+    expect(migrated.positions).toHaveLength(1);
+    expect(migrated.positions[0]).toMatchObject({ market: legacyPosition.market, paidE6: legacyPosition.paidE6, legacyUnverified: true });
+    expect(migrated.positions[0]!.address).toMatch(/^demo-position-legacy-/);
+    expect(migrated.claims[0]).toMatchObject({ amountE6: "64180000", legacyUnverified: true });
+    expect(migrated.claims[0]!.address).toMatch(/^demo-claim-legacy-/);
+    expect(migrated.activity[0]).toMatchObject({ kind: "settle", amountE6: "260000000", legacyUnverified: true });
+    expect(migrated.activity[0]!.receiptId).toMatch(/^demo-receipt-legacy-/);
+    expect(migrated.activity[0]!.receiptId).not.toMatch(/^[1-9A-HJ-NP-Za-km-z]{80,90}$/);
+    expect(migrated.rewardsE6).toBe("0");
+    expect(migrated.legacyMigration).toEqual({ sourceVersion: 1, migratedTs: NOW, seededExamples: true, legacySyntheticRewardsE6: "400000" });
+    expect(parseLedger(JSON.stringify(migrated), NOW + 1)).toEqual(migrated);
   });
 
   it("uses unmistakably local receipts rather than Solana-shaped signatures", () => {
@@ -93,7 +127,7 @@ describe("demo ledger", () => {
     expect(() => unstake(staked, usdcE6(2000), NOW)).toThrow(/more than you have staked/);
     const day = NOW + 86_400_000;
     expect(pendingRewardsE6(staked)).toBe(0n);
-    expect(() => claimRewards(staked, day)).toThrow(/does not fabricate staking rewards/);
+    expect(() => claimRewards({ ...staked, rewardsE6: "400000" }, day)).toThrow(/does not calculate or pay staking rewards/);
   });
 
   it("moves money in and out with the same checks as a transfer", () => {

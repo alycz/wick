@@ -26,7 +26,7 @@ Expected final duration is between `150` and `180` seconds. The recorder itself 
 
 The storyboard below was written before the November 18 redesign. Labels such as **Try it now**, the right activity rail and the devnet footer describe that earlier UI, not verified current controls. Before recording, reconcile `scripts/record-demo.ts` with the current routes, accessible names and evidence surfaces, and verify the real browser flow. Do not remove transaction correlation, real Stream events, settlement, funding or timing gates merely because the redesigned layout changed. A CI or frontend deployment success does not satisfy these recording gates.
 
-The browser-only practice account is not the devnet demo path for this recording. Its `demo-receipt-*` values, local balance changes, positions and staking actions must never be used as transaction, explorer, settlement, pool-solvency or QuickNode Stream evidence. The recorder must use a connected/local devnet wallet and retain the existing chain/RPC/Stream correlation gates.
+The browser-only practice account is not the devnet demo path for this recording. Its `demo-receipt-*` values, local balance changes, positions and simulated staking balances must never be used as transaction, explorer, settlement, reward, pool-solvency or QuickNode Stream evidence. Migrated version-1 records are explicitly simulated/unverified and are unsuitable as demo evidence. The recorder must use a connected/local devnet wallet and retain the existing chain/RPC/Stream correlation gates.
 
 ## Planned storyboard (UI labels require revalidation)
 

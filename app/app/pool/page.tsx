@@ -78,7 +78,9 @@ export default function PoolPage() {
 
   return <div className="pl-page">
     <header className="pf-head">
-      <div><h1>Pool</h1><p>Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear.</p></div>
+      <div><h1>Pool</h1><p>{demoMode
+        ? "Browser-only practice balances are simulated. They do not represent pool liquidity, staking yield, or claimable rewards."
+        : "Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear."}</p></div>
     </header>
     {(error || signature || (backendReady && !actions.client && !demoMode)) && <div className="pf-alerts">
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
@@ -120,15 +122,15 @@ export default function PoolPage() {
       <aside className="ticket"><div className="card pl-card" aria-label="Stake $WICKED">
         <Seg className="pl-tabs" label="Staking action" value={tab} onChange={setTab}
           options={[{ value: "stake", label: "Stake" }, { value: "unstake", label: "Unstake" }, { value: "claim", label: "Claim" }]} />
-        {demoBalances && <div className="pl-bal" aria-label="Your $WICKED">
-          <div><span>In wallet</span><b>{wicked(demoBalances.wallet)} $WICKED</b></div>
-          <div><span>Staked</span><b>{wicked(demoBalances.staked)} $WICKED</b></div>
-          <div><span>Rewards</span><b className={demoBalances.rewards > 0 ? "up" : ""}>{usd(demoBalances.rewards)}</b></div>
+        {demoBalances && <div className="pl-bal" aria-label="Simulated demo balances">
+          <div><span>Simulated wallet</span><b>{wicked(demoBalances.wallet)} $WICKED</b></div>
+          <div><span>Simulated stake</span><b>{wicked(demoBalances.staked)} $WICKED</b></div>
+          <div><span>Simulated rewards</span><b className={demoBalances.rewards > 0 ? "up" : ""}>{usd(demoBalances.rewards)}</b></div>
         </div>}
         {tab === "claim" ? <>
-          <div className="pf-val"><span>Rewards</span><b>$WICKED fee share</b>
-            <span>{metrics && metrics.queue > 0 ? `Rewards resume once the ${usd(metrics.queue)} payout queue is cleared.` : "The payout queue is clear, so rewards are flowing."}</span></div>
-          <button type="button" className="cta" disabled={disabled} onClick={() => void action("claim", () => actions.client!.claimRewards())}>{busy === "claim" ? "Confirming…" : "Claim rewards"}</button>
+          <div className="pf-val"><span>{demoMode ? "Simulated rewards" : "Rewards"}</span><b>{demoMode ? "Unavailable in browser practice" : "$WICKED fee share"}</b>
+            <span>{demoMode ? "The practice ledger does not calculate, accrue, or pay staking rewards." : metrics && metrics.queue > 0 ? `Rewards resume once the ${usd(metrics.queue)} payout queue is cleared.` : "The payout queue is clear, so rewards are flowing."}</span></div>
+          <button type="button" className="cta" disabled={disabled || demoMode} onClick={() => void action("claim", () => actions.client!.claimRewards())}>{busy === "claim" ? "Confirming…" : demoMode ? "Rewards unavailable" : "Claim rewards"}</button>
         </> : <>
           <div className="amt">
             <label htmlFor="pl-amt">Amount</label>

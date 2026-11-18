@@ -6,6 +6,7 @@ import type { MarketKind, PositionSide, PricerMarket } from "@wick/shared";
    settlement outcomes, pool solvency, historical activity, or staking rewards. */
 
 export const DEMO_STORAGE_KEY = "wick-demo-account-v1";
+export const DEMO_LEGACY_BACKUP_KEY = "wick-demo-account-v1-legacy-backup";
 export const DEMO_START_USDC_E6 = 10_000_000_000n;
 export const HALF_SPREAD_E6 = 5_000;
 export const PROFIT_FEE_BPS = 200;
@@ -32,12 +33,21 @@ export interface DemoPosition {
   openedTs: number;
   closedTs?: number;
   snapshot: DemoMarketSnapshot;
+  legacyUnverified?: boolean;
 }
 
-export interface DemoClaim { address: string; claimIndex: string; owner: string; amountE6: string; paidE6: string; status: "queued" | "paid" }
+export interface DemoClaim { address: string; claimIndex: string; owner: string; amountE6: string; paidE6: string; status: "queued" | "paid"; legacyUnverified?: boolean }
 
 export type DemoActivityKind = "open" | "close" | "liquidate" | "settle" | "claim" | "deposit" | "withdraw" | "faucet" | "stake" | "unstake" | "rewards";
-export interface DemoActivity { receiptId: string; ts: number; kind: DemoActivityKind; amountE6: string; detail?: string }
+export interface DemoActivity { receiptId: string; ts: number; kind: DemoActivityKind; amountE6: string; detail?: string; legacyUnverified?: boolean }
+
+export interface DemoLegacyMigration {
+  sourceVersion: 1;
+  migratedTs: number;
+  seededExamples: boolean;
+  /* Preserved for disclosure/recovery only. It is never added to the active reward balance. */
+  legacySyntheticRewardsE6: string;
+}
 
 export interface DemoLedger {
   version: 2;
@@ -51,6 +61,7 @@ export interface DemoLedger {
   positions: DemoPosition[];
   claims: DemoClaim[];
   activity: DemoActivity[];
+  legacyMigration?: DemoLegacyMigration;
 }
 
 export class DemoError extends Error {}
@@ -81,12 +92,71 @@ export function createLedger(owner: string, now: number): DemoLedger {
   };
 }
 
-export function parseLedger(value: string | null): DemoLedger | undefined {
+interface LegacyDemoLedger extends Omit<DemoLedger, "version" | "positions" | "claims" | "activity" | "legacyMigration"> {
+  version: 1;
+  seeded?: boolean;
+  nextClaimIndex?: number;
+  positions: Array<Omit<DemoPosition, "legacyUnverified">>;
+  claims: Array<Omit<DemoClaim, "legacyUnverified">>;
+  activity: Array<Omit<DemoActivity, "receiptId" | "legacyUnverified"> & { signature?: string }>;
+}
+
+const legacyId = (kind: "position" | "claim" | "receipt", ts: number, index: number) => `demo-${kind}-legacy-${ts.toString(36)}-${index.toString(36)}`;
+
+function migrateLegacyLedger(legacy: LegacyDemoLedger, now: number): DemoLedger {
+  const createdTs = Number.isFinite(legacy.createdTs) ? legacy.createdTs : now;
+  return {
+    version: 2,
+    owner: legacy.owner,
+    createdTs,
+    usdcE6: legacy.usdcE6,
+    wickedE6: legacy.wickedE6,
+    stakedE6: legacy.stakedE6,
+    /* Version 1 accrued time-based synthetic rewards. Preserve the value in migration metadata,
+       but never expose it as an active or claimable reward. */
+    rewardsE6: "0",
+    rewardsTs: now,
+    positions: legacy.positions.map((position, index) => ({
+      ...position,
+      address: legacyId("position", position.openedTs || createdTs, index),
+      legacyUnverified: true,
+    })),
+    claims: legacy.claims.map((claim, index) => ({
+      ...claim,
+      address: legacyId("claim", createdTs, index),
+      legacyUnverified: true,
+    })),
+    activity: legacy.activity.map((activity, index) => ({
+      ts: activity.ts,
+      kind: activity.kind,
+      amountE6: activity.amountE6,
+      ...(activity.detail ? { detail: activity.detail } : {}),
+      receiptId: legacyId("receipt", activity.ts || createdTs, index),
+      legacyUnverified: true,
+    })),
+    legacyMigration: {
+      sourceVersion: 1,
+      migratedTs: now,
+      seededExamples: legacy.seeded === true,
+      legacySyntheticRewardsE6: legacy.rewardsE6,
+    },
+  };
+}
+
+export function isLegacyDemoStorage(value: string | null): boolean {
+  if (!value) return false;
+  try { return (JSON.parse(value) as { version?: unknown }).version === 1; }
+  catch { return false; }
+}
+
+export function parseLedger(value: string | null, now: number = Date.now()): DemoLedger | undefined {
   if (!value) return undefined;
   try {
-    const parsed = JSON.parse(value) as Partial<DemoLedger>;
-    if (parsed.version !== 2 || typeof parsed.owner !== "string" || typeof parsed.usdcE6 !== "string" || !Array.isArray(parsed.positions)) return undefined;
-    return parsed as DemoLedger;
+    const parsed = JSON.parse(value) as { version?: unknown; owner?: unknown; usdcE6?: unknown; positions?: unknown; claims?: unknown; activity?: unknown };
+    if (typeof parsed.owner !== "string" || typeof parsed.usdcE6 !== "string" || !Array.isArray(parsed.positions) || !Array.isArray(parsed.claims) || !Array.isArray(parsed.activity)) return undefined;
+    if (parsed.version === 1) return migrateLegacyLedger(parsed as unknown as LegacyDemoLedger, now);
+    if (parsed.version !== 2) return undefined;
+    return parsed as unknown as DemoLedger;
   } catch { return undefined; }
 }
 
@@ -170,7 +240,8 @@ export function claimQueue(ledger: DemoLedger, address: string, now: number) {
   }, "claim", remaining, now, `#${claim.claimIndex}`);
 }
 
-export function pendingRewardsE6(ledger: DemoLedger): bigint { return big(ledger.rewardsE6); }
+/* Browser practice never calculates or accrues staking rewards. */
+export function pendingRewardsE6(ledger: DemoLedger): bigint { void ledger; return 0n; }
 
 export function stake(ledger: DemoLedger, amountE6: bigint, now: number) {
   if (amountE6 <= 0n) throw new DemoError("Stake amount must be positive.");
@@ -184,10 +255,9 @@ export function unstake(ledger: DemoLedger, amountE6: bigint, now: number) {
   return log({ ...ledger, rewardsTs: now, wickedE6: str(big(ledger.wickedE6) + amountE6), stakedE6: str(big(ledger.stakedE6) - amountE6) }, "unstake", amountE6, now);
 }
 
-export function claimRewards(ledger: DemoLedger, now: number) {
-  const rewards = big(ledger.rewardsE6);
-  if (rewards <= 0n) throw new DemoError("The browser demo does not fabricate staking rewards. Connect a configured devnet wallet for chain-backed rewards.");
-  return log({ ...ledger, rewardsTs: now, usdcE6: str(big(ledger.usdcE6) + rewards), rewardsE6: "0" }, "rewards", rewards, now);
+export function claimRewards(ledger: DemoLedger, now: number): never {
+  void ledger; void now;
+  throw new DemoError("The browser demo does not calculate or pay staking rewards. Connect a configured devnet wallet for chain-backed rewards.");
 }
 
 export function deposit(ledger: DemoLedger, amountE6: bigint, now: number, kind: "deposit" | "faucet" = "deposit") {

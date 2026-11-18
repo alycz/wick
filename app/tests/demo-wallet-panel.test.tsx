@@ -12,6 +12,7 @@ vi.mock("@/hooks/use-markets", () => ({ useHealth: () => ({}), useMarkets: () =>
 
 import { DemoAccountProvider } from "@/components/demo-account";
 import { DemoWalletProvider, WalletPanel } from "@/components/wallet-panel";
+import { DEMO_LEGACY_BACKUP_KEY, DEMO_STORAGE_KEY } from "@/lib/demo/ledger";
 
 const app = () => render(<DemoWalletProvider><DemoAccountProvider><WalletPanel /></DemoAccountProvider></DemoWalletProvider>);
 
@@ -23,6 +24,22 @@ describe("WalletPanel demo account", () => {
     app();
     expect(await screen.findByRole("button", { name: "Demo account, $10,000.00" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect wallet" })).toBeInTheDocument();
+  });
+
+  it("backs up and migrates version-1 browser data instead of discarding it", async () => {
+    const legacy = JSON.stringify({
+      version: 1, owner: "LegacyOwner", createdTs: 1000, usdcE6: "9123000000", wickedE6: "1250000000", stakedE6: "0",
+      rewardsE6: "400000", rewardsTs: 1000, nextClaimIndex: 1, seeded: true, positions: [], claims: [], activity: [],
+    });
+    window.localStorage.setItem(DEMO_STORAGE_KEY, legacy);
+
+    app();
+
+    expect(await screen.findByRole("button", { name: "Demo account, $9,123.00" })).toBeInTheDocument();
+    expect(window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY)).toBe(legacy);
+    const migrated = JSON.parse(window.localStorage.getItem(DEMO_STORAGE_KEY)!);
+    expect(migrated).toMatchObject({ version: 2, usdcE6: "9123000000", rewardsE6: "0" });
+    expect(migrated.legacyMigration).toMatchObject({ sourceVersion: 1, legacySyntheticRewardsE6: "400000" });
   });
 
   it("deposits into and withdraws from the demo balance", async () => {

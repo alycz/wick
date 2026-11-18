@@ -5,7 +5,7 @@ import type { PricerMarket } from "@wick/shared";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMarkets } from "@/hooks/use-markets";
 import { DemoClient } from "@/lib/demo/client";
-import { createLedger, demoAccountId, DEMO_STORAGE_KEY, parseLedger, reconcile, type DemoLedger } from "@/lib/demo/ledger";
+import { createLedger, demoAccountId, DEMO_LEGACY_BACKUP_KEY, DEMO_STORAGE_KEY, isLegacyDemoStorage, parseLedger, reconcile, type DemoLedger } from "@/lib/demo/ledger";
 import { useDemoWallet } from "./wallet-panel";
 
 /* Visitors without a wallet get a demo account: real markets, simulated balance and positions.
@@ -26,7 +26,15 @@ const DemoAccountContext = createContext<DemoAccountValue | undefined>(undefined
 function load(): DemoLedger {
   let stored: string | null = null;
   try { stored = window.localStorage.getItem(DEMO_STORAGE_KEY); } catch { /* storage blocked */ }
-  return parseLedger(stored) ?? createLedger(demoAccountId(), Date.now());
+  const parsed = parseLedger(stored);
+  if (parsed && stored && isLegacyDemoStorage(stored)) {
+    try {
+      /* Keep the untouched v1 value recoverable while the active key receives the safe migration. */
+      if (window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY) === null) window.localStorage.setItem(DEMO_LEGACY_BACKUP_KEY, stored);
+      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(parsed));
+    } catch { /* storage blocked or full; the in-memory migration still preserves the records */ }
+  }
+  return parsed ?? createLedger(demoAccountId(), Date.now());
 }
 
 export function DemoAccountProvider({ children }: { children: ReactNode }) {
