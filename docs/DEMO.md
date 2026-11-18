@@ -2,7 +2,7 @@
 
 ## Current status
 
-No demo MP4 exists. Wick has no verified public deployment, so generating footage now would misrepresent a local/read-only interface as a working product. `scripts/record-demo.ts` is deliberately fail-closed: it runs real devnet bots and `demo-check`, records a configured deployment only, waits for real open/liquidation/settlement events, and emits `demo/wick-demo.mp4` only after Playwright and ffmpeg succeed.
+As of November 18, the frontend is deployed at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) and returned HTTP 200. No verified final demo MP4 or end-to-end public devnet trading lifecycle is recorded here. Frontend availability must not be represented as verified program/backend/faucet/QuickNode execution. `scripts/record-demo.ts` is deliberately fail-closed: it runs real devnet bots and `demo-check`, records a configured deployment only, waits for real open/liquidation/settlement events, and emits `demo/wick-demo.mp4` only after Playwright and ffmpeg succeed.
 
 Target runtime is **2–3 minutes**. Every shot below must use the final public deployment and real devnet/test assets. Do not splice in fixture data, edit browser state, seed fake feed entries, or alter playback speed.
 
@@ -22,7 +22,11 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 
 Expected final duration is between `150` and `180` seconds. The recorder itself runs the real bots and `demo-check` again before opening Chromium. It captures the browser's exact `sendTransaction` signature, reads that transaction's market and position accounts back from devnet RPC, and accepts only Stream events correlated to that evidence. If any prerequisite, transaction, alert, live cap, correlation, liquidation, settlement, timeline, video, caption or encoding step fails, stop and fix the system; do not make an alternate simulated video.
 
-## Exact storyboard
+## Historical UI labels and current acceptance boundary
+
+The storyboard below was written before the November 18 redesign. Labels such as **Try it now**, the right activity rail and the devnet footer describe that earlier UI, not verified current controls. Before recording, reconcile `scripts/record-demo.ts` with the current routes, accessible names and evidence surfaces, and verify the real browser flow. Do not remove transaction correlation, real Stream events, settlement, funding or timing gates merely because the redesigned layout changed. A CI or frontend deployment success does not satisfy these recording gates.
+
+## Planned storyboard (UI labels require revalidation)
 
 | Time | Shot and action | Evidence visible |
 |---:|---|---|
