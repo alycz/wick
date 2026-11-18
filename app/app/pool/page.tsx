@@ -8,6 +8,7 @@ import { useFeed } from "@/hooks/use-feed";
 import { useWickActions } from "@/hooks/use-wick-actions";
 import { backendConfigured, getLpHistory, type LpPoint } from "@/lib/api";
 import { pendingRewardsE6 } from "@/lib/demo/ledger";
+import { GUEST_POOL_ACTIVITY, GUEST_POOL_HISTORY } from "@/lib/demo/preview";
 import { latestIndexerEventKey } from "@/lib/feed";
 import { compactAddress, e6 } from "@/lib/format";
 import { timeLabel, usd } from "@/lib/markets";
@@ -40,6 +41,10 @@ export default function PoolPage() {
   const refreshKey = latestIndexerEventKey(feed.events, POOL_EVENTS);
   useEffect(() => {
     const controller = new AbortController();
+    if (demoMode) {
+      setError(undefined);
+      return () => controller.abort();
+    }
     if (!backendReady) {
       setError("Pool data can't load because the backend isn't configured.");
       return () => controller.abort();
@@ -48,16 +53,17 @@ export default function PoolPage() {
       .then((nextHistory) => { setHistory(nextHistory); setError(undefined); })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => controller.abort();
-  }, [backendReady, refreshKey, refreshNonce]);
+  }, [demoMode, backendReady, refreshKey, refreshNonce]);
 
-  const latest = history.at(-1);
+  const displayHistory: readonly LpPoint[] = demoMode ? GUEST_POOL_HISTORY : history;
+  const latest = displayHistory.at(-1);
   const metrics = useMemo(() => {
     if (!latest) return undefined;
     const balance = e6(latest.balanceE6);
-    const dayAgo = [...history].reverse().find((point) => point.blockTime <= latest.blockTime - 86_400);
+    const dayAgo = [...displayHistory].reverse().find((point) => point.blockTime <= latest.blockTime - 86_400);
     return { balance, queue: e6(latest.queueOwedE6), fees: e6(latest.feesE6), change: dayAgo ? balance - e6(dayAgo.balanceE6) : undefined };
-  }, [history, latest]);
-  const series = useMemo(() => history.map((point) => ({ time: point.blockTime, value: e6(point.balanceE6) })), [history]);
+  }, [displayHistory, latest]);
+  const series = useMemo(() => displayHistory.map((point) => ({ time: point.blockTime, value: e6(point.balanceE6) })), [displayHistory]);
   const span = series.length > 1 ? series[series.length - 1]!.time - series[0]!.time : 0;
   const poolEvents = feed.events.filter((event) => EVENT_NAMES[event.name]).slice(0, 8);
 
@@ -79,9 +85,12 @@ export default function PoolPage() {
   return <div className="pl-page">
     <header className="pf-head">
       <div><h1>Pool</h1><p>{demoMode
-        ? "Browser-only practice balances are simulated. They do not represent pool liquidity, staking yield, or claimable rewards."
+        ? "Browser-only pool preview. Example liquidity and activity are simulated; local practice balances remain separate."
         : "Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear."}</p></div>
     </header>
+    {demoMode && <p className="pf-note demo-provenance" role="status">
+      <b>Example demo · simulated locally.</b> Pool totals, the chart, and activity below are illustrative—not Solana state, QuickNode events, provider data, yield, or claimable funds. Connect a wallet to leave this preview.
+    </p>}
     {(error || signature || (backendReady && !actions.client && !demoMode)) && <div className="pf-alerts">
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
       {backendReady && !actions.client && !demoMode && <p className="pf-note">{actions.error ?? "Staking is not configured."}</p>}
@@ -95,7 +104,7 @@ export default function PoolPage() {
         <small className={metrics?.change === undefined ? "" : metrics.change >= 0 ? "up" : "down"}>{metrics?.change === undefined ? "Available to pay winners" : `${metrics.change >= 0 ? "+" : "−"}${usd(Math.abs(metrics.change))} in 24h`}</small></div>
       <div><span>Payout queue</span><b>{metrics ? usd(metrics.queue) : "—"}</b><small>{metrics && metrics.queue > 0 ? "Rewards paused until it clears" : "Clear"}</small></div>
       <div><span>Fees earned</span><b>{metrics ? usd(metrics.fees) : "—"}</b><small>All time</small></div>
-      <div><span>Snapshots</span><b>{history.length}</b><small>From on-chain events</small></div>
+      <div><span>Snapshots</span><b>{displayHistory.length}</b><small>{demoMode ? "Simulated examples" : "From on-chain events"}</small></div>
     </section>
 
     <div className="pl-grid">
@@ -111,7 +120,9 @@ export default function PoolPage() {
         </div>
         <section aria-label="Recent pool activity">
           <h2 className="pl-h2">Recent pool activity</h2>
-          {poolEvents.length === 0 ? <p className="pf-empty">No pool events yet.</p> : poolEvents.map((event) => {
+          {demoMode ? GUEST_POOL_ACTIVITY.map((event) => <div className="ev" key={event.id}>
+            <i style={{ background: "var(--wick)" }} /><b>{event.name}</b><span className="mu">{event.id}</span><small>{event.detail}</small>
+          </div>) : poolEvents.length === 0 ? <p className="pf-empty">No pool events yet.</p> : poolEvents.map((event) => {
             const [name, color] = EVENT_NAMES[event.name]!;
             return <div className="ev" key={`${event.signature}:${event.eventIndex}`}>
               <i style={{ background: color }} /><b>{name}</b><span className="mu">{compactAddress(event.signature)}</span><small>{timeLabel(event.blockTime * 1000)}</small>

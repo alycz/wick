@@ -14,11 +14,12 @@ import { backendConfigured, getClaims, getPositions, type ClaimView } from "@/li
 import { latestIndexerEventKey } from "@/lib/feed";
 import { cents, compactAddress, e6 } from "@/lib/format";
 import { dateLabel, timeLabel, usd } from "@/lib/markets";
+import { GUEST_PORTFOLIO_CLAIMS, GUEST_PORTFOLIO_POSITIONS } from "@/lib/demo/preview";
 import { calculateLivePositionPnls, livePositionPnlE6, marketAddressForSymbol } from "@/lib/portfolio";
 import "@/styles/portfolio.css";
 
-type PositionRow = PositionView & { legacyUnverified?: boolean } & Record<string, unknown>;
-type ClaimRow = ClaimView & { legacyUnverified?: boolean };
+type PositionRow = PositionView & { legacyUnverified?: boolean; previewOnly?: boolean; previewLabel?: string; previewSub?: string; previewPnlE6?: string; previewMark?: number } & Record<string, unknown>;
+type ClaimRow = ClaimView & { legacyUnverified?: boolean; previewOnly?: boolean };
 type Tab = "open" | "queue" | "hist";
 const PORTFOLIO_EVENTS = new Set(["PositionOpened", "PositionClosed", "PositionLiquidated", "PositionSettled", "ClaimQueued", "ClaimPaid"]);
 
@@ -55,10 +56,15 @@ export default function PortfolioPage() {
   const marketState = useMarkets();
   /* without a wallet, Portfolio shows the demo account; markets stay live */
   const demoMode = actions.demo === true && account !== undefined;
-  const owner = demoMode ? account.ledger.owner : demo.publicKey ?? connected.publicKey?.toBase58();
+  const ledgerPositions = account?.ledger.positions;
+  const ledgerClaims = account?.ledger.claims;
+  const previewMode = demoMode && ledgerPositions?.length === 0 && ledgerClaims?.length === 0;
+  const owner = demoMode ? account?.ledger.owner : demo.publicKey ?? connected.publicKey?.toBase58();
   const backendReady = demoMode || backendConfigured();
-  const positions: PositionRow[] = demoMode ? account.ledger.positions as unknown as PositionRow[] : chainPositions;
-  const claims: ClaimRow[] = demoMode ? account.ledger.claims : chainClaims;
+  const positions = useMemo<PositionRow[]>(() => previewMode ? [...GUEST_PORTFOLIO_POSITIONS] as unknown as PositionRow[] : demoMode && ledgerPositions ? ledgerPositions as unknown as PositionRow[] : chainPositions,
+    [previewMode, demoMode, ledgerPositions, chainPositions]);
+  const claims = useMemo<ClaimRow[]>(() => previewMode ? [...GUEST_PORTFOLIO_CLAIMS] : demoMode && ledgerClaims ? ledgerClaims : chainClaims,
+    [previewMode, demoMode, ledgerClaims, chainClaims]);
   /* demo positions key markets by symbol, so their PnL is computed directly */
   const demoMarkets = useMemo(() => demoMode ? Object.fromEntries(marketState.markets.map((market) => [market.symbol, market])) : {}, [demoMode, marketState.markets]);
   const byAddress = demoMode ? demoMarkets : chainMarkets;
@@ -66,6 +72,7 @@ export default function PortfolioPage() {
     if (!demoMode) return chainPnls;
     const result: Record<string, string> = {};
     for (const position of positions) {
+      if (position.previewPnlE6 !== undefined) { result[position.address] = position.previewPnlE6; continue; }
       const market = demoMarkets[position.market];
       if (position.status === "open" && market) result[position.address] = livePositionPnlE6(position, market).toString();
     }
@@ -122,9 +129,13 @@ export default function PortfolioPage() {
 
   return <div className="pf-page">
     <header className="pf-head">
-      <div><h1>Portfolio</h1><p>{demoMode ? "Browser-only practice using live prices. Local activity is not on-chain; connect a wallet for Solana devnet positions." : "Positions and payouts read from Wick\u2019s on-chain events."}</p></div>
+      <div><h1>Portfolio</h1><p>{demoMode ? "Browser-only practice. Example positions and local activity are simulated; connect a wallet for genuine Solana devnet positions." : "Positions and payouts read from Wick\u2019s on-chain events."}</p></div>
       {owner && <div className="pf-wallet"><span>{demoMode ? "Demo account" : "Wallet"}</span><b>{demoMode ? usd(e6(account.ledger.usdcE6)) : compactAddress(owner)}</b></div>}
     </header>
+
+    {previewMode && <p className="pf-note demo-provenance" role="status">
+      <b>Example demo · simulated locally.</b> These positions, returns, and payout figures are illustrative browser examples—not wallet balances, Solana transactions, QuickNode events, or Gemini/Deribit evidence. They are not saved to your demo ledger.
+    </p>}
 
     {demoMode && account.ledger.legacyMigration && <p className="pf-note" role="status">
       Preserved version-1 browser records are simulated and unverified legacy practice data—not chain, settlement, pool, or Stream evidence.
@@ -154,20 +165,20 @@ export default function PortfolioPage() {
         <div className="prow hd"><span>Market</span><span>Side</span><span>Contracts</span><span>Entry → now</span><span>PnL</span><span>Action</span></div>
         {open.map((position) => {
           const market = byAddress[position.market];
-          const label = marketLabel(market ?? snapshotMarket(position), position.market);
+          const label = position.previewLabel ? { name: position.previewLabel, sub: position.previewSub ?? "Illustrative example" } : marketLabel(market ?? snapshotMarket(position), position.market);
           const pnl = livePnls[position.address] === undefined ? undefined : e6(livePnls[position.address]);
-          const mark = market ? (position.side === "yes" ? market.theo : 1 - market.theo) : undefined;
+          const mark = position.previewMark ?? (market ? (position.side === "yes" ? market.theo : 1 - market.theo) : undefined);
           const key = position.address;
           return <div className={`prow${market ? " go" : ""}`} key={key} onClick={() => go(market)} role={market ? "link" : undefined}
             tabIndex={market ? 0 : undefined} onKeyDown={(event) => { if (event.key === "Enter") go(market); }}>
-            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}{position.legacyUnverified ? " · Simulated/unverified legacy" : ""}</small></div></div>
+            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}{position.previewOnly ? " · Example preview" : position.legacyUnverified ? " · Simulated/unverified legacy" : ""}</small></div></div>
             <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
             <div className="v"><b>{e6(position.contractsE6).toLocaleString("en-US", { maximumFractionDigits: 1 })}</b><small>Margin {usd(e6(position.marginE6))}</small></div>
             <div className="v"><b>{cents(position.entryE6 / 1_000_000)} → {cents(mark)}</b><small>Liquidates at {cents(position.liqMarkE6 / 1_000_000)}</small></div>
             <b className={pnl === undefined ? "" : pnl >= 0 ? "up" : "down"}>{pnl === undefined ? "—" : signedUsd(pnl)}</b>
             <div className="pf-acts" onClick={(event) => event.stopPropagation()}>
-              <button type="button" className="ghost" disabled={busy === key || disabled} onClick={() => void run(key, () => actions.client!.closePosition(position, 10_000))}>{busy === key ? "Confirming…" : "Close"}</button>
-              <button type="button" className="ghost" disabled={busy === key || disabled} onClick={() => void run(key, () => actions.client!.settlePosition(position))}>Settle</button>
+              <button type="button" className="ghost" disabled={position.previewOnly || busy === key || disabled} onClick={() => void run(key, () => actions.client!.closePosition(position, 10_000))}>{position.previewOnly ? "Example" : busy === key ? "Confirming…" : "Close"}</button>
+              <button type="button" className="ghost" disabled={position.previewOnly || busy === key || disabled} onClick={() => void run(key, () => actions.client!.settlePosition(position))}>Settle</button>
             </div>
           </div>;
         })}
@@ -177,10 +188,10 @@ export default function PortfolioPage() {
         {claims.map((claim) => {
           const owed = e6(claim.amountE6); const paid = e6(claim.paidE6);
           return <div className="prow" key={claim.address}>
-            <b>#{claim.claimIndex}{claim.legacyUnverified ? " · Simulated legacy" : ""}</b><span>{usd(owed)}</span><span>{usd(paid)}</span><b>{usd(owed - paid)}</b>
+            <b>#{claim.claimIndex}{claim.previewOnly ? " · Example preview" : claim.legacyUnverified ? " · Simulated legacy" : ""}</b><span>{usd(owed)}</span><span>{usd(paid)}</span><b>{usd(owed - paid)}</b>
             <span><span className={`tag ${claim.status === "paid" ? "y" : "q"}`}>{claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}</span></span>
-            <div className="pf-acts"><button type="button" className="ghost" disabled={busy === claim.address || claim.status === "paid" || disabled}
-              onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))}>{busy === claim.address ? "Confirming…" : "Claim"}</button></div>
+            <div className="pf-acts"><button type="button" className="ghost" disabled={claim.previewOnly || busy === claim.address || claim.status === "paid" || disabled}
+              onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))}>{claim.previewOnly ? "Example" : busy === claim.address ? "Confirming…" : "Claim"}</button></div>
           </div>;
         })}
       </div>)}
@@ -188,10 +199,10 @@ export default function PortfolioPage() {
         <div className="prow hd"><span>Market</span><span>Side</span><span>Margin</span><span>Entry</span><span>Result</span><span>PnL</span></div>
         {closed.map((position) => {
           const market = byAddress[position.market];
-          const label = marketLabel(market ?? snapshotMarket(position), position.market);
+          const label = position.previewLabel ? { name: position.previewLabel, sub: position.previewSub ?? "Illustrative example" } : marketLabel(market ?? snapshotMarket(position), position.market);
           const pnl = position.realizedPnlE6 === undefined ? undefined : e6(String(position.realizedPnlE6));
           return <div className={`prow${market ? " go" : ""}`} key={position.address} onClick={() => go(market)}>
-            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}{position.legacyUnverified ? " · Simulated/unverified legacy" : ""}</small></div></div>
+            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}{position.previewOnly ? " · Example preview" : position.legacyUnverified ? " · Simulated/unverified legacy" : ""}</small></div></div>
             <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
             <span>{usd(e6(position.marginE6))}</span>
             <span>{cents(position.entryE6 / 1_000_000)}</span>
