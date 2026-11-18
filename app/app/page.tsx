@@ -77,7 +77,6 @@ export default function LandingPage() {
       <div>
         <h2>A fair price where the order book runs out.</h2>
         <p>Gemini&apos;s book is deep near the money and thin in the tails. Wick turns Deribit&apos;s BTC options volatility into a fair chance for every strike.</p>
-        <p>When Wick&apos;s price and Gemini&apos;s disagree, you can see it before you trade.</p>
         <Link className="ghost" href="/trade">Open the strike ladder</Link>
       </div>
       <div className="mini" aria-label="Strikes near the money">
@@ -93,7 +92,7 @@ export default function LandingPage() {
 
     <section>
       <div className="steps">
-        <div><span>1</span><b>Pick a strike and a side</b><p>Choose any BTC strike and expiry. Wick shows its fair price and Gemini&apos;s quote side by side.</p></div>
+        <div><span>1</span><b>Pick a strike and a side</b><p>Choose a BTC strike and expiry to see its current fair price and price history.</p></div>
         <div><span>2</span><b>Size it with leverage</b><p>Each market has its own cap. Contracts near the money with minutes left get less leverage than far tails.</p></div>
         <div><span>3</span><b>Settle on Gemini&apos;s result</b><p>At expiry the market settles on Gemini&apos;s official outcome. Winnings are paid from the pool, in order.</p></div>
       </div>
