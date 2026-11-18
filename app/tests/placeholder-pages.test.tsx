@@ -9,14 +9,12 @@ vi.mock("@/components/wallet-panel", () => ({ useDemoWallet: () => ({}) }));
 vi.mock("@/hooks/use-markets", () => ({ useMarkets: () => marketState }));
 vi.mock("@/hooks/use-feed", () => ({ useFeed: () => feedState }));
 vi.mock("@/components/wick-chart", () => ({ WickChart: () => <div /> }));
-const sim = { on: false };
-vi.mock("@/lib/api", () => ({ backendConfigured: () => true, liveBackend: () => true, getLpHistory: async () => [] }));
-vi.mock("@/components/demo-account", () => ({ useShowSimulated: () => sim.on, useDemoAccount: () => undefined }));
+vi.mock("@/lib/api", () => ({ backendConfigured: () => false, getLpHistory: async () => [] }));
 
 import LeaderboardPage from "@/app/leaderboard/page";
 import StatsPage from "@/app/stats/page";
 
-afterEach(() => { cleanup(); sim.on = false; });
+afterEach(cleanup);
 
 describe("pages without backend data yet", () => {
   it("shows the leaderboard frame with a no-data row instead of invented traders", () => {
@@ -30,16 +28,5 @@ describe("pages without backend data yet", () => {
     render(<StatsPage />);
     expect(screen.getByRole("heading", { name: "Stats" })).toBeInTheDocument();
     expect(screen.getAllByText(/No data yet/).length).toBeGreaterThanOrEqual(6);
-  });
-
-  it("fills the leaderboard and stats with simulated data on demo data", () => {
-    sim.on = true;
-    render(<LeaderboardPage />);
-    expect(screen.queryByText(/No data yet/)).not.toBeInTheDocument();
-    expect(screen.getAllByRole("row").length).toBeGreaterThan(20);
-    cleanup();
-    const { container } = render(<StatsPage />);
-    expect(screen.getByText("Trades")).toBeInTheDocument();
-    expect(container.querySelectorAll(".liqs .lr").length).toBe(6);
   });
 });
