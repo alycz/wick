@@ -405,6 +405,8 @@ function Easy(props: ViewProps) {
         <div><span>Price to beat</span><b>{usd(selected.strike)}</b></div>
         <div className="sep" />
         <div className="cur"><span>Current price <span className={spot >= selected.strike ? "up" : "down"}>{spot >= selected.strike ? "▲" : "▼"} {usd(Math.abs(spot - selected.strike), 0)}</span></span><b>{usd(spot)}</b></div>
+        <div className="sep" />
+        <div className="upx"><span>Up price</span><b>{cents(selected.theo)}</b></div>
       </div>}
       <MarketChart {...props} className="p e-chartp" height={260} />
       {!up && <div className="pk-bar">
