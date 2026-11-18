@@ -7,7 +7,6 @@ import "../styles/landing.css";
 import "../styles/markets.css";
 import "../styles/wick-chart.css";
 import "skullet/styles.css";
-import "../styles/account.css";
 import { BRAND } from "@wick/shared";
 import { Providers } from "@/components/providers";
 import { Shell } from "@/components/shell";

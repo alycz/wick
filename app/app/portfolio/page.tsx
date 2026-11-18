@@ -1,24 +1,37 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useEffect, useState } from "react";
-import type { PositionView } from "@wick/shared";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import type { PositionView, PricerMarket } from "@wick/shared";
+import { Seg } from "@/components/markets/controls";
 import { useDemoWallet } from "@/components/wallet-panel";
 import { useFeed } from "@/hooks/use-feed";
 import { useMarkets } from "@/hooks/use-markets";
 import { useWickActions } from "@/hooks/use-wick-actions";
 import { backendConfigured, getClaims, getPositions, type ClaimView } from "@/lib/api";
 import { latestIndexerEventKey } from "@/lib/feed";
-import { cents, compactAddress, dollars, e6 } from "@/lib/format";
-import { calculateLivePositionPnls } from "@/lib/portfolio";
-import "@/styles/account.css";
+import { cents, compactAddress, e6 } from "@/lib/format";
+import { dateLabel, timeLabel, usd } from "@/lib/markets";
+import { calculateLivePositionPnls, marketAddressForSymbol } from "@/lib/portfolio";
+import "@/styles/portfolio.css";
 
 type PositionRow = PositionView & Record<string, unknown>;
+type Tab = "open" | "queue" | "hist";
 const PORTFOLIO_EVENTS = new Set(["PositionOpened", "PositionClosed", "PositionLiquidated", "PositionSettled", "ClaimQueued", "ClaimPaid"]);
+
+function marketLabel(market: PricerMarket | undefined, address: string): { name: string; sub: string } {
+  if (!market) return { name: compactAddress(address), sub: "Market" };
+  if (market.kind === "up_down") return { name: "BTC Up or Down 15m", sub: `Ends ${timeLabel(market.expiryTs)}` };
+  return { name: `BTC > $${(market.strike / 1000).toFixed(market.strike % 1000 ? 1 : 0)}k`, sub: market.duration === "1h" ? `Hourly · ${timeLabel(market.expiryTs)}` : dateLabel(market.expiryTs) };
+}
+
+const signedUsd = (value: number) => `${value >= 0 ? "+" : "−"}${usd(Math.abs(value))}`;
 
 export default function PortfolioPage() {
   const connected = useWallet();
   const demo = useDemoWallet();
+  const router = useRouter();
   const owner = demo.publicKey ?? connected.publicKey?.toBase58();
   const [positions, setPositions] = useState<PositionRow[]>([]);
   const [claims, setClaims] = useState<ClaimView[]>([]);
@@ -27,11 +40,14 @@ export default function PortfolioPage() {
   const [signature, setSignature] = useState<string>();
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [livePnls, setLivePnls] = useState<Record<string, string>>({});
+  const [byAddress, setByAddress] = useState<Record<string, PricerMarket>>({});
+  const [tab, setTab] = useState<Tab>("open");
   const actions = useWickActions();
   const feed = useFeed();
   const marketState = useMarkets();
   const backendReady = backendConfigured();
   const refreshKey = latestIndexerEventKey(feed.events, PORTFOLIO_EVENTS);
+
   useEffect(() => {
     const controller = new AbortController();
     if (!owner || !backendReady) return () => controller.abort();
@@ -40,20 +56,23 @@ export default function PortfolioPage() {
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => controller.abort();
   }, [owner, backendReady, refreshKey, refreshNonce]);
+
   useEffect(() => {
     let cancelled = false;
     const programId = process.env.NEXT_PUBLIC_PROGRAM_ID;
     if (!programId || positions.length === 0 || marketState.markets.length === 0) {
-      setLivePnls({});
+      setLivePnls((value) => Object.keys(value).length ? {} : value);
       return () => { cancelled = true; };
     }
     void calculateLivePositionPnls(positions, marketState.markets, programId)
-      .then((values) => {
-        if (!cancelled) setLivePnls(Object.fromEntries([...values].map(([address, value]) => [address, value.toString()])));
-      })
+      .then((values) => { if (!cancelled) setLivePnls(Object.fromEntries([...values].map(([address, value]) => [address, value.toString()]))); })
       .catch(() => { if (!cancelled) setLivePnls({}); });
+    void Promise.all(marketState.markets.map(async (market) => [await marketAddressForSymbol(market.symbol, programId), market] as const))
+      .then((pairs) => { if (!cancelled) setByAddress(Object.fromEntries(pairs)); })
+      .catch(() => { if (!cancelled) setByAddress({}); });
     return () => { cancelled = true; };
   }, [positions, marketState.markets]);
+
   const run = async (key: string, operation: () => Promise<string>) => {
     if (!actions.client) { setError(actions.error ?? "Trading is not configured."); return; }
     setBusy(key); setError(undefined); setSignature(undefined);
@@ -62,72 +81,94 @@ export default function PortfolioPage() {
     finally { setBusy(undefined); }
   };
 
-  return <div className="account-page">
-    <header className="account-hero">
-      <div>
-        <p className="account-eyebrow">ACCOUNT</p>
-        <h1>Portfolio</h1>
-        <p>Positions and payouts indexed directly from Wick program events.</p>
-      </div>
-      {owner && <div className="account-wallet"><span>Active wallet</span><strong>{compactAddress(owner)}</strong></div>}
+  const open = positions.filter((position) => position.status === "open");
+  const closed = positions.filter((position) => position.status !== "open");
+  const owedClaims = claims.filter((claim) => claim.status !== "paid");
+  const totals = useMemo(() => {
+    const margin = open.reduce((sum, position) => sum + e6(position.marginE6), 0);
+    const known = open.filter((position) => livePnls[position.address] !== undefined);
+    const unrealized = known.reduce((sum, position) => sum + e6(livePnls[position.address]), 0);
+    const queued = owedClaims.reduce((sum, claim) => sum + e6(claim.amountE6) - e6(claim.paidE6), 0);
+    const realized = closed.reduce((sum, position) => sum + (position.realizedPnlE6 === undefined ? 0 : e6(String(position.realizedPnlE6))), 0);
+    return { margin, unrealized: known.length ? unrealized : undefined, queued, realized };
+  }, [open, closed, owedClaims, livePnls]);
+  const disabled = !backendReady || !actions.client;
+  const go = (market: PricerMarket | undefined) => { if (market) router.push(`/m/${encodeURIComponent(market.symbol)}`); };
+
+  return <div className="pf-page">
+    <header className="pf-head">
+      <div><h1>Portfolio</h1><p>Positions and payouts read from Wick&apos;s on-chain events.</p></div>
+      {owner && <div className="pf-wallet"><span>Wallet</span><b>{compactAddress(owner)}</b></div>}
     </header>
 
-    <div className="account-alerts">
-      {!owner && <div className="account-notice">Create a test wallet or connect Phantom / Solflare to load a portfolio.</div>}
-      {owner && !backendReady && <div className="account-notice">Backend is not configured. No position data can be verified.</div>}
-      {backendReady && !actions.client && <div className="account-notice">{actions.error ?? "Trading is not configured."}</div>}
-      {error && <div className="account-notice account-notice-error" role="alert">{error}</div>}
-      {signature && <div className="account-notice account-notice-success" role="status">Confirmed on devnet · {compactAddress(signature)}</div>}
-    </div>
+    {(!owner || (owner && !backendReady) || (backendReady && owner && !actions.client) || error || signature) && <div className="pf-alerts">
+      {!owner && <p className="pf-note">Connect Phantom or Solflare, or create a local wallet from the wallet menu, to see your portfolio.</p>}
+      {owner && !backendReady && <p className="pf-note">Positions can&apos;t load because the backend isn&apos;t configured.</p>}
+      {owner && backendReady && !actions.client && <p className="pf-note">{actions.error ?? "Trading is not configured."}</p>}
+      {error && <p className="pf-note pf-err" role="alert">{error}</p>}
+      {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
+    </div>}
 
-    <section className="account-surface account-positions" aria-labelledby="account-positions-heading">
-      <div className="account-section-heading">
-        <div>
-          <p className="account-section-kicker">Open &amp; settled</p>
-          <h2 id="account-positions-heading">Positions</h2>
-        </div>
-        <span>{positions.length} indexed</span>
-      </div>
-      {positions.length === 0 ? <div className="account-empty">No indexed positions for this wallet.</div> : <div className="account-table-wrap">
-        <table className="account-table">
-          <thead><tr><th>Market</th><th>Side</th><th>Margin</th><th>Leverage</th><th>Entry</th><th>Contracts</th><th>PnL</th><th><span className="account-visually-hidden">Actions</span></th></tr></thead>
-          <tbody>{positions.map((position) => {
-            const pnlValue = position.status === "open" ? livePnls[position.address] : position.realizedPnlE6 === undefined ? undefined : String(position.realizedPnlE6);
-            const pnl = pnlValue === undefined ? undefined : e6(pnlValue);
-            return <tr key={position.address}>
-              <td data-label="Market"><div className="account-market"><strong>{compactAddress(position.market)}</strong><span>{position.status}</span></div></td>
-              <td data-label="Side"><span className={`account-side account-side-${position.side}`}>{position.side.toUpperCase()}</span></td>
-              <td data-label="Margin">{dollars(e6(position.marginE6), 2)}</td>
-              <td data-label="Leverage">{position.leverage}×</td>
-              <td data-label="Entry">{cents(position.entryE6 / 1_000_000)}</td>
-              <td data-label="Contracts">{e6(position.contractsE6).toFixed(2)}</td>
-              <td data-label={position.status === "open" ? "Live PnL" : "Realized PnL"}><span className={pnl === undefined ? "account-pnl" : pnl >= 0 ? "account-pnl account-pnl-positive" : "account-pnl account-pnl-negative"}>{pnl === undefined ? "—" : dollars(pnl, 2)}</span></td>
-              <td data-label="Actions">{position.status === "open" ? <div className="account-row-actions">
-                <button className="account-button account-button-secondary" type="button" disabled={busy === position.address || !backendReady || !actions.client} onClick={() => void run(position.address, () => actions.client!.closePosition(position, 10_000))}>{busy === position.address ? "Confirming…" : "Close"}</button>
-                <button className="account-button account-button-text" type="button" disabled={busy === position.address || !backendReady || !actions.client} onClick={() => void run(position.address, () => actions.client!.settlePosition(position))}>Settle</button>
-              </div> : <span className="account-complete">Complete</span>}</td>
-            </tr>;
-          })}</tbody>
-        </table>
-      </div>}
+    <section className="pf-stats" aria-label="Summary">
+      <div><span>In open positions</span><b>{usd(totals.margin)}</b><small>{open.length} open</small></div>
+      <div><span>Unrealized PnL</span><b className={totals.unrealized === undefined ? "" : totals.unrealized >= 0 ? "up" : "down"}>{totals.unrealized === undefined ? "—" : signedUsd(totals.unrealized)}</b><small>At Wick&apos;s fair price</small></div>
+      <div><span>Realized PnL</span><b className={totals.realized >= 0 ? "up" : "down"}>{signedUsd(totals.realized)}</b><small>{closed.length} closed</small></div>
+      <div><span>Payouts queued</span><b>{usd(totals.queued)}</b><small>{owedClaims.length} {owedClaims.length === 1 ? "claim" : "claims"} waiting</small></div>
     </section>
 
-    <section className="account-surface account-claims" aria-labelledby="account-claims-heading">
-      <div className="account-section-heading">
-        <div><p className="account-section-kicker">FIFO pool payouts</p><h2 id="account-claims-heading">Queued claims</h2></div>
-        <span>{claims.length} total</span>
-      </div>
-      {claims.length === 0 ? <div className="account-empty">No queued claims.</div> : <div className="account-table-wrap">
-        <table className="account-table account-claims-table">
-          <thead><tr><th>Claim</th><th>Amount owed</th><th>Status</th><th><span className="account-visually-hidden">Action</span></th></tr></thead>
-          <tbody>{claims.map((claim) => <tr key={claim.address}>
-            <td data-label="Claim"><strong>#{claim.claimIndex}</strong></td>
-            <td data-label="Amount owed"><strong>{dollars(e6(claim.amountE6) - e6(claim.paidE6), 2)}</strong></td>
-            <td data-label="Status"><span className="account-status">{claim.status}</span></td>
-            <td data-label="Action"><button className="account-button account-button-secondary" disabled={busy === claim.address || claim.status === "paid" || !backendReady || !actions.client} onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))} type="button">{busy === claim.address ? "Confirming…" : "Claim"}</button></td>
-          </tr>)}</tbody>
-        </table>
-      </div>}
+    <section aria-label="Positions">
+      <Seg className="pf-tabs" label="Portfolio" value={tab} onChange={setTab}
+        options={[{ value: "open", label: `Positions (${open.length})` }, { value: "queue", label: `Payout queue (${owedClaims.length})` }, { value: "hist", label: "History" }]} />
+      {tab === "open" && (open.length === 0 ? <p className="pf-empty">No open positions. Open one from Markets.</p> : <div className="pf-list">
+        <div className="prow hd"><span>Market</span><span>Side</span><span>Contracts</span><span>Entry → now</span><span>PnL</span><span>Action</span></div>
+        {open.map((position) => {
+          const market = byAddress[position.market];
+          const label = marketLabel(market, position.market);
+          const pnl = livePnls[position.address] === undefined ? undefined : e6(livePnls[position.address]);
+          const mark = market ? (position.side === "yes" ? market.theo : 1 - market.theo) : undefined;
+          const key = position.address;
+          return <div className={`prow${market ? " go" : ""}`} key={key} onClick={() => go(market)} role={market ? "link" : undefined}
+            tabIndex={market ? 0 : undefined} onKeyDown={(event) => { if (event.key === "Enter") go(market); }}>
+            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}</small></div></div>
+            <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
+            <div className="v"><b>{e6(position.contractsE6).toLocaleString("en-US", { maximumFractionDigits: 1 })}</b><small>Margin {usd(e6(position.marginE6))}</small></div>
+            <div className="v"><b>{cents(position.entryE6 / 1_000_000)} → {cents(mark)}</b><small>Liquidates at {cents(position.liqMarkE6 / 1_000_000)}</small></div>
+            <b className={pnl === undefined ? "" : pnl >= 0 ? "up" : "down"}>{pnl === undefined ? "—" : signedUsd(pnl)}</b>
+            <div className="pf-acts" onClick={(event) => event.stopPropagation()}>
+              <button type="button" className="ghost" disabled={busy === key || disabled} onClick={() => void run(key, () => actions.client!.closePosition(position, 10_000))}>{busy === key ? "Confirming…" : "Close"}</button>
+              <button type="button" className="ghost" disabled={busy === key || disabled} onClick={() => void run(key, () => actions.client!.settlePosition(position))}>Settle</button>
+            </div>
+          </div>;
+        })}
+      </div>)}
+      {tab === "queue" && (claims.length === 0 ? <p className="pf-empty">No payouts are waiting. When the pool is short, winning payouts queue here in order.</p> : <div className="pf-list">
+        <div className="prow hd"><span>Claim</span><span>Owed</span><span>Paid</span><span>Remaining</span><span>Status</span><span>Action</span></div>
+        {claims.map((claim) => {
+          const owed = e6(claim.amountE6); const paid = e6(claim.paidE6);
+          return <div className="prow" key={claim.address}>
+            <b>#{claim.claimIndex}</b><span>{usd(owed)}</span><span>{usd(paid)}</span><b>{usd(owed - paid)}</b>
+            <span><span className={`tag ${claim.status === "paid" ? "y" : "q"}`}>{claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}</span></span>
+            <div className="pf-acts"><button type="button" className="ghost" disabled={busy === claim.address || claim.status === "paid" || disabled}
+              onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))}>{busy === claim.address ? "Confirming…" : "Claim"}</button></div>
+          </div>;
+        })}
+      </div>)}
+      {tab === "hist" && (closed.length === 0 ? <p className="pf-empty">No closed positions yet.</p> : <div className="pf-list">
+        <div className="prow hd"><span>Market</span><span>Side</span><span>Margin</span><span>Entry</span><span>Result</span><span>PnL</span></div>
+        {closed.map((position) => {
+          const market = byAddress[position.market];
+          const label = marketLabel(market, position.market);
+          const pnl = position.realizedPnlE6 === undefined ? undefined : e6(String(position.realizedPnlE6));
+          return <div className={`prow${market ? " go" : ""}`} key={position.address} onClick={() => go(market)}>
+            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}</small></div></div>
+            <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
+            <span>{usd(e6(position.marginE6))}</span>
+            <span>{cents(position.entryE6 / 1_000_000)}</span>
+            <span><span className={`tag ${position.status === "liquidated" ? "n" : "d"}`}>{position.status.charAt(0).toUpperCase() + position.status.slice(1)}</span></span>
+            <b className={pnl === undefined ? "" : pnl >= 0 ? "up" : "down"}>{pnl === undefined ? "—" : signedUsd(pnl)}</b>
+          </div>;
+        })}
+      </div>)}
     </section>
   </div>;
 }

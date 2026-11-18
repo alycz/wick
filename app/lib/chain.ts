@@ -47,11 +47,11 @@ function browserChainEnvironment(): ChainEnvironmentVariables {
 
 export function chainConfigurationError(environment: ChainEnvironmentVariables = browserChainEnvironment()): string | undefined {
   const programValue = environment.NEXT_PUBLIC_PROGRAM_ID?.trim();
-  if (!programValue) return "Trading is not configured: the Wick devnet program ID is missing.";
+  if (!programValue) return "Trading isn't available yet: the Wick program ID isn't set.";
   const mintValue = environment.NEXT_PUBLIC_USDC_TEST_MINT?.trim();
-  if (!mintValue) return "Trading is not configured: the test-USDC mint is missing.";
+  if (!mintValue) return "Trading isn't available yet: the USDC mint isn't set.";
   const rpcUrl = environment.NEXT_PUBLIC_RPC_URL?.trim();
-  if (!rpcUrl) return "Trading is not configured: the Solana devnet RPC URL is missing.";
+  if (!rpcUrl) return "Trading isn't available yet: the Solana RPC URL isn't set.";
   if ((WICK_IDL.instructions as readonly unknown[]).length === 0) return "Trading is not configured: deploy Wick and export its generated IDL first.";
   try {
     const programId = new PublicKey(programValue);

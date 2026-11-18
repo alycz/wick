@@ -56,7 +56,7 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
   return <div ref={box} className="wc-tv" />;
 }
 
-export function WickChart({ series, format, windows, height = 220, refLine, legend, color }: {
+export function WickChart({ series, format, windows, height = 220, refLine, legend, color, formatTime, initialWindow }: {
   series: ChartSeries[];
   format: "usd" | "cents";
   windows: ChartWindow[];
@@ -64,9 +64,11 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
   refLine?: { value: number; label?: string };
   legend?: ReactNode;
   color?: string;
+  formatTime?: (time: number) => string;
+  initialWindow?: number;
 }) {
   const [mode, setMode] = useState<"live" | "tv">("live");
-  const [win, setWin] = useState(windows[Math.min(1, windows.length - 1)]?.secs ?? 300);
+  const [win, setWin] = useState(initialWindow ?? windows[Math.min(1, windows.length - 1)]?.secs ?? 300);
   const fmt = format === "cents" ? cents : usd;
   const single = series.length === 1 ? series[0] : undefined;
   const empty = series.every((item) => item.data.length < 2);
@@ -95,9 +97,9 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
     <div className="wc-area" style={{ height }}>
       {empty ? <div className="wc-empty">Waiting for live prices.</div> : mode === "live"
         ? single
-          ? <Liveline data={single.data} value={single.data[single.data.length - 1]!.value} color={color ?? single.color} theme="dark" formatValue={fmt} window={win}
+          ? <Liveline data={single.data} value={single.data[single.data.length - 1]!.value} color={color ?? single.color} theme="dark" formatValue={fmt} window={win} {...(formatTime ? { formatTime } : {})}
             {...(ref ? { referenceLine: ref } : {})} badgeVariant="default" />
-          : <Liveline data={series[0]!.data} value={series[0]!.data[series[0]!.data.length - 1]?.value ?? 0} theme="dark" formatValue={fmt} window={win} grid
+          : <Liveline data={series[0]!.data} value={series[0]!.data[series[0]!.data.length - 1]?.value ?? 0} theme="dark" formatValue={fmt} window={win} grid {...(formatTime ? { formatTime } : {})}
             series={series.map((item) => ({ id: item.id, label: item.label, color: item.color, data: item.data, value: item.data[item.data.length - 1]?.value ?? 0 }))} />
         : <TradingView series={series} format={format} {...(ref ? { refLine: ref } : {})} />}
     </div>
