@@ -4,6 +4,11 @@
 :is(.lb-page, .sx-page) .p { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 :is(.lb-page, .sx-page) .mu { color: var(--muted); }
 :is(.lb-page, .sx-page) .nodata { padding: 28px 16px; color: var(--muted); font-size: 13px; text-align: center; white-space: normal; }
+:is(.lb-page, .sx-page) .demo-provenance { margin: 0; padding: 10px 14px; border: 1px solid rgba(95,212,204,.38); border-radius: 10px; background: rgba(95,212,204,.07); color: var(--muted); font-size: 13px; line-height: 1.5; }
+:is(.lb-page, .sx-page) .demo-provenance b { color: var(--wick); margin-right: 4px; }
+:is(.lb-page, .sx-page) .demo-metric { min-height: 108px; display: grid; place-content: center; gap: 6px; text-align: center; }
+:is(.lb-page, .sx-page) .demo-metric b { font-size: 26px; }
+:is(.lb-page, .sx-page) .demo-metric span { color: var(--muted); font-size: 12px; }
 :is(.lb-page, .sx-page) .lbt th { white-space: nowrap; }
 .lb-page, .sx-page { max-width: 1320px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 18px; align-content: start; }
 :is(.lb-page, .sx-page) .pg-hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
