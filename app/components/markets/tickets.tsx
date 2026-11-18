@@ -50,7 +50,9 @@ function Status({ open }: { open: ReturnType<typeof useOpen> }) {
   return <>
     {!open.actions.client && <p className="tk-msg" role="status">{open.actions.error ?? "Trading is not configured."}</p>}
     {open.error && <p className="tk-msg tk-err" role="alert">{open.error}</p>}
-    {open.signature && <p className="tk-msg tk-ok" role="status">Position opened · {compactAddress(open.signature)}</p>}
+    {open.signature && <p className="tk-msg tk-ok" role="status">{open.actions.demo
+      ? `Local demo position opened · ${open.signature} · no network transaction`
+      : `Devnet position opened · ${compactAddress(open.signature)}`}</p>}
   </>;
 }
 

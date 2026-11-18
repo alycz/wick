@@ -1,7 +1,14 @@
 import { marketsResponseSchema, type IndexedEvent, type MarketHistoryPoint, type PositionView, type PricerMarket } from "@wick/shared";
 import { z } from "zod";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
+/** Accepts "host", "host/" or "https://host"; a bare host gets https://. */
+export function normalizeBackendUrl(raw: string | undefined): string {
+  const value = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!value) return "";
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+const BACKEND = normalizeBackendUrl(process.env.NEXT_PUBLIC_BACKEND_URL);
 
 const historySchema = z.array(z.object({
   ts: z.number(),

@@ -55,7 +55,7 @@ describe("WalletPanel availability", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect wallet" }));
     fireEvent.click(screen.getByRole("button", { name: /Create a local wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
-    expect(screen.getByRole("dialog", { name: "Deposit" })).toHaveTextContent(/Send USDC on Solana/);
+    expect(screen.getByRole("dialog", { name: "Deposit" })).toHaveTextContent(/Send test USDC on Solana devnet/);
     expect(screen.queryByRole("button", { name: "Add funds" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
     expect(screen.getByRole("dialog", { name: "Withdraw" })).toHaveTextContent(/aren't available yet/);

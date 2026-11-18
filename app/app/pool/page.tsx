@@ -35,12 +35,6 @@ export default function PoolPage() {
   const actions = useWickActions();
   const account = useDemoAccount();
   const demoMode = actions.demo === true && account !== undefined;
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!demoMode) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [demoMode]);
   const feed = useFeed();
   const backendReady = backendConfigured();
   const refreshKey = latestIndexerEventKey(feed.events, POOL_EVENTS);
@@ -77,19 +71,23 @@ export default function PoolPage() {
   /* the demo account stakes against its own ledger, so it doesn't wait on pool history */
   const disabled = busy !== undefined || !actions.client || (!demoMode && (!backendReady || !metrics));
   const demoBalances = demoMode ? {
-    wallet: e6(account.ledger.wickedE6), staked: e6(account.ledger.stakedE6), rewards: Number(pendingRewardsE6(account.ledger, now)) / 1_000_000,
+    wallet: e6(account.ledger.wickedE6), staked: e6(account.ledger.stakedE6), rewards: Number(pendingRewardsE6(account.ledger)) / 1_000_000,
   } : undefined;
   const wicked = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   const amountE6 = BigInt(Math.round(amount * 1_000_000));
 
   return <div className="pl-page">
     <header className="pf-head">
-      <div><h1>Pool</h1><p>Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear.</p></div>
+      <div><h1>Pool</h1><p>{demoMode
+        ? "Browser-only practice balances are simulated. They do not represent pool liquidity, staking yield, or claimable rewards."
+        : "Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear."}</p></div>
     </header>
     {(error || signature || (backendReady && !actions.client && !demoMode)) && <div className="pf-alerts">
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
       {backendReady && !actions.client && !demoMode && <p className="pf-note">{actions.error ?? "Staking is not configured."}</p>}
-      {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
+      {signature && <p className="pf-note pf-ok" role="status">{demoMode
+        ? `Local demo complete · ${signature} · no network transaction`
+        : `Devnet transaction confirmed · ${compactAddress(signature)}`}</p>}
     </div>}
 
     <section className="pf-stats" aria-label="Pool metrics">
@@ -124,15 +122,15 @@ export default function PoolPage() {
       <aside className="ticket"><div className="card pl-card" aria-label="Stake $WICKED">
         <Seg className="pl-tabs" label="Staking action" value={tab} onChange={setTab}
           options={[{ value: "stake", label: "Stake" }, { value: "unstake", label: "Unstake" }, { value: "claim", label: "Claim" }]} />
-        {demoBalances && <div className="pl-bal" aria-label="Your $WICKED">
-          <div><span>In wallet</span><b>{wicked(demoBalances.wallet)} $WICKED</b></div>
-          <div><span>Staked</span><b>{wicked(demoBalances.staked)} $WICKED</b></div>
-          <div><span>Rewards</span><b className={demoBalances.rewards > 0 ? "up" : ""}>{usd(demoBalances.rewards)}</b></div>
+        {demoBalances && <div className="pl-bal" aria-label="Simulated demo balances">
+          <div><span>Simulated wallet</span><b>{wicked(demoBalances.wallet)} $WICKED</b></div>
+          <div><span>Simulated stake</span><b>{wicked(demoBalances.staked)} $WICKED</b></div>
+          <div><span>Simulated rewards</span><b className={demoBalances.rewards > 0 ? "up" : ""}>{usd(demoBalances.rewards)}</b></div>
         </div>}
         {tab === "claim" ? <>
-          <div className="pf-val"><span>Rewards</span><b>$WICKED fee share</b>
-            <span>{metrics && metrics.queue > 0 ? `Rewards resume once the ${usd(metrics.queue)} payout queue is cleared.` : "The payout queue is clear, so rewards are flowing."}</span></div>
-          <button type="button" className="cta" disabled={disabled} onClick={() => void action("claim", () => actions.client!.claimRewards())}>{busy === "claim" ? "Confirming…" : "Claim rewards"}</button>
+          <div className="pf-val"><span>{demoMode ? "Simulated rewards" : "Rewards"}</span><b>{demoMode ? "Unavailable in browser practice" : "$WICKED fee share"}</b>
+            <span>{demoMode ? "The practice ledger does not calculate, accrue, or pay staking rewards." : metrics && metrics.queue > 0 ? `Rewards resume once the ${usd(metrics.queue)} payout queue is cleared.` : "The payout queue is clear, so rewards are flowing."}</span></div>
+          <button type="button" className="cta" disabled={disabled || demoMode} onClick={() => void action("claim", () => actions.client!.claimRewards())}>{busy === "claim" ? "Confirming…" : demoMode ? "Rewards unavailable" : "Claim rewards"}</button>
         </> : <>
           <div className="amt">
             <label htmlFor="pl-amt">Amount</label>
@@ -146,7 +144,9 @@ export default function PoolPage() {
             {busy === tab ? "Confirming…" : `${tab === "stake" ? "Stake" : "Unstake"} ${amount.toLocaleString("en-US")} $WICKED`}
           </button>
         </>}
-        <p className="fine">$WICKED is emitted to losing traders on the pool&apos;s high-water-mark curve. Rewards only pay out while the payout queue is empty.</p>
+        <p className="fine">{demoMode
+          ? "Browser-only practice. Local stake actions create receipts, but the demo does not fabricate staking rewards or network transfers."
+          : "$WICKED is emitted to losing traders on the pool's high-water-mark curve. Rewards only pay out while the payout queue is empty."}</p>
       </div></aside>
     </div>
   </div>;

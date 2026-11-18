@@ -19,15 +19,14 @@ export class DemoClient implements WickClient {
   constructor(private readonly store: DemoStore, private readonly latencyMs = 650, private readonly now: () => number = Date.now) {}
 
   /* a short pause like a confirmed transaction, then the ledger update */
-  private async apply(operation: (current: DemoLedger, now: number) => { ledger: DemoLedger; signature: string }): Promise<string> {
+  private async apply(operation: (current: DemoLedger, now: number) => { ledger: DemoLedger; receiptId: string }): Promise<string> {
     if (this.latencyMs > 0) await wait(this.latencyMs * (0.7 + Math.random() * 0.6));
     const result = operation(this.store.read(), this.now());
     this.store.write(result.ledger);
-    return result.signature;
+    return result.receiptId;
   }
 
   private market(symbol: string): PricerMarket | undefined { return this.store.markets().find((market) => market.symbol === symbol); }
-  private spot(): number | undefined { return this.store.markets().find((market) => market.spot > 0)?.spot; }
 
   /* trades fill at the price on screen when the button was pressed, like a transaction built from that quote */
   openPosition(input: OpenPositionInput): Promise<string> {
@@ -42,7 +41,7 @@ export class DemoClient implements WickClient {
     return this.apply((current, now) => ledger.closePosition(current, input.address, market, minExitE6, now));
   }
   settlePosition(input: PositionActionInput): Promise<string> {
-    return this.apply((current, now) => ledger.settlePosition(current, input.address, this.spot(), now));
+    return this.apply((current, now) => ledger.settlePosition(current, input.address, undefined, now));
   }
   claimQueue(input: ClaimActionInput): Promise<string> { return this.apply((current, now) => ledger.claimQueue(current, input.address, now)); }
   stake(amountE6: bigint): Promise<string> { return this.apply((current, now) => ledger.stake(current, amountE6, now)); }

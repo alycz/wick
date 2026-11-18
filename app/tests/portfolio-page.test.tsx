@@ -35,7 +35,7 @@ describe("PortfolioPage", () => {
     expect(screen.getByText("$71.25")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(mocks.closePosition).toHaveBeenCalledWith(expect.objectContaining({ address: "PosOpen1" }), 10_000));
-    expect(await screen.findByText(/Transaction confirmed/)).toBeInTheDocument();
+    expect(await screen.findByText(/Devnet transaction confirmed/)).toBeInTheDocument();
   });
 
   it("lists claims in the payout queue tab", async () => {
