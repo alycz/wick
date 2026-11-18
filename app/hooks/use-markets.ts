@@ -52,6 +52,8 @@ export function useMarketHistory(symbol: string): { history: MarketHistoryPoint[
   const [error, setError] = useState<string>();
   useEffect(() => {
     const controller = new AbortController();
+    setHistory([]);
+    if (!symbol) return () => controller.abort();
     if (!backendConfigured()) { setError("Backend is not configured."); return () => controller.abort(); }
     void getHistory(symbol, controller.signal)
       .then((value) => { setHistory(value); setError(undefined); })
