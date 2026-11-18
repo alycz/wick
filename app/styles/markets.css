@@ -129,9 +129,9 @@
 .mk-page .bn { background: var(--no-bg); color: var(--no-hi); }
 .mk-page .by.on, .mk-page .by:hover { background: var(--yes); color: #fff; }
 .mk-page .bn.on, .mk-page .bn:hover { background: var(--no); color: #fff; }
-.mk-page .seg-host { position: relative; isolation: isolate; }
-.mk-page .seg-host > .ind { position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; opacity: 0; transition: transform .34s cubic-bezier(.22, 1, .36, 1), width .34s cubic-bezier(.22, 1, .36, 1), height .34s cubic-bezier(.22, 1, .36, 1), opacity .15s; }
-.mk-page .seg-host > button[aria-pressed="true"] { background: transparent !important; }
+.seg-host { position: relative; isolation: isolate; }
+.seg-host > .ind { position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; opacity: 0; transition: transform .34s cubic-bezier(.22, 1, .36, 1), width .34s cubic-bezier(.22, 1, .36, 1), height .34s cubic-bezier(.22, 1, .36, 1), opacity .15s; }
+.seg-host > button[aria-pressed="true"] { background: transparent !important; }
 .mk-page .pills.seg-host > .ind { background: var(--fg); border-radius: 999px; }
 .mk-page .mk-mode.seg-host > .ind { background: var(--fg); border-radius: 7px; }
 .mk-page .chain-exp { display: flex; gap: 8px; flex: none; }

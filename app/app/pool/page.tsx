@@ -1,20 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PoolChart } from "@/components/line-chart";
+import { Seg } from "@/components/markets/controls";
+import { WickChart } from "@/components/wick-chart";
 import { useFeed } from "@/hooks/use-feed";
 import { useWickActions } from "@/hooks/use-wick-actions";
 import { backendConfigured, getLpHistory, type LpPoint } from "@/lib/api";
 import { latestIndexerEventKey } from "@/lib/feed";
-import { compactAddress, dollars, e6 } from "@/lib/format";
-import "@/styles/account.css";
+import { compactAddress, e6 } from "@/lib/format";
+import { timeLabel, usd } from "@/lib/markets";
+import "@/styles/portfolio.css";
 
+type Tab = "stake" | "unstake" | "claim";
 const POOL_EVENTS = new Set(["LpUpdated", "Staked", "Unstaked", "RewardsClaimed", "ClaimPaid"]);
+const WINDOWS = [{ label: "1D", secs: 86_400 }, { label: "1W", secs: 604_800 }, { label: "1M", secs: 2_592_000 }, { label: "All", secs: 31_536_000 }];
+const EVENT_NAMES: Record<string, [string, string]> = {
+  LpUpdated: ["Pool updated", "var(--wick)"], Staked: ["Staked", "var(--muted)"], Unstaked: ["Unstaked", "var(--muted)"],
+  RewardsClaimed: ["Rewards claimed", "var(--yes-hi)"], ClaimPaid: ["Payout paid", "var(--no-hi)"], ClaimQueued: ["Payout queued", "#f2c14e"],
+  PositionLiquidated: ["Liquidation", "var(--wick)"],
+};
 
 export default function PoolPage() {
   const [history, setHistory] = useState<LpPoint[]>([]);
   const [error, setError] = useState<string>();
   const [amount, setAmount] = useState(100);
+  const [text, setText] = useState<string>();
+  const [tab, setTab] = useState<Tab>("stake");
   const [busy, setBusy] = useState<string>();
   const [signature, setSignature] = useState<string>();
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -25,7 +36,7 @@ export default function PoolPage() {
   useEffect(() => {
     const controller = new AbortController();
     if (!backendReady) {
-      setError("Backend is not configured. No pool data can be verified.");
+      setError("Pool data can't load because the backend isn't configured.");
       return () => controller.abort();
     }
     void getLpHistory(controller.signal)
@@ -33,8 +44,17 @@ export default function PoolPage() {
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => controller.abort();
   }, [backendReady, refreshKey, refreshNonce]);
+
   const latest = history.at(-1);
-  const metrics = useMemo(() => latest ? ({ balance: e6(latest.balanceE6), queue: e6(latest.queueOwedE6), fees: e6(latest.feesE6) }) : undefined, [latest]);
+  const metrics = useMemo(() => {
+    if (!latest) return undefined;
+    const balance = e6(latest.balanceE6);
+    const dayAgo = [...history].reverse().find((point) => point.blockTime <= latest.blockTime - 86_400);
+    return { balance, queue: e6(latest.queueOwedE6), fees: e6(latest.feesE6), change: dayAgo ? balance - e6(dayAgo.balanceE6) : undefined };
+  }, [history, latest]);
+  const series = useMemo(() => history.map((point) => ({ time: point.blockTime, value: e6(point.balanceE6) })), [history]);
+  const poolEvents = feed.events.filter((event) => EVENT_NAMES[event.name]).slice(0, 8);
+
   const action = async (name: string, operation: () => Promise<string>) => {
     if (!actions.client) { setError(actions.error ?? "Staking is not configured."); return; }
     setBusy(name); setError(undefined); setSignature(undefined);
@@ -42,48 +62,70 @@ export default function PoolPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(undefined); }
   };
-  return <div className="pool-page">
-    <header className="pool-hero">
-      <p className="pool-eyebrow">SELF-BOOTSTRAPPING LIQUIDITY</p>
-      <h1>Martingaler pool</h1>
-      <p>Trader losses capitalize the pool. Fees and surplus accrue to $WICKED stakers after queued payouts.</p>
+  const disabled = busy !== undefined || !backendReady || !metrics || !actions.client;
+  const amountE6 = BigInt(Math.round(amount * 1_000_000));
+
+  return <div className="pl-page">
+    <header className="pf-head">
+      <div><h1>Pool</h1><p>Losing trades fill the pool and winning trades are paid from it. Stake $WICKED to earn the surplus once the payout queue is clear.</p></div>
     </header>
+    {(error || signature || (backendReady && !actions.client)) && <div className="pf-alerts">
+      {error && <p className="pf-note pf-err" role="alert">{error}</p>}
+      {backendReady && !actions.client && <p className="pf-note">{actions.error ?? "Staking is not configured."}</p>}
+      {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
+    </div>}
 
-    <div className="pool-alerts">
-      {error && <div className="pool-notice pool-notice-error" role="alert">{error}</div>}
-      {backendReady && !actions.client && <div className="pool-notice">{actions.error ?? "Staking is not configured."}</div>}
-      {signature && <div className="pool-notice pool-notice-success" role="status">Confirmed on devnet · {compactAddress(signature)}</div>}
-    </div>
-
-    <section className="pool-metrics" aria-label="Pool metrics">
-      <div className="pool-metric"><span>LP balance</span><b>{metrics ? dollars(metrics.balance, 2) : "—"}</b><small>Available liquidity</small></div>
-      <div className="pool-metric"><span>Queue owed</span><b>{metrics ? dollars(metrics.queue, 2) : "—"}</b><small>Pending payouts</small></div>
-      <div className="pool-metric"><span>Total fees</span><b>{metrics ? dollars(metrics.fees, 2) : "—"}</b><small>Indexed fees</small></div>
-      <div className="pool-metric pool-metric-token"><span>Emissions</span><b>$WICKED</b><small>Protocol token</small></div>
+    <section className="pf-stats" aria-label="Pool metrics">
+      <div><span>Pool liquidity</span><b>{metrics ? usd(metrics.balance) : "—"}</b>
+        <small className={metrics?.change === undefined ? "" : metrics.change >= 0 ? "up" : "down"}>{metrics?.change === undefined ? "Available to pay winners" : `${metrics.change >= 0 ? "+" : "−"}${usd(Math.abs(metrics.change))} in 24h`}</small></div>
+      <div><span>Payout queue</span><b>{metrics ? usd(metrics.queue) : "—"}</b><small>{metrics && metrics.queue > 0 ? "Rewards paused until it clears" : "Clear"}</small></div>
+      <div><span>Fees earned</span><b>{metrics ? usd(metrics.fees) : "—"}</b><small>All time</small></div>
+      <div><span>Snapshots</span><b>{history.length}</b><small>From on-chain events</small></div>
     </section>
 
-    <div className="pool-layout">
-      <section className="pool-surface pool-chart" aria-labelledby="pool-balance-heading">
-        <div className="pool-section-heading"><div><p>VERIFIED HISTORY</p><h2 id="pool-balance-heading">Pool balance</h2></div><span>{history.length} snapshots</span></div>
-        <div className="pool-chart-frame"><PoolChart points={history} /></div>
-      </section>
-
-      <section className="pool-surface pool-staking" aria-labelledby="pool-stake-heading">
-        <div className="pool-staking-copy">
-          <p className="pool-eyebrow">FEE SHARE</p>
-          <h2 id="pool-stake-heading">Stake $WICKED</h2>
-          <p>Rewards distribute only after the payout queue is empty. Tokens are emitted to losing traders using the pool high-watermark curve.</p>
+    <div className="pl-grid">
+      <div className="pl-main">
+        <section className="card pl-chart" aria-label="Pool liquidity chart">
+          <WickChart series={[{ id: "pool", label: "Pool liquidity", color: "#5fd4cc", data: series }]} format="usd" windows={WINDOWS} height={260} initialWindow={31_536_000}
+            formatTime={(time) => new Date(time * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
+        </section>
+        <div className="flow">
+          <div><span>1 · Trades lose</span><b>Losses go to the pool</b><p>Margin from losing and liquidated positions becomes pool liquidity. No outside deposit is needed.</p></div>
+          <div><span>2 · Trades win</span><b>Winners are paid in order</b><p>If the pool is short, payouts wait in a first-in, first-out queue until it refills.</p></div>
+          <div><span>3 · Queue clears</span><b>Stakers earn the rest</b><p>Fees and surplus go to $WICKED stakers only while the queue is empty.</p></div>
         </div>
-        <div className="pool-controls">
-          <label htmlFor="pool-stake-amount"><span>Amount</span><input id="pool-stake-amount" type="number" min="1" value={amount} onChange={(event) => setAmount(Math.max(1, Number(event.target.value)))} /><small>$WICKED</small></label>
-          <div className="pool-actions">
-            <button className="pool-button pool-button-primary" disabled={busy !== undefined || !backendReady || !metrics || !actions.client} onClick={() => void action("stake", () => actions.client!.stake(BigInt(Math.round(amount * 1_000_000))))} type="button">{busy === "stake" ? "Confirming…" : "Stake"}</button>
-            <button className="pool-button pool-button-secondary" disabled={busy !== undefined || !backendReady || !metrics || !actions.client} onClick={() => void action("unstake", () => actions.client!.unstake(BigInt(Math.round(amount * 1_000_000))))} type="button">{busy === "unstake" ? "Confirming…" : "Unstake"}</button>
-            <button className="pool-button pool-button-secondary pool-button-wide" disabled={busy !== undefined || !backendReady || !metrics || !actions.client} onClick={() => void action("claim", () => actions.client!.claimRewards())} type="button">{busy === "claim" ? "Confirming…" : "Claim rewards"}</button>
+        <section aria-label="Recent pool activity">
+          <h2 className="pl-h2">Recent pool activity</h2>
+          {poolEvents.length === 0 ? <p className="pf-empty">No pool events yet.</p> : poolEvents.map((event) => {
+            const [name, color] = EVENT_NAMES[event.name]!;
+            return <div className="ev" key={`${event.signature}:${event.eventIndex}`}>
+              <i style={{ background: color }} /><b>{name}</b><span className="mu">{compactAddress(event.signature)}</span><small>{timeLabel(event.blockTime * 1000)}</small>
+            </div>;
+          })}
+        </section>
+      </div>
+      <aside className="ticket"><div className="card pl-card" aria-label="Stake $WICKED">
+        <Seg className="pl-tabs" label="Staking action" value={tab} onChange={setTab}
+          options={[{ value: "stake", label: "Stake" }, { value: "unstake", label: "Unstake" }, { value: "claim", label: "Claim" }]} />
+        {tab === "claim" ? <>
+          <div className="pf-val"><span>Rewards</span><b>$WICKED fee share</b>
+            <span>{metrics && metrics.queue > 0 ? `Rewards resume once the ${usd(metrics.queue)} payout queue is cleared.` : "The payout queue is clear, so rewards are flowing."}</span></div>
+          <button type="button" className="cta" disabled={disabled} onClick={() => void action("claim", () => actions.client!.claimRewards())}>{busy === "claim" ? "Confirming…" : "Claim rewards"}</button>
+        </> : <>
+          <div className="amt">
+            <label htmlFor="pl-amt">Amount</label>
+            <input id="pl-amt" inputMode="decimal" aria-label="Amount in WICKED" value={text ?? amount.toLocaleString("en-US")}
+              onFocus={() => setText(String(amount))} onChange={(event) => setText(event.target.value.replace(/[^0-9.]/g, ""))}
+              onBlur={() => { if (text !== undefined) setAmount(Math.max(0, Number(text) || 0)); setText(undefined); }} />
           </div>
-          {(!backendReady || !metrics || !actions.client) && <p className="pool-action-state">Actions remain disabled until verified pool data and a configured wallet client are available.</p>}
-        </div>
-      </section>
+          <div className="pl-unit"><span>$WICKED</span></div>
+          <button type="button" className="cta" disabled={disabled || amount <= 0}
+            onClick={() => void action(tab, () => tab === "stake" ? actions.client!.stake(amountE6) : actions.client!.unstake(amountE6))}>
+            {busy === tab ? "Confirming…" : `${tab === "stake" ? "Stake" : "Unstake"} ${amount.toLocaleString("en-US")} $WICKED`}
+          </button>
+        </>}
+        <p className="fine">$WICKED is emitted to losing traders on the pool&apos;s high-water-mark curve. Rewards only pay out while the payout queue is empty.</p>
+      </div></aside>
     </div>
   </div>;
 }
