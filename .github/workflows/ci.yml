@@ -26,8 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - uses: dtolnay/rust-toolchain@1.85.1
-      - uses: metadaoproject/setup-solana@v1.2
-        with: { solana-cli-version: 2.2.20 }
+      # Install the Solana CLI with Anza's official installer. metadaoproject/setup-solana@v1.2
+      # resolves its own scripts/channel-info.sh against this repo and fails before installing.
+      - name: Install Solana CLI 2.2.20
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.20/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
       - run: cargo install --locked anchor-cli --version 0.31.1
       - run: pnpm install --frozen-lockfile
       - run: mkdir -p ~/.config/solana target/deploy
