@@ -1,641 +1,300 @@
+/* App chrome: header, wallet menu, footer. Matches design/redesign-prototype. */
+
 .chrome-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background: var(--bg);
-  color: var(--text);
+  color: var(--fg);
 }
 
 .chrome-topbar {
   position: sticky;
   z-index: 40;
-  top: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.chrome-topbar-in {
+  display: flex;
   align-items: center;
-  height: 50px;
-  min-height: 50px;
-  padding: 0 16px;
-  border: 1px solid var(--line-strong);
-  border-bottom-color: var(--line);
-  border-radius: 0;
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
-  box-shadow: 0 10px 35px rgb(0 0 0 / 24%);
-  backdrop-filter: blur(18px);
+  gap: 28px;
+  max-width: 1600px;
+  height: 60px;
+  margin: 0 auto;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
 }
 
 .chrome-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: max-content;
-  color: var(--text);
-  font-size: 20px;
-  font-weight: 760;
-  line-height: 1;
-  letter-spacing: -0.055em;
+  gap: 9px;
+  color: var(--fg);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.02em;
   text-decoration: none;
 }
 
-.wick-logo-mark {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  place-items: center;
-  background: var(--amber);
-  clip-path: polygon(50% 0, 78% 25%, 62% 25%, 87% 100%, 50% 78%, 13% 100%, 38% 25%, 22% 25%);
-  color: #111;
-  font-size: 0;
-}
-
-.chrome-brand-name {
-  transform: translateY(-1px);
-}
+.chrome-brand svg { display: block; flex: none; }
 
 .chrome-nav {
   display: flex;
-  align-items: stretch;
-  align-self: stretch;
-  gap: 3px;
-  margin-left: 34px;
+  gap: 22px;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .chrome-nav-link {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 15px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
+  color: inherit;
   text-decoration: none;
-  transition: color 140ms ease, background 140ms ease;
-}
-
-.chrome-nav-link::after {
-  position: absolute;
-  right: 14px;
-  bottom: -1px;
-  left: 14px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: transparent;
-  content: "";
+  transition: color .15s ease;
 }
 
 .chrome-nav-link:hover,
-.chrome-nav-link:focus-visible,
 .chrome-nav-link--active {
-  color: var(--aqua);
+  color: var(--fg);
 }
 
-.chrome-nav-link--active::after {
-  background: var(--aqua);
-  box-shadow: 0 -3px 12px color-mix(in srgb, var(--aqua) 45%, transparent);
-}
-
-.chrome-trade-menu {
-  position: relative;
+.chrome-right {
   display: flex;
-  align-items: stretch;
-}
-
-.chrome-trade-menu > .chrome-nav-link {
-  border: 0;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-
-.chrome-trade-caret {
-  margin-left: 6px;
-  color: var(--aqua);
-  font-size: 13px;
-  transition: transform 140ms ease;
-}
-
-.chrome-trade-menu > [aria-expanded="true"] .chrome-trade-caret {
-  transform: rotate(180deg);
-}
-
-.chrome-trade-popover {
-  position: absolute;
-  z-index: 70;
-  top: calc(100% + 8px);
-  left: 0;
-  display: grid;
-  width: 236px;
-  padding: 7px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--panel-3) 96%, transparent);
-  box-shadow: 0 18px 45px rgb(0 0 0 / 42%);
-}
-
-.chrome-trade-popover a {
-  display: grid;
-  grid-template-columns: 42px 1fr;
-  gap: 2px 10px;
   align-items: center;
-  min-height: 48px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  color: var(--text);
-  text-decoration: none;
+  gap: 12px;
+  margin-left: auto;
 }
 
-.chrome-trade-popover a:hover,
-.chrome-trade-popover a:focus-visible {
-  outline: none;
-  background: color-mix(in srgb, var(--aqua) 10%, var(--panel-2));
-}
-
-.chrome-trade-popover b {
-  grid-row: 1 / span 2;
-  color: var(--aqua);
-  font-size: 12px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.chrome-trade-popover span {
-  color: var(--muted);
-  font-size: 10px;
-}
-
+/* wallet */
 .chrome-wallet {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
 }
 
 .chrome-wallet-entry {
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--fg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease;
 }
 
-.chrome-wallet-entry > span {
-  color: color-mix(in srgb, currentColor 66%, transparent);
-  font-size: 12px;
-  transition: transform 140ms ease;
+.chrome-wallet-entry:hover,
+.chrome-wallet-entry[aria-expanded="true"] {
+  background: var(--panel-3);
 }
 
-.chrome-wallet-entry[aria-expanded="true"] > span {
+.chrome-wallet-entry--connect {
+  background: var(--wick);
+  color: #04201e;
+}
+
+.chrome-wallet-entry--connect:hover,
+.chrome-wallet-entry--connect[aria-expanded="true"] {
+  background: var(--aqua-strong);
+}
+
+.chrome-wallet-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--yes-hi);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, .15);
+}
+
+.chrome-wallet-caret {
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+  transition: transform .2s var(--ease-out);
+}
+
+.chrome-wallet-entry--connect .chrome-wallet-caret { color: inherit; }
+
+.chrome-wallet-entry[aria-expanded="true"] .chrome-wallet-caret {
   transform: rotate(180deg);
 }
 
 .chrome-wallet-popover {
   position: absolute;
-  z-index: 80;
+  z-index: 60;
   top: calc(100% + 8px);
   right: 0;
   display: grid;
-  gap: 8px;
-  width: 282px;
-  padding: 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--panel-3) 97%, transparent);
-  box-shadow: 0 18px 45px rgb(0 0 0 / 42%);
+  gap: 6px;
+  width: 290px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transform-origin: top right;
+  animation: chrome-pop .22s var(--ease-out);
 }
 
-.chrome-wallet-popover-head {
+@keyframes chrome-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.chrome-wallet-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 2px 3px 8px;
-  border-bottom: 1px solid var(--line);
+  gap: 10px;
+  padding: 8px;
 }
 
-.chrome-wallet-popover-head strong {
-  color: var(--text);
-  font-size: 12px;
-}
+.chrome-wallet-head b { display: block; font-weight: 600; }
+.chrome-wallet-head small { color: var(--muted); font-size: 12px; }
 
-.chrome-wallet-popover-head span,
-.chrome-wallet-demo > div:first-child > span,
-.chrome-wallet-external > span {
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+.chrome-wallet-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: conic-gradient(from 120deg, #5fd4cc, #9aa8ff, #f7931a, #5fd4cc);
 }
 
 .chrome-wallet-option {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   width: 100%;
-  min-height: 58px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 10px;
   background: var(--panel-2);
-  color: var(--text);
-  font: inherit;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+
+.chrome-wallet-option:hover,
+.chrome-wallet-option:focus-visible { background: var(--panel-3); }
+.chrome-wallet-option strong { font-weight: 600; }
+.chrome-wallet-option span { color: var(--muted); font-size: 12px; }
+
+.chrome-wallet-items {
+  display: grid;
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chrome-wallet-link {
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
 
-.chrome-wallet-option:hover,
-.chrome-wallet-option:focus-visible {
-  outline: none;
-  border-color: var(--aqua);
-  background: color-mix(in srgb, var(--aqua) 8%, var(--panel-2));
-}
-
-.chrome-wallet-option strong { font-size: 12px; }
-.chrome-wallet-option span { color: var(--muted); font-size: 10px; }
-
-.chrome-wallet-demo {
-  display: grid;
-  gap: 9px;
-  padding: 10px 11px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel-2);
-}
-
-.chrome-wallet-demo > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-
-.chrome-network-chip i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--aqua);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--aqua) 65%, transparent);
-}
-
-.chrome-wallet-address {
-  color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.chrome-wallet-actions {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  padding-top: 7px;
-  border-top: 1px solid var(--line);
-}
-
-.chrome-wallet-link {
-  min-height: 28px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
 .chrome-wallet-link:hover,
-.chrome-wallet-link:focus-visible {
-  background: var(--panel-3);
-  color: var(--aqua);
-}
+.chrome-wallet-link:focus-visible { background: var(--panel-2); }
+.chrome-wallet-link:disabled { cursor: wait; opacity: .5; }
 
+.chrome-wallet-link--danger { color: var(--no-hi); }
 .chrome-wallet-link--danger:hover,
-.chrome-wallet-link--danger:focus-visible {
-  color: var(--red);
-}
+.chrome-wallet-link--danger:focus-visible { background: rgba(240, 80, 93, .1); }
 
-.chrome-wallet-link:disabled {
-  cursor: wait;
-  opacity: .48;
-}
+.chrome-wallet-external,
+.chrome-wallet .wallet-adapter-dropdown { display: block; width: 100%; }
 
-.chrome-primary,
 .chrome-wallet .wallet-adapter-button {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
   justify-content: center;
-  min-height: 34px;
-  padding: 0 17px;
-  border: 1px solid color-mix(in srgb, var(--aqua) 70%, var(--line));
-  border-radius: 10px;
-  background: var(--aqua);
-  color: var(--bg);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 760;
-  line-height: 1;
-  cursor: pointer;
-  transition: filter 140ms ease, transform 140ms ease;
-}
-
-.chrome-primary:hover,
-.chrome-wallet .wallet-adapter-button:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-}
-
-.chrome-wallet .wallet-adapter-button {
   width: 100%;
-  border-color: var(--line-strong);
+  height: auto;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 10px;
   background: var(--panel-2);
-  color: var(--text);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
-.chrome-wallet-external {
-  display: grid;
-  gap: 6px;
-}
-
-.chrome-wallet .wallet-adapter-button-start-icon {
-  margin-right: 7px;
-}
+.chrome-wallet .wallet-adapter-button:not([disabled]):hover { background: var(--panel-3); }
+.chrome-wallet .wallet-adapter-button-start-icon { width: 18px; height: 18px; margin-right: 8px; }
 
 .chrome-wallet-message {
   position: absolute;
+  z-index: 50;
   top: calc(100% + 10px);
   right: 0;
-  z-index: 50;
-  max-width: 330px;
+  max-width: 320px;
   margin: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   background: var(--panel-2);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 35%);
-  color: var(--text);
-  font-size: 11px;
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  font-size: 12px;
 }
 
-.chrome-network-chip {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  min-height: 24px;
-  margin: auto 0 auto auto;
-  padding: 0 7px;
-  border-left: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.chrome-app-grid {
-  display: grid;
-  min-height: calc(100vh - 90px);
-  border-right: 1px solid var(--line);
-  border-left: 1px solid var(--line);
-}
-
-.chrome-app-grid--rail {
-  grid-template-columns: minmax(0, 1fr) 280px;
-}
-
-.chrome-app-grid--wide {
-  grid-template-columns: minmax(0, 1fr);
-}
-
+/* page body */
 .chrome-main {
+  flex: 1;
+  width: 100%;
   min-width: 0;
-}
-
-.chrome-activity {
-  min-width: 0;
-  border-left: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
-}
-
-.chrome-activity-head {
-  display: grid;
-  gap: 9px;
-  padding: 15px 14px 13px;
-  border-bottom: 1px solid var(--line);
-}
-
-.chrome-activity-eyebrow {
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.chrome-activity-status {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 580;
-  line-height: 1.45;
-}
-
-.chrome-live-dot {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  margin-top: 3px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.chrome-live-dot.connected {
-  background: var(--green);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 65%, transparent);
-}
-
-.chrome-activity-list {
-  display: grid;
-}
-
-.chrome-activity-item {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
-  color: inherit;
-  text-decoration: none;
-  transition: background 140ms ease;
-}
-
-.chrome-activity-item:hover,
-.chrome-activity-item:focus-visible {
-  background: var(--panel-2);
-}
-
-.chrome-activity-title {
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 660;
-}
-
-.chrome-activity-meta {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 9px;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chrome-activity-empty {
-  margin: 13px;
-  padding: 15px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 8px;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.5;
 }
 
 .chrome-footer {
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.chrome-footer-in {
   display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding: 13px 18px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 18px 16px;
 }
 
-@media (max-width: 900px) {
-  .chrome-topbar {
-    grid-template-columns: auto 1fr;
-    row-gap: 0;
-  }
+@media (max-width: 760px) {
+  .chrome-topbar-in { gap: 16px; }
 
+  .chrome-brand span { display: none; }
+
+  /* primary links move to a bottom bar on phones */
   .chrome-nav {
-    margin-left: 20px;
-  }
-
-  .chrome-wallet {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-    padding: 8px 0;
-    border-top: 1px solid var(--line);
-  }
-
-  .chrome-app-grid--rail {
-    grid-template-columns: minmax(0, 1fr) 240px;
-  }
-}
-
-@media (max-width: 780px) {
-  .chrome-topbar {
-    grid-template-columns: auto minmax(0, 1fr);
-    min-height: 58px;
-    padding: 0 12px;
-  }
-
-  .chrome-brand-name {
-    font-size: 19px;
-  }
-
-  .chrome-nav {
-    justify-content: flex-end;
-    margin-left: 10px;
-  }
-
-  .chrome-nav-link {
-    padding: 0 9px;
-    font-size: 11px;
-  }
-
-  .chrome-app-grid--rail {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .chrome-activity {
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
-
-  .chrome-network-chip {
-    margin-left: auto;
-  }
-}
-
-@media (max-width: 520px) {
-  .chrome-topbar {
-    grid-template-columns: auto minmax(0, 1fr);
-    height: auto;
-    min-height: auto;
-    padding: 6px 8px 0;
-  }
-
-  .chrome-brand {
-    justify-self: start;
-  }
-
-  .chrome-nav {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-content: center;
-    width: 100%;
-    min-height: 34px;
-    margin: 4px 0 0;
-    border-top: 1px solid var(--line);
-  }
-
-  .chrome-nav-link {
-    flex: 1 1 0;
-    justify-content: center;
-  }
-
-  .chrome-trade-menu {
-    flex: 1 1 0;
-  }
-
-  .chrome-trade-menu > .chrome-nav-link {
-    width: 100%;
-  }
-
-  .chrome-trade-popover {
     position: fixed;
-    top: 82px;
-    right: 8px;
-    left: 8px;
-    width: auto;
+    z-index: 40;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    justify-content: space-around;
+    gap: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: rgba(11, 14, 17, .94);
+    backdrop-filter: blur(12px);
+    font-size: 14px;
   }
 
-  .chrome-network-chip {
-    padding-inline: 5px;
-    font-size: 8px;
-  }
-
-  .chrome-wallet {
-    grid-column: 2;
-    grid-row: 1;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-    margin: 0;
-    padding: 0;
-    border-top: 0;
-  }
+  .chrome-nav-link { flex: 1; padding: 6px 0; text-align: center; }
 
   .chrome-wallet-popover {
     position: fixed;
-    top: 48px;
-    right: 8px;
-    width: min(310px, calc(100vw - 16px));
+    top: 64px;
+    right: 12px;
+    width: min(300px, calc(100vw - 24px));
   }
 
-  .chrome-primary,
-  .chrome-wallet .wallet-adapter-button {
-    min-height: 32px;
-    padding-inline: 9px;
-    font-size: 10px;
-  }
-
-  .chrome-footer {
-    flex-wrap: wrap;
-  }
+  .chrome-footer { padding-bottom: 64px; }
 }
