@@ -17,7 +17,8 @@ import { dateLabel, timeLabel, usd } from "@/lib/markets";
 import { calculateLivePositionPnls, livePositionPnlE6, marketAddressForSymbol } from "@/lib/portfolio";
 import "@/styles/portfolio.css";
 
-type PositionRow = PositionView & Record<string, unknown>;
+type PositionRow = PositionView & { legacyUnverified?: boolean } & Record<string, unknown>;
+type ClaimRow = ClaimView & { legacyUnverified?: boolean };
 type Tab = "open" | "queue" | "hist";
 const PORTFOLIO_EVENTS = new Set(["PositionOpened", "PositionClosed", "PositionLiquidated", "PositionSettled", "ClaimQueued", "ClaimPaid"]);
 
@@ -57,7 +58,7 @@ export default function PortfolioPage() {
   const owner = demoMode ? account.ledger.owner : demo.publicKey ?? connected.publicKey?.toBase58();
   const backendReady = demoMode || backendConfigured();
   const positions: PositionRow[] = demoMode ? account.ledger.positions as unknown as PositionRow[] : chainPositions;
-  const claims: ClaimView[] = demoMode ? account.ledger.claims : chainClaims;
+  const claims: ClaimRow[] = demoMode ? account.ledger.claims : chainClaims;
   /* demo positions key markets by symbol, so their PnL is computed directly */
   const demoMarkets = useMemo(() => demoMode ? Object.fromEntries(marketState.markets.map((market) => [market.symbol, market])) : {}, [demoMode, marketState.markets]);
   const byAddress = demoMode ? demoMarkets : chainMarkets;
@@ -121,16 +122,22 @@ export default function PortfolioPage() {
 
   return <div className="pf-page">
     <header className="pf-head">
-      <div><h1>Portfolio</h1><p>{demoMode ? "A demo account trading on live prices. Connect a wallet to see your positions on Solana." : "Positions and payouts read from Wick\u2019s on-chain events."}</p></div>
+      <div><h1>Portfolio</h1><p>{demoMode ? "Browser-only practice using live prices. Local activity is not on-chain; connect a wallet for Solana devnet positions." : "Positions and payouts read from Wick\u2019s on-chain events."}</p></div>
       {owner && <div className="pf-wallet"><span>{demoMode ? "Demo account" : "Wallet"}</span><b>{demoMode ? usd(e6(account.ledger.usdcE6)) : compactAddress(owner)}</b></div>}
     </header>
+
+    {demoMode && account.ledger.legacyMigration && <p className="pf-note" role="status">
+      Preserved version-1 browser records are simulated and unverified legacy practice data—not chain, settlement, pool, or Stream evidence.
+    </p>}
 
     {(!owner || (owner && !backendReady) || (backendReady && owner && !actions.client) || error || signature) && <div className="pf-alerts">
       {!owner && <p className="pf-note">Connect Phantom or Solflare, or create a local wallet from the wallet menu, to see your portfolio.</p>}
       {owner && !backendReady && <p className="pf-note">Positions can&apos;t load because the backend isn&apos;t configured.</p>}
       {owner && backendReady && !actions.client && <p className="pf-note">{actions.error ?? "Trading is not configured."}</p>}
       {error && <p className="pf-note pf-err" role="alert">{error}</p>}
-      {signature && <p className="pf-note pf-ok" role="status">Transaction confirmed · {compactAddress(signature)}</p>}
+      {signature && <p className="pf-note pf-ok" role="status">{demoMode
+        ? `Local demo complete · ${signature} · no network transaction`
+        : `Devnet transaction confirmed · ${compactAddress(signature)}`}</p>}
     </div>}
 
     <section className="pf-stats" aria-label="Summary">
@@ -153,7 +160,7 @@ export default function PortfolioPage() {
           const key = position.address;
           return <div className={`prow${market ? " go" : ""}`} key={key} onClick={() => go(market)} role={market ? "link" : undefined}
             tabIndex={market ? 0 : undefined} onKeyDown={(event) => { if (event.key === "Enter") go(market); }}>
-            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}</small></div></div>
+            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}{position.legacyUnverified ? " · Simulated/unverified legacy" : ""}</small></div></div>
             <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
             <div className="v"><b>{e6(position.contractsE6).toLocaleString("en-US", { maximumFractionDigits: 1 })}</b><small>Margin {usd(e6(position.marginE6))}</small></div>
             <div className="v"><b>{cents(position.entryE6 / 1_000_000)} → {cents(mark)}</b><small>Liquidates at {cents(position.liqMarkE6 / 1_000_000)}</small></div>
@@ -170,7 +177,7 @@ export default function PortfolioPage() {
         {claims.map((claim) => {
           const owed = e6(claim.amountE6); const paid = e6(claim.paidE6);
           return <div className="prow" key={claim.address}>
-            <b>#{claim.claimIndex}</b><span>{usd(owed)}</span><span>{usd(paid)}</span><b>{usd(owed - paid)}</b>
+            <b>#{claim.claimIndex}{claim.legacyUnverified ? " · Simulated legacy" : ""}</b><span>{usd(owed)}</span><span>{usd(paid)}</span><b>{usd(owed - paid)}</b>
             <span><span className={`tag ${claim.status === "paid" ? "y" : "q"}`}>{claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}</span></span>
             <div className="pf-acts"><button type="button" className="ghost" disabled={busy === claim.address || claim.status === "paid" || disabled}
               onClick={() => void run(claim.address, () => actions.client!.claimQueue(claim))}>{busy === claim.address ? "Confirming…" : "Claim"}</button></div>
@@ -184,7 +191,7 @@ export default function PortfolioPage() {
           const label = marketLabel(market ?? snapshotMarket(position), position.market);
           const pnl = position.realizedPnlE6 === undefined ? undefined : e6(String(position.realizedPnlE6));
           return <div className={`prow${market ? " go" : ""}`} key={position.address} onClick={() => go(market)}>
-            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}</small></div></div>
+            <div className="pm"><div className="coin xs" aria-hidden="true">₿</div><div><b>{label.name}</b><small>{label.sub}{position.legacyUnverified ? " · Simulated/unverified legacy" : ""}</small></div></div>
             <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
             <span>{usd(e6(position.marginE6))}</span>
             <span>{cents(position.entryE6 / 1_000_000)}</span>

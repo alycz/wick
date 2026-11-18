@@ -132,11 +132,11 @@ export function WalletPanel() {
   const demoFund = async () => {
     if (!demo) return;
     setFunding(true); setMessage(undefined);
-    try { await demo.client.deposit(usdcE6(1_000), "faucet"); setMessage("Added $1,000.00 to your demo balance"); }
+    try { await demo.client.deposit(usdcE6(1_000), "faucet"); setMessage("Added $1,000.00 to the local demo balance · no network transfer"); }
     catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setFunding(false); }
   };
-  const source = wallet.publicKey ? "Local wallet · this browser" : connected.wallet ? `${connected.wallet.adapter.name} · Solana` : "";
+  const source = wallet.publicKey ? "Local wallet · this browser" : connected.wallet ? `${connected.wallet.adapter.name} · Solana devnet` : "";
 
   return (
     <div className="chrome-wallet" ref={walletPanelRef} onKeyDown={(event) => {
@@ -161,7 +161,7 @@ export function WalletPanel() {
         {demo && <>
           <div className="chrome-wallet-head">
             <span className="chrome-wallet-avatar chrome-wallet-avatar--demo" aria-hidden="true" />
-            <div><b>Demo account</b><small>Live prices · {usd(demoBalance)} USDC</small></div>
+            <div><b>Demo account</b><small>Live prices · {usd(demoBalance)} simulated USDC</small></div>
           </div>
           <div className="chrome-wallet-acts">
             <button data-wallet-option className="chrome-wallet-dep" type="button" onClick={() => { setOpen(false); setTransfer("deposit"); }}>Deposit</button>
@@ -171,7 +171,7 @@ export function WalletPanel() {
             <button className="chrome-wallet-link" type="button" onClick={() => void demoFund()} disabled={funding}>{funding ? "Adding funds…" : "Add funds"}</button>
             <button className="chrome-wallet-link" type="button" onClick={() => { demo.reset(); setMessage("Demo account reset"); }}>Reset demo</button>
           </div>
-          <p className="chrome-wallet-or">Connect a wallet to trade on Solana</p>
+          <p className="chrome-wallet-or">Connect a wallet for Solana devnet transactions</p>
         </>}
         {address && <div className="chrome-wallet-head">
           <span className="chrome-wallet-avatar" aria-hidden="true" />
@@ -228,8 +228,8 @@ function TransferDialog({ mode, onMode, onClose, address, source, funding, onFun
         <button type="button" className="dw-x" aria-label="Close" onClick={onClose}>×</button>
       </div>
       {demo ? <DemoTransferBody mode={mode} demo={demo} /> : mode === "deposit" ? <>
-        <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Your wallet</small><b>{compactAddress(address)}</b></div><div className="r"><small>Network</small><b>Solana</b></div></div>
-        <p className="dw-txt">Send USDC on Solana to this address. Wick takes margin straight from this wallet when you open a position, so there&apos;s nothing else to move.</p>
+        <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Your wallet</small><b>{compactAddress(address)}</b></div><div className="r"><small>Network</small><b>Solana devnet</b></div></div>
+        <p className="dw-txt">Send test USDC on Solana devnet to this address. Wick takes margin straight from this wallet when you open a position, so there&apos;s nothing else to move.</p>
         <div className="dw-addr"><code>{address}</code><button type="button" className="dw-copy" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button></div>
         {onFund && <button type="button" className="dw-go" disabled={funding} onClick={onFund}>{funding ? "Adding funds…" : "Add funds"}</button>}
         <small className="dw-foot">{source}</small>
@@ -254,15 +254,15 @@ function DemoTransferBody({ mode, demo }: { mode: "deposit" | "withdraw"; demo: 
   const submit = async () => {
     setBusy(true); setResult(undefined);
     try {
-      const signature = mode === "deposit" ? await demo.deposit(value) : await demo.withdraw(value, to);
-      setResult({ ok: true, text: `${mode === "deposit" ? "Deposited" : "Sent"} ${usd(value)} · ${compactAddress(signature)}` });
+      const receiptId = mode === "deposit" ? await demo.deposit(value) : await demo.withdraw(value, to);
+      setResult({ ok: true, text: `Local demo balance ${mode === "deposit" ? "increased" : "decreased"} ${usd(value)} · ${receiptId} · no network transfer` });
       setAmount("");
     } catch (error) { setResult({ ok: false, text: error instanceof Error ? error.message : String(error) }); }
     finally { setBusy(false); }
   };
   const chips = mode === "deposit" ? [100, 500, 1_000] : [25, 50, 100];
   return <>
-    <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Demo balance</small><b>{usd(demo.balance)}</b></div><div className="r"><small>Network</small><b>Solana</b></div></div>
+    <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Demo balance</small><b>{usd(demo.balance)}</b></div><div className="r"><small>Network</small><b>Local browser</b></div></div>
     <div className="dw-fld"><label htmlFor="dw-amt">Amount</label>
       <input id="dw-amt" inputMode="decimal" placeholder="0.00 USDC" value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))} /></div>
     <div className="dw-chips">{chips.map((option) => {
@@ -276,6 +276,6 @@ function DemoTransferBody({ mode, demo }: { mode: "deposit" | "withdraw"; demo: 
       {busy ? "Confirming…" : mode === "deposit" ? "Deposit" : "Withdraw"}
     </button>
     {result && <p className={`dw-res ${result.ok ? "up" : "down"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
-    <small className="dw-foot">Demo account · connect a wallet to move real USDC</small>
+    <small className="dw-foot">Practice account only · simulated USDC · no network transfer</small>
   </>;
 }

@@ -1,12 +1,11 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Keypair } from "@solana/web3.js";
 import type { PricerMarket } from "@wick/shared";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMarkets } from "@/hooks/use-markets";
 import { DemoClient } from "@/lib/demo/client";
-import { createLedger, DEMO_STORAGE_KEY, parseLedger, reconcile, seedHistory, type DemoLedger } from "@/lib/demo/ledger";
+import { createLedger, demoAccountId, DEMO_LEGACY_BACKUP_KEY, DEMO_STORAGE_KEY, isLegacyDemoStorage, parseLedger, reconcile, type DemoLedger } from "@/lib/demo/ledger";
 import { useDemoWallet } from "./wallet-panel";
 
 /* Visitors without a wallet get a demo account: real markets, simulated balance and positions.
@@ -24,10 +23,26 @@ export interface DemoAccountValue {
 
 const DemoAccountContext = createContext<DemoAccountValue | undefined>(undefined);
 
-function load(): DemoLedger {
+interface LoadedLedger { ledger: DemoLedger; allowPersistence: boolean }
+
+function load(): LoadedLedger {
   let stored: string | null = null;
   try { stored = window.localStorage.getItem(DEMO_STORAGE_KEY); } catch { /* storage blocked */ }
-  return parseLedger(stored) ?? createLedger(Keypair.generate().publicKey.toBase58(), Date.now());
+  const parsed = parseLedger(stored);
+  const legacy = isLegacyDemoStorage(stored);
+  if (parsed && stored && legacy) {
+    try {
+      /* Never replace the active v1 value until its exact bytes are recoverable. */
+      if (window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY) === null) window.localStorage.setItem(DEMO_LEGACY_BACKUP_KEY, stored);
+      if (window.localStorage.getItem(DEMO_LEGACY_BACKUP_KEY) !== stored) return { ledger: parsed, allowPersistence: false };
+      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(parsed));
+      return { ledger: parsed, allowPersistence: true };
+    } catch {
+      /* Keep using the migrated view in memory, but fail closed: no later commit may overwrite v1. */
+      return { ledger: parsed, allowPersistence: false };
+    }
+  }
+  return { ledger: parsed ?? createLedger(demoAccountId(), Date.now()), allowPersistence: !legacy };
 }
 
 export function DemoAccountProvider({ children }: { children: ReactNode }) {
@@ -37,6 +52,7 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
   const [ledger, setLedger] = useState<DemoLedger>(() => createLedger("", 0));
   const [ready, setReady] = useState(false);
   const ledgerRef = useRef(ledger);
+  const allowPersistenceRef = useRef(true);
   const marketsRef = useRef<readonly PricerMarket[]>(markets);
   marketsRef.current = markets;
 
@@ -44,19 +60,24 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
     if (next === ledgerRef.current) return;
     ledgerRef.current = next;
     setLedger(next);
+    if (!allowPersistenceRef.current) return;
     try { window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(next)); } catch { /* storage blocked or full */ }
   }, []);
 
-  useEffect(() => { ledgerRef.current = load(); setLedger(ledgerRef.current); setReady(true); }, []);
+  useEffect(() => {
+    const loaded = load();
+    ledgerRef.current = loaded.ledger;
+    allowPersistenceRef.current = loaded.allowPersistence;
+    setLedger(loaded.ledger);
+    setReady(true);
+  }, []);
 
-  /* keeper pass: seed history once a BTC price is known, then liquidate and settle against live prices */
+  /* Local keeper pass: only mark-based liquidation. Settlement waits for an official outcome. */
   useEffect(() => {
     if (!ready) return;
     const run = () => {
       const now = Date.now();
-      const spot = marketsRef.current.find((market) => market.spot > 0)?.spot;
-      const seeded = spot === undefined ? ledgerRef.current : seedHistory(ledgerRef.current, spot, now);
-      commit(reconcile(seeded, marketsRef.current, now));
+      commit(reconcile(ledgerRef.current, marketsRef.current, now));
     };
     run();
     const timer = window.setInterval(run, 5_000);
@@ -65,9 +86,7 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
 
   const client = useMemo(() => new DemoClient({ read: () => ledgerRef.current, write: commit, markets: () => marketsRef.current }), [commit]);
   const reset = useCallback(() => {
-    const fresh = createLedger(Keypair.generate().publicKey.toBase58(), Date.now());
-    const spot = marketsRef.current.find((market) => market.spot > 0)?.spot;
-    commit(spot === undefined ? fresh : seedHistory(fresh, spot, Date.now()));
+    commit(createLedger(demoAccountId(), Date.now()));
   }, [commit]);
 
   const active = !wallet.publicKey && !connected.publicKey;
