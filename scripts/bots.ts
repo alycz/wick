@@ -1,4 +1,8 @@
-import { AnchorProvider, BN, Program, Wallet, type Idl } from "@coral-xyz/anchor";
+import anchor, { AnchorProvider, Program, Wallet, type Idl } from "@coral-xyz/anchor";
+
+// Node ESM cannot see BN as a named export of anchor's CJS build, so read it off the default export.
+const { BN } = anchor;
+type BN = InstanceType<typeof BN>;
 import { createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { FAUCET_INVENTORY_E6, USDC_DECIMALS } from "../packages/shared/src/constants.js";

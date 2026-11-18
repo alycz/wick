@@ -1,6 +1,5 @@
-import {
+import anchor, {
   AnchorProvider,
-  BN,
   Program,
   setProvider,
   type Idl,
@@ -27,6 +26,9 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { before, describe, it } from "node:test";
+
+// Node ESM cannot see BN as a named export of anchor's CJS build, so read it off the default export.
+const { BN } = anchor;
 
 const E6 = 1_000_000n;
 const U64_MASK = (1n << 64n) - 1n;
