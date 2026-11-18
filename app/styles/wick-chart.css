@@ -19,3 +19,14 @@
 .wc-tabs.seg-host > .ind, .mk-page .vt.seg-host > .ind { background: var(--panel-3); border-radius: 6px; }
 .wc-tv { width: 100%; height: 100%; }
 .wc-empty { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: 13px; }
+/* hover card over the live chart */
+.wc-tip { position: absolute; top: 8px; z-index: 3; pointer-events: none; display: grid; gap: 6px; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line-strong, var(--line)); box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px); font-size: 12px; animation: wc-tip-in .12s var(--ease-out, ease-out); }
+.wc-tip-t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.wc-tip-r { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.wc-tip-r span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.wc-tip-r i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.wc-tip-r b { font-size: 15px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.wc-tip-r:only-of-type b { font-size: 17px; }
+@keyframes wc-tip-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }

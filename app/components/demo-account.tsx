@@ -7,6 +7,7 @@ import { useMarkets } from "@/hooks/use-markets";
 import { DemoClient } from "@/lib/demo/client";
 import { createLedger, demoAccountId, DEMO_LEGACY_BACKUP_KEY, DEMO_STORAGE_KEY, isLegacyDemoStorage, parseLedger, reconcile, type DemoLedger } from "@/lib/demo/ledger";
 import { useDemoWallet } from "./wallet-panel";
+import { liveBackend } from "@/lib/api";
 
 /* Visitors without a wallet get a demo account: real markets, simulated balance and positions.
    Connecting Phantom/Solflare or creating a local wallet switches every page back to DevNet. */
@@ -97,4 +98,11 @@ export function DemoAccountProvider({ children }: { children: ReactNode }) {
 /* undefined outside the provider (tests, isolated components), which means no demo */
 export function useDemoAccount(): DemoAccountValue | undefined {
   return useContext(DemoAccountContext);
+}
+
+/** Whether pages without a backend endpoint (leaderboard, protocol stats) should show simulated numbers:
+    on the demo account, or whenever the app is running on demo market data. */
+export function useShowSimulated(): boolean {
+  const account = useDemoAccount();
+  return !liveBackend() || account?.active === true;
 }

@@ -68,3 +68,13 @@
   .sx-page .tile { border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line); }
   .sx-page .tile:nth-child(2n) { border-right: 0 !important; }
 }
+:is(.lb-page, .sx-page) .up { color: var(--yes-hi); } :is(.lb-page, .sx-page) .down { color: var(--no-hi); }
+:is(.lb-page, .sx-page) .tag { font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 5px; white-space: nowrap; margin-left: 6px; }
+:is(.lb-page, .sx-page) .tag.y { background: var(--yes-bg); color: var(--yes-hi); } :is(.lb-page, .sx-page) .tag.n { background: var(--no-bg); color: var(--no-hi); }
+.sx-page .expo .legend { display: flex; gap: 18px; font-size: 12px; }
+.sx-page .expo .legend span { display: flex; align-items: center; gap: 6px; }
+.sx-page .expo .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.sx-page .expo .dot.y { background: var(--yes-hi); } .sx-page .expo .dot.n { background: var(--no-hi); }
+.sx-page .liqs .lr .lm { min-width: 0; }
+/* table rule: the last column's header stays left aligned, its content runs to the right edge */
+:is(.lb-page, .sx-page) .lbt td:last-child { text-align: right; }

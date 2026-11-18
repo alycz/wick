@@ -154,7 +154,7 @@ const edgeText = (edge: number | undefined) => edge === undefined ? "–" : sign
 
 /* ================= PRO ================= */
 function Pro(props: ViewProps) {
-  const { group, groups, rows, selected, spot, sigma, now, health, live, error, ticket, choose, chooseGroup, mode, setMode, spotTrail, history } = props;
+  const { group, groups, rows, selected, spot, sigma, now, health, live, error, ticket, choose, chooseGroup, mode, setMode, spotTrail, theoTrail, gemTrail, history } = props;
   const [view, setView] = useState<"graph" | "table">("table");
   let spotRowDone = false;
   return <div className="mk-page pro">
@@ -216,8 +216,7 @@ function Pro(props: ViewProps) {
       </div>
       <section className="p side-col bookp" aria-label="Gemini quote">
         <div className="book-h"><b>{group.upDown ? "Up/Down 15m" : `${usd(selected.strike, 0)} · ${group.label}`}</b><span>Gemini · YES · ¢</span></div>
-        <Quote market={selected} now={now} />
-        <div className="bk-src">Gemini&apos;s best bid and ask for this strike. Wick fills against its pool at its fair price, shown in teal.</div>
+        <Quote market={selected} now={now} theoTrail={theoTrail} gemTrail={gemTrail} />
       </section>
       <section className="p side-col" aria-label="Trade">
         <ProTicket market={selected} upDown={group.upDown} label={marketName(group, selected)} history={history} state={ticket} />
@@ -228,18 +227,59 @@ function Pro(props: ViewProps) {
 
 const cap = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
-function Quote({ market, now }: { market: PricerMarket; now: number }) {
+/* Gemini's top of book for the selected strike, drawn against Wick's fair price, with how the two have moved. */
+function Quote({ market, now, theoTrail, gemTrail }: { market: PricerMarket; now: number; theoTrail: ChartPoint[]; gemTrail: ChartPoint[] }) {
   const { bid, ask, mid, last } = market.gemini;
-  const spread = bid !== undefined && ask !== undefined ? `${((ask - bid) * 100).toFixed(1)}¢` : "–";
+  const fair = market.theo;
+  const c = (value: number | undefined, digits = 1) => value === undefined ? "–" : `${(value * 100).toFixed(digits)}¢`;
   const ageSecs = Math.max(0, (now - market.gemini.ts) / 1000);
+  /* zoom the scale around the quote and the fair price so the markers spread out */
+  const points = [bid, ask, fair, mid].filter((value): value is number => value !== undefined);
+  const lo = Math.max(0, Math.min(...points) - .04), hi = Math.min(1, Math.max(...points) + .04);
+  const pos = (value: number) => `${((value - lo) / Math.max(hi - lo, .01)) * 100}%`;
   return <div className="qt">
-    <div className="qt-row qt-big"><span>Ask</span><b className="askc">{ask === undefined ? "No ask" : (ask * 100).toFixed(1)}</b></div>
-    <div className="bk-sp"><span>Spread {spread}</span><span style={{ color: "var(--wick)" }}>Wick fair {(market.theo * 100).toFixed(1)}</span></div>
-    <div className="qt-row qt-big"><span>Bid</span><b className="bidc">{bid === undefined ? "No bid" : (bid * 100).toFixed(1)}</b></div>
-    <div className="qt-row"><span>Mid</span><b>{mid === undefined ? "–" : (mid * 100).toFixed(1)}</b></div>
-    <div className="qt-row"><span>Last</span><b>{last === undefined ? "–" : (last * 100).toFixed(1)}</b></div>
-    <div className="qt-row"><span>Edge vs mid</span><b className={edgeClass(market.edge)}>{edgeText(market.edge)}</b></div>
-    <div className="qt-row"><span>Quote age</span><b>{ageSecs < 60 ? `${ageSecs.toFixed(0)}s` : `${Math.floor(ageSecs / 60)}m`}</b></div>
+    <div className="qt-ba">
+      <div className="qt-cell b"><span>Bid</span><b>{c(bid)}</b></div>
+      <div className="qt-cell a"><span>Ask</span><b>{c(ask)}</b></div>
+    </div>
+    <div className="qt-scale" aria-label={`Gemini ${c(bid)} to ${c(ask)}, Wick fair ${c(fair)}`}>
+      <div className="qt-track">
+        {bid !== undefined && ask !== undefined ? <i className="qt-band" style={{ left: pos(bid), width: `calc(${pos(ask)} - ${pos(bid)})` }} /> : null}
+        {mid !== undefined ? <i className="qt-mid" style={{ left: pos(mid) }} /> : null}
+        <i className="qt-fair" style={{ left: pos(fair) }}><em>Wick {c(fair)}</em></i>
+      </div>
+      <div className="qt-ends"><span>{c(lo, 0)}</span><span>{c(hi, 0)}</span></div>
+    </div>
+    <div className="qt-stats">
+      <div><span>Spread</span><b>{bid !== undefined && ask !== undefined ? c(ask - bid) : "–"}</b></div>
+      <div><span>Mid</span><b>{c(mid)}</b></div>
+      <div><span>Edge vs mid</span><b className={edgeClass(market.edge)}>{market.edge === undefined ? "–" : `${edgeText(market.edge)}¢`}</b></div>
+      <div><span>Last</span><b>{c(last)}</b></div>
+      <div><span>Quote age</span><b>{ageSecs < 60 ? `${ageSecs.toFixed(0)}s` : `${Math.floor(ageSecs / 60)}m`}</b></div>
+      <div><span>Leverage cap</span><b>{market.maxLeverage}x</b></div>
+    </div>
+    <FairVsMid theo={theoTrail} gem={gemTrail} />
+  </div>;
+}
+
+/* small two-line chart: Wick fair against Gemini mid over the recent trail */
+function FairVsMid({ theo, gem }: { theo: ChartPoint[]; gem: ChartPoint[] }) {
+  const all = [...theo, ...gem];
+  if (theo.length < 2) return <div className="qt-spark qt-spark-empty">The fair price trail appears as prices update.</div>;
+  const t0 = Math.min(...all.map((p) => p.time)), t1 = Math.max(...all.map((p) => p.time));
+  /* at least a 6¢ range, so a quote that ticks by a cent stays a calm line instead of filling the box */
+  const lo = Math.min(...all.map((p) => p.value)), hi = Math.max(...all.map((p) => p.value));
+  const span = Math.max(hi - lo, .06), v0 = (lo + hi) / 2 - span / 2;
+  /* light smoothing: a 5-point moving average */
+  const smooth = (data: ChartPoint[]) => data.map((p, i) => { const part = data.slice(Math.max(0, i - 2), i + 3); return { time: p.time, value: part.reduce((sum, q) => sum + q.value, 0) / part.length }; });
+  const path = (data: ChartPoint[]) => smooth(data).map((p, i) => `${i ? "L" : "M"}${(((p.time - t0) / Math.max(t1 - t0, 1)) * 100).toFixed(2)},${(100 - ((p.value - v0) / span) * 80 - 10).toFixed(2)}`).join("");
+  const mins = Math.max(1, Math.round((t1 - t0) / 60));
+  return <div className="qt-spark">
+    <div className="qt-spark-h"><span><i style={{ background: "var(--wick)" }} />Wick fair</span><span><i style={{ background: "#9aa8ff" }} />Gemini mid</span><span className="mu">{mins}m</span></div>
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {gem.length > 1 ? <path d={path(gem)} stroke="#9aa8ff" /> : null}
+      <path d={path(theo)} stroke="var(--wick)" />
+    </svg>
   </div>;
 }
 
@@ -304,8 +344,9 @@ function Easy(props: ViewProps) {
     <div style={{ minWidth: 0 }}>
       <div className="ev-head">
         <div className="ev-id"><div className="coin" aria-hidden="true">₿</div><div><small>Crypto · Bitcoin</small><h1>{title}</h1></div></div>
-        <div className="ev-px"><div className="k-px">{usd(spot)}</div>
+        <div className="ev-px">
           {change !== undefined && spanMins > 0 && <div className="k-chg"><span className={change >= 0 ? "up" : "down"}>{change >= 0 ? "▲" : "▼"} {usd(Math.abs(change))} ({Math.abs(change / first! * 100).toFixed(2)}%)</span><span className="mu">{spanMins}m</span></div>}
+          <div className="k-px">{usd(spot)}</div>
         </div>
       </div>
       {up && <div className="ud">

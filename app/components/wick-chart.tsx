@@ -13,7 +13,12 @@ export interface ChartWindow { label: string; secs: number }
 
 const GRID = "#1a1f24";
 const TEXT = "#8e979f";
-const usd = (value: number) => `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/* millions read as $4.50M so the axis fits, and the minus sign sits before the $ */
+const usd = (value: number) => {
+  const abs = Math.abs(value), sign = value < 0 ? "−" : "";
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  return `${sign}$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 const cents = (value: number) => `${(value * 100).toFixed(1)}¢`;
 
 function TradingView({ series, format, refLine }: { series: ChartSeries[]; format: "usd" | "cents"; refLine?: { value: number; label?: string } }) {
@@ -56,6 +61,30 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
   return <div ref={box} className="wc-tv" />;
 }
 
+/* value of a series at a time: the last point at or before it */
+function valueAt(data: ChartPoint[], time: number): number | undefined {
+  let lo = 0, hi = data.length - 1, found: number | undefined;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (data[mid]!.time <= time) { found = data[mid]!.value; lo = mid + 1; } else hi = mid - 1; }
+  return found;
+}
+const clockTime = (time: number) => new Date(time * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" });
+
+/* Hover card drawn over the Liveline canvas: time on top, then each series with its value. */
+function HoverCard({ hover, series, fmt, formatTime, width }: { hover: { time: number; x: number }; series: ChartSeries[]; fmt: (v: number) => string; formatTime?: (t: number) => string; width: number }) {
+  const rows = series.map((item) => ({ item, value: valueAt(item.data, hover.time) })).filter((row) => row.value !== undefined);
+  if (!rows.length) return null;
+  const cardW = series.length > 1 ? 188 : 150;
+  const flip = hover.x + 14 + cardW > width - 8;
+  const left = flip ? Math.max(8, hover.x - 14 - cardW) : hover.x + 14;
+  return <div className="wc-tip" style={{ left, width: cardW }} role="status">
+    <span className="wc-tip-t">{(formatTime ?? clockTime)(hover.time)}</span>
+    {rows.map(({ item, value }) => <div className="wc-tip-r" key={item.id}>
+      {series.length > 1 ? <span><i style={{ background: item.color }} />{item.label}</span> : null}
+      <b>{fmt(value!)}</b>
+    </div>)}
+  </div>;
+}
+
 export function WickChart({ series, format, windows, height = 220, refLine, legend, color, formatTime, initialWindow }: {
   series: ChartSeries[];
   format: "usd" | "cents";
@@ -72,6 +101,11 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
   const fmt = format === "cents" ? cents : usd;
   const single = series.length === 1 ? series[0] : undefined;
   const empty = series.every((item) => item.data.length < 2);
+  const [hover, setHover] = useState<{ time: number; x: number }>();
+  const area = useRef<HTMLDivElement>(null);
+  const onHover = (point: { time: number; x: number } | null) => setHover(point ? { time: point.time, x: point.x } : undefined);
+  /* Liveline draws its own one-line readout; push it off the canvas and show the hover card instead */
+  const hoverProps = { onHover, tooltipY: -10_000 };
 
   // keep a reference line only when it sits near the visible values, so a far strike does not flatten the line
   let ref = refLine;
@@ -94,14 +128,15 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
         <button type="button" className="wc-tab" aria-pressed={mode === "tv"} onClick={() => setMode("tv")}>TradingView</button>
       </div>
     </div>
-    <div className="wc-area" style={{ height }}>
+    <div className="wc-area" style={{ height }} ref={area} onMouseLeave={() => setHover(undefined)}>
       {empty ? <div className="wc-empty">Waiting for live prices.</div> : mode === "live"
         ? single
           ? <Liveline data={single.data} value={single.data[single.data.length - 1]!.value} color={color ?? single.color} theme="dark" formatValue={fmt} window={win} {...(formatTime ? { formatTime } : {})}
-            {...(ref ? { referenceLine: ref } : {})} badgeVariant="default" />
+            {...(ref ? { referenceLine: ref } : {})} badgeVariant="default" {...hoverProps} />
           : <Liveline data={series[0]!.data} value={series[0]!.data[series[0]!.data.length - 1]?.value ?? 0} theme="dark" formatValue={fmt} window={win} grid {...(formatTime ? { formatTime } : {})}
-            series={series.map((item) => ({ id: item.id, label: item.label, color: item.color, data: item.data, value: item.data[item.data.length - 1]?.value ?? 0 }))} />
+            series={series.map((item) => ({ id: item.id, label: item.label, color: item.color, data: item.data, value: item.data[item.data.length - 1]?.value ?? 0 }))} {...hoverProps} />
         : <TradingView series={series} format={format} {...(ref ? { refLine: ref } : {})} />}
+      {mode === "live" && hover && !empty ? <HoverCard hover={hover} series={series} fmt={fmt} width={area.current?.clientWidth ?? 0} {...(formatTime ? { formatTime } : {})} /> : null}
     </div>
   </div>;
 }
