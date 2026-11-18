@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { BRAND } from "@wick/shared";
 import { WalletPanel } from "./wallet-panel";
-import { liveBackend } from "@/lib/api";
+import { backendConfigured } from "@/lib/api";
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -42,7 +42,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <footer className="chrome-footer">
         <div className="chrome-footer-in">
           <span>{BRAND.name} · Solana</span>
-          <span>{liveBackend() ? "Prices: Deribit options · Settlement: Gemini" : "Demo prices: simulated from the Wick pricing model"}</span>
+          <span>{backendConfigured() ? "Prices: Deribit options · Settlement: Gemini" : "Market data unavailable · Backend not configured"}</span>
         </div>
       </footer>
     </div>

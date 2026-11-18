@@ -6,7 +6,7 @@ async function loadApi(url: string) {
   return import("@/lib/api");
 }
 
-describe("backend URL and fallback", () => {
+describe("backend URL and failures", () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
   it("adds https:// to a bare host and drops trailing slashes", async () => {
@@ -16,18 +16,16 @@ describe("backend URL and fallback", () => {
     expect(normalizeBackendUrl("  ")).toBe("");
   });
 
-  it("switches to demo data when the backend can't be reached", async () => {
+  it("surfaces network failures instead of fabricating market data", async () => {
     const api = await loadApi("wick-backend.railway.internal");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    expect(api.liveBackend()).toBe(true);
-    expect((await api.getMarkets()).length).toBeGreaterThan(10);
-    expect(api.liveBackend()).toBe(false);
+    expect(api.backendConfigured()).toBe(true);
+    await expect(api.getMarkets()).rejects.toThrow("Failed to fetch");
   });
 
-  it("switches to demo data when the backend answers 404", async () => {
+  it("surfaces HTTP failures instead of claiming healthy providers", async () => {
     const api = await loadApi("https://example.invalid");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not found", { status: 404 })));
-    expect((await api.getHealth()).ok).toBe(true);
-    expect(api.liveBackend()).toBe(false);
+    await expect(api.getHealth()).rejects.toThrow("Backend request failed (404)");
   });
 });

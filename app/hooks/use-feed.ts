@@ -2,7 +2,7 @@
 
 import type { IndexedEvent } from "@wick/shared";
 import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
-import { backendConfigured, backendUrl, liveBackend, getFeed, parseIndexedEvent } from "@/lib/api";
+import { backendConfigured, backendUrl, getFeed, parseIndexedEvent } from "@/lib/api";
 import { mergeIndexedEvents } from "@/lib/feed";
 
 export interface FeedState { events: IndexedEvent[]; connected: boolean; loading: boolean; error?: string }
@@ -39,30 +39,20 @@ function useFeedSource(): FeedState {
         });
       return refreshInFlight;
     };
-    let timer: number | undefined;
-    const openSource = () => {
-      if (controller.signal.aborted) return;
-      if (!liveBackend()) {
-        setConnected(true);
-        timer = window.setInterval(() => void refresh(), 15_000);
-        return;
-      }
-      source = new EventSource(backendUrl("/events/stream"));
-      source.addEventListener("open", () => { setConnected(true); void refresh(); });
-      source.addEventListener("error", () => {
-        setConnected(false);
-        setError((current) => current ?? "Live indexer connection interrupted; reconnecting.");
-      });
-      source.addEventListener("wick", (message) => {
-        try {
-          const event = parseIndexedEvent(JSON.parse((message as MessageEvent<string>).data));
-          setEvents((current) => mergeIndexedEvents(current, [event]));
-        } catch { /* ignore malformed event frames */ }
-      });
-    };
-    /* the first snapshot decides the source: the backend's event stream, or demo data if the backend is unreachable */
-    void refresh().then(openSource);
-    return () => { controller.abort(); source?.close(); if (timer !== undefined) window.clearInterval(timer); };
+    void refresh();
+    source = new EventSource(backendUrl("/events/stream"));
+    source.addEventListener("open", () => { setConnected(true); void refresh(); });
+    source.addEventListener("error", () => {
+      setConnected(false);
+      setError((current) => current ?? "Live indexer connection interrupted; reconnecting.");
+    });
+    source.addEventListener("wick", (message) => {
+      try {
+        const event = parseIndexedEvent(JSON.parse((message as MessageEvent<string>).data));
+        setEvents((current) => mergeIndexedEvents(current, [event]));
+      } catch { /* ignore malformed event frames */ }
+    });
+    return () => { controller.abort(); source?.close(); };
   }, [configured]);
   return { events, connected, loading, ...(error === undefined ? {} : { error }) };
 }
