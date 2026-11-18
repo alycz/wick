@@ -3,7 +3,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import type { PositionView, PricerMarket } from "@wick/shared";
+import { DEVNET_PROGRAM_ID, type PositionView, type PricerMarket } from "@wick/shared";
 import { Seg } from "@/components/markets/controls";
 import { useDemoAccount } from "@/components/demo-account";
 import { useDemoWallet } from "@/components/wallet-panel";
@@ -84,7 +84,7 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const programId = process.env.NEXT_PUBLIC_PROGRAM_ID;
+    const programId = process.env.NEXT_PUBLIC_PROGRAM_ID || DEVNET_PROGRAM_ID;
     if (demoMode || !programId || chainPositions.length === 0 || marketState.markets.length === 0) {
       setLivePnls((value) => Object.keys(value).length ? {} : value);
       return () => { cancelled = true; };

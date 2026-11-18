@@ -7,10 +7,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-wick = "HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN"
+wick = "GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8"
 
 [programs.localnet]
-wick = "HTjxbnhTfHUqBk6ZW8aMJS5hWmTpsDbzMk9VKfQTZVjN"
+wick = "GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8"
 
 [registry]
 url = "https://api.apr.dev"
