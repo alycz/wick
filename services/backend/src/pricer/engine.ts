@@ -76,6 +76,11 @@ const cutoffByBucket: Record<SupportedBucket, number> = {
   month_end: 600,
 };
 
+// A Solana transaction is limited to 1,232 bytes. Each mark adds a writable
+// market account plus its encoded update, so keeping this below the observed
+// 18-update ceiling leaves room for a priority-fee instruction on retries.
+const MAX_MARKS_PER_TRANSACTION = 16;
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -450,33 +455,40 @@ export class PricerEngine {
     const open = markets.filter((market) => market.status === "open" && this.ensuredMarkets.has(market.symbol));
     if (open.length === 0) return;
     const heartbeat = now - this.lastBatchAt >= this.heartbeatMs;
-    const changed = open.some((market) => {
+    const changed = open.filter((market) => {
       const previous = this.lastPosted.get(market.symbol);
       return !previous || Math.abs(priceToE6(market.theo) - previous.markE6) >= this.markMoveE6 || previous.cap !== market.maxLeverage;
     });
-    if (!changed && !heartbeat) return;
-    const requests: MarkUpdateRequest[] = open.map((market) => ({
+    if (changed.length === 0 && !heartbeat) return;
+    const requests: MarkUpdateRequest[] = (changed.length > 0 ? changed : open).map((market) => ({
       symbol: market.symbol,
       markE6: priceToE6(market.theo),
       maxLeverage: market.maxLeverage,
     }));
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(new Error("mark transaction did not land within 3 seconds")), 3_000);
+    let confirmedCount = 0;
     try {
-      const signature = await this.chain.updateMarks(requests, {
-        priorityFeeMicroLamports: this.priorityFeeMicroLamports,
-        signal: controller.signal,
-      });
+      for (let offset = 0; offset < requests.length; offset += MAX_MARKS_PER_TRANSACTION) {
+        const batch = requests.slice(offset, offset + MAX_MARKS_PER_TRANSACTION);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(new Error("mark transaction did not land within 3 seconds")), 3_000);
+        try {
+          await this.chain.updateMarks(batch, {
+            priorityFeeMicroLamports: this.priorityFeeMicroLamports,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+        confirmedCount += batch.length;
+        for (const request of batch) this.lastPosted.set(request.symbol, { markE6: request.markE6, cap: request.maxLeverage, at: now });
+      }
       this.lastBatchAt = now;
       this.lastMarkAt = now;
-      for (const request of requests) this.lastPosted.set(request.symbol, { markE6: request.markE6, cap: request.maxLeverage, at: now });
       this.priorityFeeMicroLamports = 0;
-      this.logger.info({ count: requests.length, signature }, "Adaptive mark batch confirmed");
+      this.logger.info({ count: requests.length, transactions: Math.ceil(requests.length / MAX_MARKS_PER_TRANSACTION) }, "Adaptive mark batches confirmed");
     } catch (error) {
       this.priorityFeeMicroLamports = 1_000;
-      this.logger.warn({ count: requests.length, error: errorMessage(error) }, "Mark batch failed; next attempt will add a small priority fee");
-    } finally {
-      clearTimeout(timeout);
+      this.logger.warn({ count: requests.length, confirmedCount, error: errorMessage(error) }, "Mark batch failed; next attempt will add a small priority fee");
     }
   }
 

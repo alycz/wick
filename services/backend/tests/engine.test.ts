@@ -61,12 +61,16 @@ class RecordingChain implements ChainPort {
   settledPositionSymbols: string[] = [];
   claimCalls = 0;
   failMarks = false;
+  failMarkCall: number | undefined;
   failSettlePositions = false;
   configured(): boolean { return true; }
   async marketExists(): Promise<boolean> { return false; }
   async createMarket(request: CreateMarketRequest): Promise<string> { this.created.push(request); return `create-${this.created.length}`; }
   async updateMarks(requests: readonly MarkUpdateRequest[], options: { priorityFeeMicroLamports: number }): Promise<string> {
-    if (this.failMarks) throw new Error("mark confirmation failed");
+    if (this.failMarks || this.marks.length + 1 === this.failMarkCall) {
+      this.failMarkCall = undefined;
+      throw new Error("mark confirmation failed");
+    }
     this.marks.push({ requests: structuredClone(requests), priority: options.priorityFeeMicroLamports });
     return `marks-${this.marks.length}`;
   }
@@ -113,14 +117,16 @@ describe("PricerEngine", () => {
     expect(markets.some((market) => market.kind === "ladder")).toBe(true);
     expect(markets.every((market) => market.volSource === "deribit" && market.spot === 65_500)).toBe(true);
     expect(chain.created.length).toBe(markets.length);
-    expect(chain.marks).toHaveLength(1);
-    expect(chain.marks[0]!.requests).toHaveLength(markets.length);
+    const markTransactionCount = Math.ceil(markets.length / 16);
+    expect(chain.marks).toHaveLength(markTransactionCount);
+    expect(chain.marks.every((batch) => batch.requests.length <= 16)).toBe(true);
+    expect(chain.marks.flatMap((batch) => batch.requests)).toHaveLength(markets.length);
 
     await engine.markOnce();
-    expect(chain.marks).toHaveLength(1);
+    expect(chain.marks).toHaveLength(markTransactionCount);
     now += 4_001;
     await engine.markOnce();
-    expect(chain.marks).toHaveLength(2);
+    expect(chain.marks).toHaveLength(markTransactionCount * 2);
     await engine.stop();
   });
 
@@ -321,6 +327,29 @@ describe("PricerEngine", () => {
     chain.failMarks = false;
     now += 1_000;
     await engine.markOnce();
+    expect(engine.snapshot().lastMarkAt).toBe(now);
+    await engine.stop();
+  });
+
+  it("retries only the unconfirmed mark subset after a split batch fails", async () => {
+    let now = Date.parse("2026-11-16T22:50:00.000Z");
+    const chain = new RecordingChain();
+    chain.failMarkCall = 2;
+    const engine = new PricerEngine({
+      gemini: new FixtureGemini(), vol: new FixedVol(() => now), chain, logger: quietLogger,
+      quoteStreamFactory: noSocket, now: () => now, timers: false,
+    });
+
+    await engine.start();
+    const marketCount = engine.store.markets().length;
+    expect(marketCount).toBeGreaterThan(16);
+    expect(chain.marks).toHaveLength(1);
+    expect(engine.snapshot().lastMarkAt).toBeUndefined();
+
+    now += 1_000;
+    await engine.markOnce();
+    expect(chain.marks.flatMap((batch) => batch.requests)).toHaveLength(marketCount);
+    expect(chain.marks[1]!.requests[0]!.symbol).not.toBe(chain.marks[0]!.requests[0]!.symbol);
     expect(engine.snapshot().lastMarkAt).toBe(now);
     await engine.stop();
   });
