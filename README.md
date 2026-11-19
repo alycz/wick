@@ -1,12 +1,16 @@
 # Wick
 
-**The leverage and liquidity layer for prediction markets. Trade any Gemini market at up to 300x, priced from Deribit options and filled by a self-funding pool on Solana.**
+**The leverage and liquidity layer for prediction markets. Trade supported Gemini BTC markets at up to 300x, priced from Deribit options and filled by a self-funding pool on Solana.**
 
-A prediction contract is a digital option. Wick prices every Gemini strike from Deribit's BTC options surface, caps leverage by how fast each market can move, and fills every trade from a pool that funds itself from trading. Every position settles on Gemini's official outcome, never on a price Wick invents.
+A prediction contract is a digital option. Wick prices every supported Gemini BTC strike from Deribit's options surface, caps leverage by how fast each market can move, and fills every trade from a pool that funds itself from trading. Every position settles on Gemini's official outcome, never on a price Wick invents.
 
 [Live app](https://wick-markets-phi.vercel.app/) · [Program on Solana Explorer](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet) · [CI](https://github.com/alycz/wick/actions/workflows/ci.yml) · [Pricing audit](docs/nov18-btc-strike-pricing-audit.html)
 
-UBC Hackathon 2026 · Track 02, DeFi & Onchain Apps · Built on Gemini Prediction Markets, Solana, QuickNode Streams and Deribit.
+> **Verified boundary — November 19, 2026:** the frontend, Railway backend and Wick program are deployed on Solana devnet. The backend is chain-enabled and a finalized Wick market settlement matches Gemini's official outcome and settlement value. A public browser faucet/open-position lifecycle has not been accepted end to end. QuickNode Streams is implemented but not configured: `/health` reports `indexerConfigured: false` and `streamEvidencePresent: false`, and the activity feed currently comes from labelled RPC reconciliation. Do not treat guest examples, local demo receipts or reconciled feed entries as wallet, transaction or Stream-delivery evidence.
+
+Wick is unaudited devnet software using test assets. It supports no mainnet or real funds.
+
+UBC Hackathon 2026 · Track 02, DeFi & Onchain Apps · Built on Gemini Prediction Markets, Solana and Deribit, with an unconfigured QuickNode Streams integration.
 
 ## What makes Wick different
 
@@ -22,7 +26,7 @@ curl -s https://api.devnet.solana.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8",{"encoding":"base64"}]}' \
   | grep -o '"executable":true'
 
-# 191 TypeScript tests across pricing, Gemini parsing, the backend, the app and scripts (about 11 seconds)
+# 194 TypeScript tests across pricing, Gemini parsing, the backend, the app and scripts (about 11 seconds)
 pnpm install --frozen-lockfile && pnpm test
 
 # 16 native Rust tests for the program's fixed-point math
@@ -50,14 +54,15 @@ flowchart LR
   Deribit[Deribit BTC options<br/>spot and IV surface] --> Pricer
   Pricer -->|batched marks, leverage caps, settlement| Program[Wick Anchor program<br/>Solana]
   App[Next.js app] -->|open, close, stake, claim| Program
-  Program -->|confirmed blocks| Streams[QuickNode Stream<br/>Wick program filter]
-  Streams -->|authenticated webhook| Indexer[Indexer<br/>SQLite WAL]
+  Program -. target: confirmed blocks .-> Streams[QuickNode Stream<br/>not configured]
+  Streams -. target: authenticated webhook .-> Indexer[Indexer<br/>SQLite WAL]
+  Program -->|current: RPC reconciliation| Indexer
   Indexer -->|REST and SSE| App
   Pricer -->|markets, history, WebSocket| App
   Gemini -->|official resolutionSide| Pricer
 ```
 
-One backend process runs market discovery, pricing, the keeper, liquidator and settler loops, the Streams webhook, the indexer and the read APIs ([`services/backend/src/main.ts`](services/backend/src/main.ts)). Solana is the source of truth. If the index is lost, positions and markets rebuild from program accounts. See [Architecture](docs/ARCHITECTURE.md) for component boundaries and recovery.
+One backend process runs market discovery, pricing, the keeper, liquidator and settler loops, the optional Streams webhook, the indexer and the read APIs ([`services/backend/src/main.ts`](services/backend/src/main.ts)). Solana is the source of truth. The current deployment reconciles confirmed program activity over RPC; if the index is lost, positions and markets rebuild from program accounts. See [Architecture](docs/ARCHITECTURE.md) for component boundaries and recovery.
 
 ## Pricing
 
@@ -156,18 +161,21 @@ Gemini is Wick's market list and its only outcome oracle. Wick runs on every Gem
 
 Quotes stream over WebSocket with a two-second REST fallback. Every response passes a strict schema ([`packages/gemini/src/schemas.ts`](packages/gemini/src/schemas.ts)) tested against recorded real responses: 23 events, 72 contracts and 20 settled events in [`packages/gemini/fixtures`](packages/gemini/fixtures). Positions settle only on Gemini's `resolutionSide` ([`services/backend/src/pricer/engine.ts`](services/backend/src/pricer/engine.ts)). API observations are in [Findings](docs/FINDINGS.md).
 
+One independently checked devnet example ties the provider outcome to the program without relying on the guest demo. Gemini event `BTC05M2611192100` resolved **No** at `62031.377166666665`. Its deterministic Wick market PDA is `3f1mdW5jpXCLdDjT8nb6WB1PTMdh8jsYZB22CtFNwSWR`; finalized devnet [transaction `4Zmw…cAy`](https://explorer.solana.com/tx/4ZmwN66jD19MsCKmGhPpyuQs5i9Y9VretehYBF1roqVkVdzrndSww65oN5321xa755BrwuPr3zgg9rHtWtmX9cAy?cluster=devnet) emitted `MarketSettled` for that PDA with outcome `no` and value `62031377167`. The backend observed it through `rpc_reconcile`, so this is Gemini/keeper/Solana settlement evidence, not QuickNode delivery or a public-browser position lifecycle.
+
 ## QuickNode Streams
 
-QuickNode Streams pushes every confirmed Wick transaction from Solana to the backend, so positions, activity, the leaderboard and pool history update within seconds without polling.
+The repository contains a QuickNode Streams path for pushing confirmed Wick transactions from Solana to the backend. It is not active in the verified deployment, so Wick does not claim the QuickNode Streams bounty or measured Stream latency.
 
 - **Network:** `solana-devnet`.
 - **Dataset:** `block`, from the chain tip.
 - **Filter:** [`streams/filter.js`](streams/filter.js) matches the Wick program ID in top-level and inner instructions, skips failed transactions, and returns signature, slot, block time and program logs.
 - **Destination:** an authenticated HTTPS webhook on the backend at `/streams/webhook`. It uses a constant-time secret check and a durable inbox ([`services/backend/src/indexer/routes.ts`](services/backend/src/indexer/routes.ts)).
-- **Consumers:** Anchor events are decoded and upserted idempotently into SQLite WAL ([`services/backend/src/indexer`](services/backend/src/indexer)). They feed `/feed`, `/positions`, `/leaderboard`, `/lp/history` and the SSE stream.
-- **Why Streams:** confirmed activity reaches the interface with low latency, and a 60-second RPC reconciler only fills gaps.
+- **Consumers:** when configured, Anchor events are decoded and upserted idempotently into SQLite WAL ([`services/backend/src/indexer`](services/backend/src/indexer)). The same projections feed `/feed`, `/positions`, `/leaderboard`, `/lp/history` and the SSE stream.
+- **Current source:** the deployed feed is populated by the labelled 60-second RPC reconciler; returned events carry `provenance: "rpc_reconcile"`.
+- **Why Streams:** after separate provider and delivery verification, confirmed activity could reach the interface with lower latency while RPC becomes only a gap filler.
 
-The Stream is created idempotently by [`scripts/create-stream.ts`](scripts/create-stream.ts), which tests the filter against a real program transaction before activating it.
+[`scripts/create-stream.ts`](scripts/create-stream.ts) can create the Stream idempotently and test the filter against a real program transaction before activation. It has not produced verified active-Stream or authenticated-delivery evidence for the current deployment.
 
 ## Deribit
 

@@ -1,7 +1,7 @@
 import activeFixture from "../../../packages/gemini/fixtures/active-btc.json" with { type: "json" };
 import { geminiContractSchema, geminiEventsResponseSchema, type GeminiEvent, type GeminiEventsResponse, type GeminiStrike } from "@wick/gemini";
 import type { VolSource } from "@wick/vol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { historyPoint, upDownHistoryQuote } from "../src/pricer/up-down-history.js";
 import { PricerEngine } from "../src/pricer/engine.js";
 import { replayTheo, type MarketTheoInput } from "../src/pricer/theo-replay.js";
@@ -53,6 +53,7 @@ class FixtureGemini implements GeminiGateway {
 class RecordingChain implements ChainPort {
   created: CreateMarketRequest[] = [];
   marks: Array<{ requests: readonly MarkUpdateRequest[]; priority: number }> = [];
+  markAttempts: Array<{ requests: readonly MarkUpdateRequest[]; priority: number }> = [];
   liquidations: string[] = [];
   settlements: Array<{ symbol: string; outcome: "yes" | "no"; value: bigint }> = [];
   voids: string[] = [];
@@ -61,14 +62,27 @@ class RecordingChain implements ChainPort {
   settledPositionSymbols: string[] = [];
   claimCalls = 0;
   failMarks = false;
+  failMarkCalls = new Set<number>();
+  markGates = new Map<number, Promise<void>>();
+  activeMarkCalls = 0;
+  maxConcurrentMarkCalls = 0;
   failSettlePositions = false;
   configured(): boolean { return true; }
   async marketExists(): Promise<boolean> { return false; }
   async createMarket(request: CreateMarketRequest): Promise<string> { this.created.push(request); return `create-${this.created.length}`; }
   async updateMarks(requests: readonly MarkUpdateRequest[], options: { priorityFeeMicroLamports: number }): Promise<string> {
-    if (this.failMarks) throw new Error("mark confirmation failed");
-    this.marks.push({ requests: structuredClone(requests), priority: options.priorityFeeMicroLamports });
-    return `marks-${this.marks.length}`;
+    const attempt = { requests: structuredClone(requests), priority: options.priorityFeeMicroLamports };
+    const call = this.markAttempts.push(attempt);
+    this.activeMarkCalls += 1;
+    this.maxConcurrentMarkCalls = Math.max(this.maxConcurrentMarkCalls, this.activeMarkCalls);
+    try {
+      await this.markGates.get(call);
+      if (this.failMarks || this.failMarkCalls.has(call)) throw new Error("mark confirmation failed");
+      this.marks.push(attempt);
+      return `marks-${this.marks.length}`;
+    } finally {
+      this.activeMarkCalls -= 1;
+    }
   }
   async listOpenPositions(): Promise<readonly OpenPositionRef[]> { return structuredClone(this.positions); }
   async listSettlementMarkets(): Promise<readonly SettlementMarketRef[]> { return structuredClone(this.settlementMarkets); }
@@ -124,7 +138,10 @@ describe("PricerEngine", () => {
     expect(chain.marks).toHaveLength(firstRound);
     // Past the heartbeat every open market is re-posted, so none ages past
     // the program's staleness window even when its price is flat.
-    now += 2_001;
+    now += 3_999;
+    await engine.markOnce();
+    expect(chain.marks).toHaveLength(firstRound);
+    now += 2;
     await engine.markOnce();
     expect(chain.marks).toHaveLength(firstRound * 2);
     expect(new Set(chain.marks.slice(firstRound).flatMap((mark) => mark.requests.map((request) => request.symbol))).size).toBe(markets.length);
@@ -328,6 +345,62 @@ describe("PricerEngine", () => {
     chain.failMarks = false;
     now += 1_000;
     await engine.markOnce();
+    expect(engine.snapshot().lastMarkAt).toBe(now);
+    await engine.stop();
+  });
+
+  it("retries only a failed mark subset without reporting a partial round as fresh", async () => {
+    let now = Date.parse("2026-11-16T22:50:00.000Z");
+    const chain = new RecordingChain();
+    const engine = new PricerEngine({
+      gemini: new FixtureGemini(), vol: new FixedVol(() => now), chain, logger: quietLogger,
+      quoteStreamFactory: noSocket, now: () => now, timers: false,
+    });
+
+    await engine.start();
+    const previouslyFreshAt = engine.snapshot().lastMarkAt;
+    const firstRoundAttempts = chain.markAttempts.length;
+    expect(firstRoundAttempts).toBeGreaterThan(1);
+    expect(previouslyFreshAt).toBe(now);
+    chain.failMarkCalls.add(firstRoundAttempts + 2);
+    now += 4_001;
+
+    await engine.markOnce();
+
+    expect(engine.snapshot().lastMarkAt).toBe(previouslyFreshAt);
+    expect(engine.snapshot().lastError).toContain("mark_batch");
+    const failedSymbols = chain.markAttempts[firstRoundAttempts + 1]!.requests.map((request) => request.symbol);
+
+    now += 1_000;
+    await engine.markOnce();
+
+    expect(chain.markAttempts).toHaveLength(firstRoundAttempts * 2 + 1);
+    expect(chain.markAttempts.at(-1)!.requests.map((request) => request.symbol)).toEqual(failedSymbols);
+    expect(chain.markAttempts.at(-1)!.priority).toBe(1_000);
+    expect(engine.snapshot().lastMarkAt).toBe(now);
+    expect(engine.snapshot().lastError).toBeUndefined();
+    await engine.stop();
+  });
+
+  it("bounds delayed mark confirmations to one in-flight keeper transaction", async () => {
+    const now = Date.parse("2026-11-16T22:50:00.000Z");
+    const chain = new RecordingChain();
+    let releaseFirst!: () => void;
+    chain.markGates.set(1, new Promise<void>((resolve) => { releaseFirst = resolve; }));
+    const engine = new PricerEngine({
+      gemini: new FixtureGemini(), vol: new FixedVol(() => now), chain, logger: quietLogger,
+      quoteStreamFactory: noSocket, now: () => now, timers: false,
+    });
+
+    const starting = engine.start();
+    await vi.waitFor(() => expect(chain.markAttempts).toHaveLength(1));
+
+    expect(chain.maxConcurrentMarkCalls).toBe(1);
+    expect(engine.snapshot().lastMarkAt).toBeUndefined();
+    releaseFirst();
+    await starting;
+    expect(chain.markAttempts.length).toBeGreaterThan(1);
+    expect(chain.maxConcurrentMarkCalls).toBe(1);
     expect(engine.snapshot().lastMarkAt).toBe(now);
     await engine.stop();
   });

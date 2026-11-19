@@ -96,4 +96,22 @@ describe("configured chain port", () => {
     const confirmer = { confirmTransaction: vi.fn(async () => ({ context: { slot: 43 }, value: { err: { InstructionError: [0, "Custom"] } } })) };
     await expect(submitAndConfirmTransaction(builder, confirmer)).rejects.toThrow("failed-signature");
   });
+
+  it("stops waiting when confirmation outlives the transaction deadline", async () => {
+    let releaseConfirmation!: (value: { context: { slot: number }; value: { err: null } }) => void;
+    const confirmation = new Promise<{ context: { slot: number }; value: { err: null } }>((resolve) => { releaseConfirmation = resolve; });
+    const builder = { rpc: vi.fn(async () => "slow-signature") };
+    const confirmer = { confirmTransaction: vi.fn(() => confirmation) };
+    const controller = new AbortController();
+    const outcome = submitAndConfirmTransaction(builder, confirmer, controller.signal).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(confirmer.confirmTransaction).toHaveBeenCalledOnce());
+
+    controller.abort(new Error("confirmation deadline exceeded"));
+
+    await expect(outcome).resolves.toEqual(expect.objectContaining({ message: "confirmation deadline exceeded" }));
+    releaseConfirmation({ context: { slot: 44 }, value: { err: null } });
+  });
 });

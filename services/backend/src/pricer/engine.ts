@@ -125,7 +125,6 @@ export class PricerEngine {
   private marking = false;
   private settling = false;
   private priorityFeeMicroLamports = 0;
-  private lastBatchAt = 0;
   private lastDiscoveryAt: number | undefined;
   private lastMarkAt: number | undefined;
   private lastPricingAt: number | undefined;
@@ -145,7 +144,7 @@ export class PricerEngine {
     this.discoveryIntervalMs = options.discoveryIntervalMs ?? 10_000;
     this.markIntervalMs = options.markIntervalMs ?? 1_000;
     this.settlementIntervalMs = options.settlementIntervalMs ?? 3_000;
-    this.heartbeatMs = options.heartbeatMs ?? 2_000;
+    this.heartbeatMs = options.heartbeatMs ?? 4_000;
     this.markMoveE6 = options.markMoveE6 ?? 1_000;
     this.halfSpreadE6 = options.halfSpreadE6 ?? 5_000;
     this.timers = options.timers ?? true;
@@ -473,30 +472,36 @@ export class PricerEngine {
     }));
     const batches: MarkUpdateRequest[][] = [];
     for (let offset = 0; offset < requests.length; offset += MAX_MARKS_PER_TRANSACTION) batches.push(requests.slice(offset, offset + MAX_MARKS_PER_TRANSACTION));
-    // Batches go out together so the last one is not delayed behind the first.
-    const results = await Promise.allSettled(batches.map(async (batch) => {
+    // Keep only one keeper transaction in flight at a time. This bounds RPC
+    // pressure and avoids a quiet-market heartbeat turning into a burst when
+    // the market list grows. Confirmed batches are remembered individually so
+    // a later failure retries only the unconfirmed subset.
+    let confirmed = 0;
+    const failures: unknown[] = [];
+    for (const batch of batches) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(new Error("mark transaction did not land within 3 seconds")), 3_000);
       try {
         await this.chain.updateMarks(batch, { priorityFeeMicroLamports: this.priorityFeeMicroLamports, signal: controller.signal });
         for (const request of batch) this.lastPosted.set(request.symbol, { markE6: request.markE6, cap: request.maxLeverage, at: now });
-        return batch.length;
+        confirmed += batch.length;
+      } catch (error) {
+        failures.push(error);
       } finally {
         clearTimeout(timeout);
       }
-    }));
-    const confirmed = results.reduce((sum, result) => sum + (result.status === "fulfilled" ? result.value : 0), 0);
-    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-    if (confirmed > 0) {
-      this.lastBatchAt = now;
-      this.lastMarkAt = now;
     }
     if (failures.length === 0) {
+      // `lastMarkAt` represents a complete due-market round. A partial success
+      // must not make /health look fresh while another market remains stale.
+      this.lastMarkAt = now;
       this.priorityFeeMicroLamports = 0;
       this.logger.info({ count: requests.length, transactions: batches.length }, "Adaptive mark batches confirmed");
     } else {
       this.priorityFeeMicroLamports = 1_000;
-      this.logger.warn({ count: requests.length, confirmed, failedTransactions: failures.length, error: errorMessage(failures[0]!.reason) }, "Mark batch failed; next attempt will add a small priority fee");
+      const error = errorMessage(failures[0]);
+      this.lastError = `mark_batch: ${error}`;
+      this.logger.warn({ count: requests.length, confirmed, failedTransactions: failures.length, error }, "Mark batch failed; next attempt will add a small priority fee");
     }
   }
 

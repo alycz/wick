@@ -306,9 +306,10 @@ class AnchorChainTransport implements ChainTransport {
 
 export async function submitAndConfirmTransaction(builder: TransactionBuilder, confirmer: TransactionConfirmer, signal?: AbortSignal): Promise<string> {
   throwIfAborted(signal);
-  const signature = await builder.rpc();
+  const signature = await abortable(builder.rpc(), signal);
   throwIfAborted(signal);
-  const confirmation = await confirmer.confirmTransaction(signature, "confirmed");
+  const confirmation = await abortable(confirmer.confirmTransaction(signature, "confirmed"), signal);
+  throwIfAborted(signal);
   if (confirmation.value.err) throw new Error(`Wick transaction ${signature} failed: ${JSON.stringify(confirmation.value.err)}`);
   return signature;
 }
@@ -332,6 +333,21 @@ function normalizeName(name: string): string { return name.replaceAll("_", "").t
 function symbolHash(symbol: string): Buffer { return createHash("sha256").update(symbol).digest(); }
 function u64le(value: bigint): Buffer { const bytes = Buffer.alloc(8); bytes.writeBigUInt64LE(value); return bytes; }
 function throwIfAborted(signal?: AbortSignal): void { if (signal?.aborted) throw signal.reason ?? new Error("operation aborted"); }
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason ?? new Error("operation aborted"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason ?? new Error("operation aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener("abort", onAbort); resolve(value); },
+      (error: unknown) => { signal.removeEventListener("abort", onAbort); reject(error); },
+    );
+  });
+}
 function variantName(value: unknown): string {
   if (typeof value === "string") return value.toLowerCase();
   if (value && typeof value === "object") return Object.keys(value)[0]?.toLowerCase() ?? "";
