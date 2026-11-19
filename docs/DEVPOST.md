@@ -1,6 +1,6 @@
 # Wick — Devpost submission copy
 
-> **Submission operator note — November 18, 2026:** the frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) (HTTP 200 verified). The prose below describes the implemented project, not a verified end-to-end trading deployment. Do not submit it as a working demo until `pnpm deploy:verify` passes, the final URLs and video are accessible, and the evidence selections below are satisfied. As of November 17, QuickNode must **not** be selected.
+> **Submission operator note — November 18, 2026:** the [public repository](https://github.com/alycz/wick), [frontend](https://wick-markets-phi.vercel.app/), [Railway backend](https://wick-backend-production-1e2c4649.up.railway.app/health), executable Solana devnet program and fixed-supply test mint are verified. The browser faucet/open-position lifecycle, QuickNode Stream and final 2–3 minute video are not. The guest Portfolio, Pool, Leaderboard and Stats examples are visibly labelled local simulations and must not be narrated as account, chain or provider evidence. Do not select QuickNode or submit a video link until the remaining gates below pass.
 
 ## Project name
 
@@ -20,7 +20,7 @@ We built Wick, a devnet trading interface and Anchor program for leveraged synth
 
 The Solana program implements opening and closing YES/NO positions, liquidation, official-outcome settlement, market/vault exposure limits, FIFO payout claims, a self-bootstrapping pool, $WICKED emissions, and staking. A single Node backend runs market discovery, pricing, keeper/liquidator/settler loops, the QuickNode Streams webhook, SQLite projections, and read APIs. The Next.js interface includes markets, trade previews, portfolio, pool analytics, live activity, a clearly separate browser-only practice account, and local/Phantom/Solflare devnet wallet support. Local practice receipts are not presented as chain or Stream evidence.
 
-Current evidence boundary: the public source and deployed frontend are available. Main CI [44236165665](https://github.com/alycz/wick/actions/runs/44236165665) passed on `f189083807f913c31faf5ca2571447ab99a00d1f` at 04:26:30 UTC on November 18, including TypeScript and Anchor local-validator checks. This does not verify a public devnet trading lifecycle. Program/mint, backend, actual Stream delivery, working faucet/trades and final video still require deployment and acceptance evidence. We will not present a build-time program ID or a reachable frontend as end-to-end completion.
+Current evidence boundary: public `main` is `0bce1b73264a30e1ad0c487b23c0f12ba1298721`, with CI [44408114681](https://github.com/alycz/wick/actions/runs/44408114681) passing. Signed-out UI verification after `d2909723e595b2519f86595e52029f3e9991383b` confirmed Landing, Markets, Portfolio, Pool and Stats rendered. Markets showed a populated Wick price chart, strike table, ticket and Wick fair price; no Gemini bid/ask was visible, and the chart's **Live** selector is not chain or Stream evidence. Program `GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8` is executable on devnet. The deployed backend reports healthy live volatility data and `chainConfigured: true`, and confirmed market-create/settle transactions exist. It also reports `indexerConfigured: false` and `streamEvidencePresent: false`; the public browser faucet/trade flow remains unverified, and the local public-page review cut still requires review and upload before it can become the final demo-video link.
 
 ## 2. What problem does it solve?
 
@@ -36,7 +36,7 @@ For Up/Down markets, Wick prices `N(d2)` at Gemini's captured strike with a one-
 
 The keeper posts batched fresh marks to the Anchor program. Traders sign real devnet transactions; the program verifies staleness, cutoff, slippage, leverage and liability limits. Gemini's outcome is the only settlement authority. Losses increase the pool and mint $WICKED; profitable payouts use free vault liquidity or enter a FIFO claim queue.
 
-The intended live event path is Solana devnet blocks → a QuickNode program filter → an authenticated webhook → idempotent Anchor event decoding → SQLite WAL → REST/SSE activity, positions, leaderboard and pool history. A 60-second RPC job is reconciliation, not the primary path. This path is implemented but remains a conditional claim until a real Stream and transaction are verified.
+The intended live event path is Solana devnet blocks → a QuickNode program filter → an authenticated webhook → idempotent Anchor event decoding → SQLite WAL → REST/SSE activity, positions, leaderboard and pool history. A 60-second RPC job currently reconciles confirmed program activity. The Stream path is implemented in source but remains a conditional claim until an active provider Stream and authenticated delivery are verified.
 
 ## 4. What makes it unique?
 
@@ -58,13 +58,13 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 - Solana devnet, Anchor 0.31.1, Rust 1.85.1, SPL Token
 - TypeScript 5.8, Node.js 22+, pnpm workspaces
-- Next.js 14, React 18, Tailwind CSS, Solana wallet adapters
+- Next.js 15.5.29, React 18.3, Tailwind CSS, Solana wallet adapters
 - Fastify, WebSocket, SSE, Pino, Zod
 - SQLite via `better-sqlite3` in WAL mode
 - Gemini Prediction Markets public REST and WebSocket APIs
 - Deribit public REST/WebSocket, Derive v3, EWMA realized-vol fallback
 - QuickNode Streams REST/filter/webhook implementation; live Stream evidence pending
-- Railway backend and Vercel deployment definitions; frontend deployed, integrated backend/on-chain acceptance unverified
+- Railway backend and Vercel frontend deployed; Solana devnet program and test mint verified; QuickNode indexing unconfigured
 - Vitest, Cargo tests, Playwright, ffmpeg
 
 ## Sponsor-tool details
@@ -75,29 +75,30 @@ On the product side, we would add richer portfolio risk, historical model calibr
 
 ### QuickNode Streams
 
-**Conditional; do not select this bounty yet.** The repository contains the Solana block filter, authenticated destination, IDL event decoder, idempotent SQLite indexer, REST creation/test script, and feed consumers. Eligibility requires a real active Stream ID, verified test-filter result for a deployed Wick transaction, public destination, and observed low-latency `/feed` delivery. None exists as of November 17. Select QuickNode only after every box in `docs/ELIGIBILITY.md` is checked and record the evidence here before submission.
+**Conditional; do not select this bounty yet.** The repository contains the Solana block filter, authenticated destination, IDL event decoder, idempotent SQLite indexer, REST creation/test script and feed consumers. Eligibility requires a real active Stream ID, verified test-filter result for a deployed Wick transaction, public destination and observed low-latency `/feed` delivery. The backend currently reports `indexerConfigured: false` and `streamEvidencePresent: false`. Select QuickNode only after every box in `docs/ELIGIBILITY.md` is checked and record the evidence here before submission.
 
 ## Form selections and evidence gate
 
 | Devpost field | Selection | Evidence condition |
 |---|---|---|
-| Track | **Track 02 — DeFi & Onchain Apps** | Intended selection. Submit only after the public demo interacts with the deployed Wick smart contract and the economic/risk documentation remains in README. |
-| Chain award | **Best use of Solana** | Intended selection after the Wick Anchor program is executable on devnet, its actual ID/explorer link is in README, and the lifecycle is verified. |
+| Track | **Track 02 — DeFi & Onchain Apps** | Select. Wick implements and deploys a new financial primitive on Solana devnet; the final video must accurately show the current product and evidence boundary. |
+| Chain award | **Best use of Solana** | Select. The custom Anchor program is executable on devnet and its program/mint addresses are documented. Do not overstate the unverified browser trade flow. |
 | Bounty | **Gemini Prediction Markets** | Select: implemented with real public API evidence and documented endpoints. Overall submission still needs the working-demo gate. |
 | Bounty | **QuickNode Streams** | **DO NOT SELECT YET.** Select only after active Stream/filter/destination and real delivery evidence are recorded. |
 
 ## Links to enter only after verification
 
-- Public source repository: [github.com/alycz/wick](https://github.com/alycz/wick); tested frontend baseline `f189083807f913c31faf5ca2571447ab99a00d1f`
-- Deployed frontend: [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/). URL availability is verified, but this is not yet a verified working trading demo.
-- Backend health/API: pending Railway HTTPS URL
-- Solana program: pending actual devnet program ID and explorer link
+- Public source repository: [github.com/alycz/wick](https://github.com/alycz/wick); verified public `main` baseline `0bce1b73264a30e1ad0c487b23c0f12ba1298721`
+- Deployed frontend: [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/)
+- Backend health/API: [wick-backend-production-1e2c4649.up.railway.app/health](https://wick-backend-production-1e2c4649.up.railway.app/health)
+- Solana program: [`GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8`](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet)
+- Test USDC: [`HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU`](https://explorer.solana.com/address/HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU?cluster=devnet)
 - Demo video: pending accessible 2–3 minute upload
 - QuickNode Stream evidence: pending and required only if selecting that bounty
 
 ## Safety and limitations
 
-Wick is an unaudited Solana devnet demo using self-minted test USDC. No real funds and no mainnet are supported. The pool can queue profitable payouts; leverage and liability caps reduce risk but do not guarantee solvency. The keeper and external market-data providers are trusted components. Current source has real transaction adapters that fail closed until a real program, matching generated IDL and funded authorities are configured. See `docs/WP11_REPORT.md` for open limits.
+Wick is an unaudited Solana devnet demo using self-minted test USDC. No real funds and no mainnet are supported. The pool can queue profitable payouts; leverage and liability caps reduce risk but do not guarantee solvency. The keeper and external market-data providers are trusted components. The Railway keeper is configured against the deployed program, while browser actions fail closed unless a valid wallet and confirmed devnet transaction are available. Signed-out example data is local simulation, not protocol history. See `docs/WP11_REPORT.md` and `docs/ELIGIBILITY.md` for open limits.
 
 ## Submission timing and attendance
 

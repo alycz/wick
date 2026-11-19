@@ -4,7 +4,7 @@
 
 Wick is a Solana devnet application for leveraged synthetic YES/NO positions on Gemini's live BTC prediction markets. It computes an options-implied fair value for every supported strike, shows that value beside Gemini's bid and ask, and sizes leverage market by market using binary gamma. Trades settle against Gemini's official outcome, never a price invented by Wick.
 
-> **Verification status — November 18, 2026:** the frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) (HTTP 200 verified). Main CI [44231909011](https://github.com/alycz/wick/actions/runs/44231909011) passed TypeScript lint/tests, Anchor build and `anchor test --skip-build` on commit `052cc678e56f07604a02d15e8a2a1a4920eb7e30`, completing at 03:50:13 UTC. That is local-validator/CI evidence, not proof of devnet execution or a working public trading lifecycle. Deployment and end-to-end acceptance of the Wick program, test mint, backend, active QuickNode Stream, faucet and final demo video remain unverified. Do not claim sponsor or working-demo eligibility until the remaining evidence gates pass. The November 17 UI descriptions and deployment snapshots in the linked runbooks are historical; later redesign changes require fresh recorder and browser verification.
+> **Verification status — November 18, 2026:** the public repository is [github.com/alycz/wick](https://github.com/alycz/wick), with `main` at `0bce1b73264a30e1ad0c487b23c0f12ba1298721` and CI run [44408114681](https://github.com/alycz/wick/actions/runs/44408114681) passing. The signed-out public UI was verified after commit `d2909723e595b2519f86595e52029f3e9991383b`. Landing, Markets, Portfolio, Pool and Stats rendered; Markets showed a populated Wick price chart, strike table, ticket and Wick fair price. No Gemini bid/ask was visible, and the chart's **Live** selector is not protocol-liveness evidence. The [Railway backend](https://wick-backend-production-1e2c4649.up.railway.app/health) reports `cluster: devnet`, healthy live volatility data and `chainConfigured: true`. Wick program `GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8` is executable on devnet, and its fixed-supply test-USDC mint is initialized with revoked authorities. This is real deployment and on-chain evidence, but not a verified public-browser trading lifecycle: the backend reports `indexerConfigured: false` and `streamEvidencePresent: false`, the faucet/open-position flow has not been accepted end to end, and no final public demo-video link has been reviewed or published. Signed-out Portfolio, Pool and Stats examples are explicitly local simulations and are not chain, provider or sponsor evidence.
 
 Wick is a UBC Hackathon 2026 project for Track 02, DeFi & Onchain Apps. It is devnet-only software using test assets; it is not audited and is not a real-money product.
 
@@ -34,7 +34,7 @@ Wick does **not** claim to be the first leveraged prediction market. Its differe
 
 ## Architecture
 
-The diagram shows the intended integrated topology. The frontend is public; backend, on-chain and Stream integration remain unverified.
+The diagram shows the target integrated topology. The frontend, backend and Anchor program are deployed; the QuickNode Stream path remains unconfigured and must not be presented as live.
 
 ```mermaid
 flowchart LR
@@ -137,12 +137,14 @@ The Anchor program owns the economic state and enforces the core rules: market c
 
 | Program | Address | Status / explorer |
 |---|---|---|
-| Wick custom Anchor program | **Pending deployment** | No explorer link is valid yet. Source currently contains build-time identity `EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi`; it is not executable on devnet and must not be presented as deployed. |
+| Wick custom Anchor program | `GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8` | [Executable on devnet](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet); example confirmed [market creation](https://explorer.solana.com/tx/5DeJQYoUN83WjBd9Lg1itMMdwctdZixyvYfuAo8BepgDaKyznSjs5Qhbm81o7TGiSUa4QYas6RZ178ZzyPSbhcf2?cluster=devnet) and [settlement](https://explorer.solana.com/tx/5DZcdtZrXJVncS5e6eASRoid1xqMXMg7GujHeztBdgVsp7RMBYiUjaaqDVny7CzkCTPehv4KqacLWWVW9M2dSLaW?cluster=devnet). |
+| Wick test USDC mint | `HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU` | [Devnet explorer](https://explorer.solana.com/address/HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU?cluster=devnet); 6 decimals, 200,000 fixed supply, mint/freeze authorities revoked. |
+| `$WICKED` mint | `G7Za5zgi7GaHKButBTZsjyCfWh9LnmQqGtQbUTe6nQwP` | [Devnet explorer](https://explorer.solana.com/address/G7Za5zgi7GaHKButBTZsjyCfWh9LnmQqGtQbUTe6nQwP?cluster=devnet); program-controlled PDA mint. |
 | SPL Token Program | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | [Devnet explorer](https://explorer.solana.com/address/TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA?cluster=devnet) |
 | Associated Token Account Program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` | [Devnet explorer](https://explorer.solana.com/address/ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL?cluster=devnet) |
 | System Program | `11111111111111111111111111111111` | [Devnet explorer](https://explorer.solana.com/address/11111111111111111111111111111111?cluster=devnet) |
 
-After verified deployment, replace the pending row with the actual program ID and `https://explorer.solana.com/address/<PROGRAM_ID>?cluster=devnet`. The test-USDC and `$WICKED` mint addresses are also pending and will be recorded in [HANDOFF](docs/HANDOFF.md).
+Additional deployed PDAs, authorities and vault addresses are recorded in [HANDOFF](docs/HANDOFF.md). The pool vault held 50,000 test USDC during the November 18 verification; that balance is devnet state, not real money or a solvency guarantee.
 
 ## QuickNode Streams
 
@@ -157,7 +159,7 @@ The implemented configuration is:
 
 ### Evidence gate
 
-The filter, webhook, SQLite projections, and guarded REST creation script exist, but **there is no live Stream**. Wick will claim the QuickNode Streams bounty only after all of these are evidenced:
+The filter, webhook, SQLite projections and guarded REST creation script exist, but **there is no verified live Stream**. The public backend currently reports `indexerConfigured: false` and `streamEvidencePresent: false`; the webhook fails closed with `503 STREAMS_NOT_CONFIGURED`. Wick will claim the QuickNode Streams bounty only after all of these are evidenced:
 
 - an active Stream ID and terminal active status on Solana devnet/block;
 - a real deployed-program transaction matched by QuickNode's filter-test endpoint and saved as the fixture;
@@ -266,19 +268,19 @@ Do not infer success from a command submission or provider URL. `deploy:verify` 
 
 The repository has strict TypeScript, Vitest suites for pricing, provider parsing/fallbacks, backend/indexer, frontend and scripts, plus native Rust tests. CI also defines Anchor build/test with pinned tooling. Real public API fixtures are kept for Gemini; no fake market data ships in the app.
 
-Public provider verification covers read-only Gemini discovery/quotes and settlement parsing, Deribit, Derive, and a backend pricing run. The CI run linked above also passed the Anchor local-validator tests. New browser practice accounts use live market prices with a simulated local balance, start with no trade/claim history, issue `demo-receipt-*` identifiers, and do not fabricate staking rewards or settle from BTC spot. Version-1 local records are preserved during migration, rewritten with local-only identifiers, and labelled simulated/unverified; the untouched v1 value remains in a local backup key. Legacy synthetic reward accrual is disclosed in migration metadata but is not active or claimable. Those local receipts are never transaction or Stream evidence. This does not verify the deployed devnet lifecycle, Stream latency, faucet, bots, public browser transaction flow or demo recording.
+Public provider verification covers Gemini discovery/quotes and settlement parsing, Deribit, Derive and the deployed backend pricing loop. The CI run linked above passed the repository's TypeScript and Anchor jobs. The live backend has created and settled real Wick markets on devnet through its configured chain adapter. New browser practice accounts use live market prices with simulated local balances; guest Portfolio, Pool, Leaderboard and Stats previews use clearly labelled illustrative records. Local `demo-receipt-*` values are never transaction, provider or Stream evidence. Version-1 browser records remain preserved and labelled simulated/unverified. None of this verifies a fresh browser faucet/open-position flow, QuickNode delivery latency, or a completed demo recording.
 
 ## Known limitations
 
-- The public frontend exists. An integrated public trading lifecycle, executable devnet Wick program, matching deployed IDL, test mint, backend and real Stream delivery remain unverified; a frontend URL alone does not establish those gates.
-- Real backend/frontend transaction adapters exist, but remain fail-closed until a generated matching IDL, executable devnet program, funded authorities and public configuration are verified.
+- The frontend, backend, executable program and test mint exist. A fresh public-browser faucet/open-position lifecycle and real QuickNode delivery remain unverified; deployment URLs alone do not establish those gates.
+- The Railway backend is chain-enabled and processes real devnet market lifecycle transactions. Browser writes still fail closed without a valid wallet, program configuration, account state and transaction confirmation.
 - Browser-only practice actions update local storage and show explicit local receipts; they do not transfer test USDC, prove pool solvency, create explorer links, or count as devnet/QuickNode evidence. Expired practice positions stay pending unless an official Gemini outcome becomes available through a verified path.
 - Existing version-1 practice data is migrated in place and retained in `wick-demo-account-v1-legacy-backup`; migrated positions, claims and activity remain visible only as simulated/unverified legacy data. Browser-practice staking balances are explicitly simulated, and the practice ledger does not calculate or pay staking rewards.
 - The November 17 WP11 report records historical local checks and findings. The later CI run linked above passed TypeScript and Anchor local-validator checks; public devnet execution and end-to-end acceptance still require separate evidence.
 - Faucet cooldown is best-effort per serverless instance; its global funding bound is finite on-chain inventory. Staking fee shares accrued while payout claims are queued remain reserved without later reward assignment.
 - Source is public at [alycz/wick](https://github.com/alycz/wick); source publication is not evidence of deployed backend or collector operation.
-- The public Solana devnet faucet returned HTTP 410 in this environment; the documented treasury and keeper have zero SOL. The treasury is also the demo-wallet funder; the separate mint-authority key is provisioning-only and is revoked before deployment.
-- Provider access varies by execution environment. The deployed Vercel frontend and public GitHub source are verified; do not infer missing account access from absent local credentials. Final backend/program/mint configuration and real QuickNode Stream evidence still need verification.
+- The public Solana devnet faucet previously returned HTTP 410 in this environment. On November 18 the deployed keeper held `1.38284256` devnet SOL and the active faucet treasury held `4.04592632` devnet SOL; the old pre-deployment treasury remained empty. These are test-network balances, not mainnet funds. Mint and freeze authorities on test USDC are revoked.
+- Provider access varies by execution environment. The Vercel frontend, Railway backend, public GitHub source and Solana program/mint are verified; real QuickNode Stream evidence still does not exist.
 - The self-bootstrapping pool can queue profitable payouts and depends on future losses/liquidity; it is experimental economics.
 - Keeper/oracle trust is not decentralized, the contracts are unaudited, and provider/API availability can interrupt service.
 - Wick supports BTC Up/Down and above-strike ladders only; it does not place Gemini orders, support touch/High-Low contracts, accept external LP deposits, or run on mainnet.

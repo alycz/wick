@@ -1,6 +1,14 @@
 # UBC 2026 eligibility checklist
 
-This checklist is conditional deployment evidence, not an eligibility claim. As of November 17, Wick has no public deployment, executable devnet program, QuickNode Stream, or public demo URL, so the live-data and working-demo items are incomplete.
+This is an evidence checklist, not a prize or acceptance claim. Verified on November 18, 2026:
+
+- the source repository is public at [github.com/alycz/wick](https://github.com/alycz/wick), with `main` at `0bce1b73264a30e1ad0c487b23c0f12ba1298721` and CI run [44408114681](https://github.com/alycz/wick/actions/runs/44408114681) passing;
+- the Next.js frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/); Landing, Markets, Portfolio, Pool and Stats rendered in the signed-out verification after `d2909723e595b2519f86595e52029f3e9991383b`;
+- the Railway backend is reachable at [wick-backend-production-1e2c4649.up.railway.app](https://wick-backend-production-1e2c4649.up.railway.app/health) and reports Solana devnet, healthy live volatility data and `chainConfigured: true`;
+- program [`GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8`](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet) is executable on devnet, with example confirmed [market creation](https://explorer.solana.com/tx/5DeJQYoUN83WjBd9Lg1itMMdwctdZixyvYfuAo8BepgDaKyznSjs5Qhbm81o7TGiSUa4QYas6RZ178ZzyPSbhcf2?cluster=devnet) and [settlement](https://explorer.solana.com/tx/5DZcdtZrXJVncS5e6eASRoid1xqMXMg7GujHeztBdgVsp7RMBYiUjaaqDVny7CzkCTPehv4KqacLWWVW9M2dSLaW?cluster=devnet);
+- the six-decimal test-USDC mint is live with a fixed 200,000-token supply and revoked mint/freeze authorities.
+
+The public browser trade/faucet lifecycle, active QuickNode Stream delivery, and final public demo-video link remain unverified. A local 2:45 public-page review cut exists but has not been uploaded or accepted as the submission video. Signed-out Portfolio, Pool and Stats examples are explicitly labelled local simulations and are not chain or sponsor evidence. Markets displayed a Wick fair price, populated chart, strike table and ticket, but no Gemini bid/ask; the chart's **Live** selector does not prove live protocol or Stream delivery.
 
 Official references:
 
@@ -10,23 +18,30 @@ Official references:
 
 ## QuickNode Streams bounty
 
-- [ ] **Core data source:** a live QuickNode Stream, not the 60-second reconciliation poll, supplies program events that power the activity feed, positions, leaderboard, and LP history.
+- [ ] **Core data source:** a live QuickNode Stream, not the 60-second reconciliation poll, supplies program events that power the activity feed, positions, leaderboard and LP history.
 - [ ] **Configured Stream:** active on `solana-devnet`, dataset `block`, starting at the chain tip; Stream ID and terminal active status are recorded.
-- [ ] **Verified filter:** the deployed Wick program ID replaces the placeholder; failed transactions are skipped; top-level and inner instructions are inspected; transaction signature, slot, block time, and logs are retained. A real program transaction matches via QuickNode's test endpoint.
-- [ ] **Destination:** an authenticated public HTTPS Railway endpoint receives the Stream and a real trade appears in `/feed` in roughly two seconds.
-- [x] **Repository documentation:** the README explains the intended network, dataset, filter, destination, and role. Its live wording must remain conditional until the preceding four checks pass.
+- [ ] **Verified filter:** the deployed Wick program ID replaces the placeholder; failed transactions are skipped; top-level and inner instructions are inspected; transaction signature, slot, block time and logs are retained. A real program transaction matches through QuickNode's test endpoint.
+- [ ] **Destination:** the authenticated Railway webhook receives a real Stream delivery, and the same transaction appears in `/feed` at measured low latency.
+- [x] **Repository documentation:** the README explains the intended network, dataset, filter, destination and role, while keeping live wording conditional.
 
-Wick must not claim the QuickNode bounty until every box is checked with a Stream ID, public destination, real transaction signature/block, and observed feed event.
+The backend currently reports `indexerConfigured: false` and `streamEvidencePresent: false`; its unauthenticated webhook returns `503 STREAMS_NOT_CONFIGURED`. Do not select the QuickNode bounty until every unchecked box has evidence.
 
-## Track and sponsor requirements
+## Track and submission requirements
 
-- [ ] Track 02 DeFi & Onchain Apps: public deployed demo interacts with Wick's smart contract; README documents the economic design and risk assumptions.
-- [ ] Solana award: core logic is deployed via Anchor on Solana devnet; README records every program address and explorer link.
-- [x] Gemini Prediction Markets: code uses Gemini's public prediction-market events, strike, settlement, and quote APIs; a deployed working integration remains pending.
-- [ ] Public source repository with setup instructions, technical documentation, and architecture overview.
-- [ ] Working public deployed demo.
-- [ ] Accessible 2–3 minute demo video.
-- [x] Submission answers cover what was built, the problem, how it works, differentiation, and next steps; final deployment evidence and account-holder review remain pending.
-- [ ] Submit by Friday, November 20, 2026 at 12:00 PM CST. The internal deployment/verification cutoff is Thursday, November 19 at 11:59 PM CST.
-- [ ] Finalists can present in person in Austin on Saturday, November 21. The official rules require in-person presence to qualify for prizes.
+- [x] **Public source:** repository, setup instructions, technical documentation and architecture overview are available.
+- [x] **Solana deployment:** the Wick Anchor program and test assets are deployed on devnet, with addresses and explorer links recorded in the README.
+- [x] **Gemini Prediction Markets:** the code and running backend use Gemini's public events, strikes, quotes and official outcomes.
+- [ ] **Track 02 working-demo acceptance:** the public interface and chain-enabled backend exist, but a fresh browser wallet/faucet/open-position lifecycle has not been verified end to end.
+- [ ] **Accessible 2–3 minute demo video:** a 2:45 local WebM review cut exists, but no final reviewed public video link has been verified.
+- [x] **Submission answers:** copy covers what was built, the problem, operation, differentiation, next steps and current limitations.
+- [ ] **Team/account-holder review and Devpost submission:** no form has been submitted by this repository update.
+- [ ] **Submit by Friday, November 20, 2026 at 12:00 PM CST.**
+- [ ] **In-person availability:** official rules require finalists to present in Austin on Saturday, November 21 to qualify for prizes.
 
+## Final evidence still required
+
+1. Verify a fresh public-browser devnet wallet flow without relying on signed-out example data.
+2. Confirm faucet funding, one opened position and the resulting on-chain account state, or explicitly demonstrate the current fail-closed boundary.
+3. Configure and verify QuickNode only if entering that optional bounty.
+4. Record, review and publish the 2–3 minute video described in [DEMO.md](DEMO.md).
+5. Enter the final links and submit through the authorized Devpost account holder.
