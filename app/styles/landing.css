@@ -30,7 +30,7 @@
 .hm .numbers b { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
 .hm .numbers span { color: var(--muted); font-size: 14px; }
 .hm .split { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 48px; align-items: start; }
-.hm .split h2 { margin: 0 0 12px; font-size: 32px; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
+.hm .split h2 { margin: 0 0 12px; font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .hm .split p { color: var(--muted); line-height: 1.6; margin: 0 0 12px; }
 .hm .ghost { display: inline-block; margin-top: 6px; text-decoration: none; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 500; }
 .hm .ghost:hover { border-color: var(--faint); }
@@ -39,7 +39,6 @@
 .hm a.mrow:hover { background: var(--panel); }
 .hm .mrow:last-child { border-bottom: 0; }
 .hm .mrow.hd { color: var(--muted); font-size: 12px; background: var(--panel); }
-.hm .mrow:not(.hd) > :last-child { text-align: right; }
 .hm .mrow .mu { color: var(--muted); }
 .hm .bar { height: 6px; border-radius: 6px; background: var(--panel-2); position: relative; margin-top: 6px; }
 .hm .bar i { position: absolute; inset: 0 auto 0 0; background: var(--wick); border-radius: 6px; transition: width .4s var(--ease-out, ease-out); }
@@ -67,4 +66,18 @@
   .hm .numbers div:nth-child(3) { border-left: 0; padding-left: 0; }
   .hm .numbers div:nth-child(n+3) { border-top: 1px solid var(--line); }
   .hm .steps { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* numbers strip: a closed container with even padding on every side */
+.hm .numbers { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+.hm .numbers div { padding: 22px 24px; }
+.hm .numbers div + div { padding-left: 24px; }
+/* how it works: each step is its own card */
+.hm .steps div { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 20px 22px 22px; gap: 10px; transition: border-color .2s, transform .2s var(--ease-out); }
+.hm .steps div:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+.hm .steps span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(95, 212, 204, .1); color: var(--wick); font-size: 13px; }
+/* questions read bold */
+.hm .faq summary { font-weight: 700; color: var(--fg); }
+@media (max-width: 960px) {
+  .hm .numbers div:nth-child(3) { padding-left: 24px; }
 }

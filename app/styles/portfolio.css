@@ -30,8 +30,6 @@
 .pf-list { display: grid; }
 .prow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; align-items: center; padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; min-width: 0; }
 .prow > * { min-width: 0; }
-.prow > :last-child { justify-self: end; text-align: right; }
-.prow.hd > :last-child { justify-self: start; text-align: left; }
 .prow.hd { color: var(--muted); font-size: 12px; padding: 10px 12px; }
 .prow.go { cursor: pointer; border-radius: 10px; transition: background-color .15s ease; }
 .prow.go:hover { background: var(--panel-2); }
@@ -42,7 +40,7 @@
 .pm b, .pm small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pm small, .prow .v small { color: var(--muted); font-size: 12px; }
 .prow .v b { display: block; }
-.pf-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.pf-acts { display: flex; gap: 6px; justify-content: flex-start; }
 :is(.pf-page, .pl-page) .coin { display: grid; place-items: center; flex: none; background: var(--btc); color: #fff; font-weight: 700; }
 :is(.pf-page, .pl-page) .coin.xs { width: 28px; height: 28px; border-radius: 50%; font-size: 15px; }
 :is(.pf-page, .pl-page) .tag { font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 5px; white-space: nowrap; }
@@ -67,7 +65,6 @@
 .flow p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .pl-h2 { font-size: 17px; margin: 0 0 8px; }
 .ev { display: grid; grid-template-columns: 10px repeat(3, minmax(0, 1fr)); gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--line); align-items: center; font-size: 13px; }
-.ev > :last-child { justify-self: end; }
 .ev i { width: 8px; height: 8px; border-radius: 50%; }
 .ev b { font-weight: 600; }
 .ev small { color: var(--faint); }

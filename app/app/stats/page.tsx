@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDemoAccount } from "@/components/demo-account";
 import { WickChart } from "@/components/wick-chart";
 import { useFeed } from "@/hooks/use-feed";
@@ -39,13 +39,22 @@ export default function StatsPage() {
   const tile = (label: string, value: string | undefined, note: string) => <div className="tile"><span>{label}</span><b>{value ?? "—"}</b><small className="mu">{value === undefined ? "No data yet" : note}</small></div>;
   const ago = (ts: number) => { const mins = Math.max(1, Math.round((Date.now() - ts) / 60_000)); return mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`; };
   const day = (time: number) => new Date(time * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric" });
+  /* the headline number shares a row with the chart controls; the 24h change sits under it */
+  const statHead = (value: ReactNode, delta: ReactNode, controls: { windows: ReactNode; type: ReactNode }) => <div className="sc-head">
+    <div className="sc-val">{value}{delta}</div>
+    <div className="sc-ctl">{controls.type}{controls.windows}</div>
+  </div>;
   const metric = (title: string, note: string, value: string, delta: string | undefined, up: boolean, data: Array<{ time: number; value: number }>, color: string, rise: number) =>
     <section className={`p sc rise rise-${rise}`}>
       <h3>{title} <small>{note}</small></h3>
-      <div className="sc-val"><b className={title === "Trader PnL" ? up ? "up" : "down" : ""}>{value}</b>{delta && <span className={up ? "up" : "down"}>{up ? "▲" : "▼"} {delta}</span>}</div>
-      <WickChart series={[{ id: title, label: title, color, data }]} format="usd" windows={STAT_WINDOWS} initialWindow={STAT_WINDOWS[1]!.secs} height={190} formatTime={day} />
+      <WickChart series={[{ id: title, label: title, color, data }]} format="usd" windows={STAT_WINDOWS} initialWindow={STAT_WINDOWS[1]!.secs} height={200} formatTime={day}
+        header={(controls) => statHead(<b className={title === "Trader PnL" ? up ? "up" : "down" : ""}>{value}</b>,
+          delta ? <span className={up ? "up" : "down"}>{up ? "▲" : "▼"} {delta}</span> : undefined, controls)} />
     </section>;
   const change = (data: ReadonlyArray<{ value: number }>) => { const last = data.at(-1)?.value ?? 0; const before = data.at(-25)?.value ?? last; return { diff: last - before, pct: before ? (last - before) / Math.abs(before) * 100 : 0 }; };
+  const poolBefore = series.length > 1 ? [...series].reverse().find((point) => point.time <= series[series.length - 1]!.time - 86_400) : undefined;
+  const poolDiff = poolBefore ? series[series.length - 1]!.value - poolBefore.value : undefined;
+  const poolDelta = poolDiff === undefined ? undefined : <span className={poolDiff >= 0 ? "up" : "down"}>{poolDiff >= 0 ? "▲" : "▼"} {usd(Math.abs(poolDiff))} in 24h</span>;
   const oi = change(GUEST_STATS.openInterestSeries); const vol = change(GUEST_STATS.volumeSeries); const pnl = change(GUEST_STATS.traderPnlSeries);
   return <div className="sx-page">
     <section className="p tiles rise" aria-label="Protocol totals">
@@ -64,9 +73,8 @@ export default function StatsPage() {
       {guestPreview ? metric("Trader PnL", "Net, all traders", `${GUEST_STATS.traderPnl >= 0 ? "+" : "−"}${usd(Math.abs(GUEST_STATS.traderPnl))}`, `${usd(Math.abs(pnl.diff))} in 24h`, pnl.diff >= 0, [...GUEST_STATS.traderPnlSeries], "#22c55e", 3)
         : <section className="p sc"><h3>Trader PnL <small>Net, all traders</small></h3><NoData what="Trader PnL" /></section>}
       <section className="p sc rise rise-4"><h3>Pool liquidity <small>Losses in, payouts out</small></h3>
-        {latest && <div className="sc-val"><b>{usd(e6(latest.balanceE6))}</b></div>}
-        {series.length > 1 ? <WickChart key={span ? "ready" : "empty"} series={[{ id: "pool", label: "Pool liquidity", color: "#5fd4cc", data: series }]} format="usd" windows={windowsFor(span)} height={190} initialWindow={windowsFor(span)[1]!.secs}
-          formatTime={day} /> : <NoData what="Pool history" />}
+        {series.length > 1 ? <WickChart key={span ? "ready" : "empty"} series={[{ id: "pool", label: "Pool liquidity", color: "#5fd4cc", data: series }]} format="usd" windows={windowsFor(span)} height={200} initialWindow={windowsFor(span)[1]!.secs}
+          formatTime={day} header={(controls) => statHead(<b>{latest ? usd(e6(latest.balanceE6)) : "—"}</b>, poolDelta, controls)} /> : <NoData what="Pool history" />}
       </section>
       <section className="p sc rise rise-5"><h3>Pool exposure by expiry <small>What the pool owes if each side wins</small></h3>{guestPreview ? <div className="expo">
         <div className="legend"><span><i className="dot y" />Yes wins</span><span><i className="dot n" />No wins</span></div>

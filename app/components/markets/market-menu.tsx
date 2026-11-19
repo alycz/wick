@@ -86,8 +86,8 @@ export function MarketMenu({ groups, group, now, spot, onPick, compact = false }
     </button>
     {open && <div className={`mm-panel${closing ? " out" : ""}`} role="menu" aria-label="BTC markets">
       <div className="mm-head">
-        <div><b>Bitcoin markets</b><small>{groups.length} open · BTC {usd(spot)}</small></div>
-        <span className="mm-live"><i />Live</span>
+        <b>Bitcoin markets</b>
+        <span className="mm-meta">{groups.length} open · BTC {usd(spot)}</span>
       </div>
       {section("Up or Down", upDown)}
       {section("Price at expiry", dated)}
