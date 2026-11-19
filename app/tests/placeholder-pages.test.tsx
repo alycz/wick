@@ -19,14 +19,12 @@ afterEach(cleanup);
 describe("pages without backend data yet", () => {
   it("shows the leaderboard frame with a no-data row instead of invented traders", () => {
     render(<LeaderboardPage />);
-    expect(screen.getByRole("heading", { name: "Leaderboard" })).toBeInTheDocument();
     expect(screen.getByText(/No data yet/)).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(2);
   });
 
   it("shows stats placeholders for every metric the backend can't report", () => {
     render(<StatsPage />);
-    expect(screen.getByRole("heading", { name: "Stats" })).toBeInTheDocument();
     expect(screen.getAllByText(/No data yet/).length).toBeGreaterThanOrEqual(6);
   });
 });

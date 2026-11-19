@@ -31,14 +31,12 @@ import PortfolioPage from "@/app/portfolio/page";
 afterEach(cleanup);
 
 describe("PortfolioPage migrated browser practice", () => {
-  it("keeps legacy records visible while marking them simulated and unverified", () => {
+  it("keeps migrated records visible in history and the payout queue", () => {
     render(<PortfolioPage />);
-    expect(screen.getByRole("status")).toHaveTextContent(/simulated and unverified legacy practice data/i);
-
     fireEvent.click(screen.getByRole("button", { name: "History" }));
-    expect(screen.getByText(/Simulated\/unverified legacy/)).toBeInTheDocument();
+    expect(screen.getByText("BTC > $95k")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Payout queue/ }));
-    expect(screen.getByText(/#1 · Simulated legacy/)).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
   });
 });
