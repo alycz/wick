@@ -163,7 +163,8 @@ export default function PortfolioPage() {
             <span><span className={`tag ${position.side === "yes" ? "y" : "n"}`}>{position.side.toUpperCase()} {position.leverage}x</span></span>
             <div className="v"><b>{e6(position.contractsE6).toLocaleString("en-US", { maximumFractionDigits: 1 })}</b><small>Margin {usd(e6(position.marginE6))}</small></div>
             <div className="v"><b>{cents(position.entryE6 / 1_000_000)} → {cents(mark)}</b><small>Liquidates at {cents(position.liqMarkE6 / 1_000_000)}</small></div>
-            <b className={pnl === undefined ? "" : pnl >= 0 ? "up" : "down"}>{pnl === undefined ? "—" : signedUsd(pnl)}</b>
+            <div className="v"><b className={pnl === undefined ? "" : pnl >= 0 ? "up" : "down"}>{pnl === undefined ? "—" : signedUsd(pnl)}</b>
+              <small>{pnl === undefined ? "Updating" : `${pnl >= 0 ? "+" : "−"}${Math.abs(pnl / e6(position.marginE6) * 100).toFixed(1)}% on margin`}</small></div>
             <div className="pf-acts" onClick={(event) => event.stopPropagation()}>
               {position.previewOnly ? <button type="button" className="ghost" onClick={() => router.push("/trade")}>Trade</button> : <>
                 <button type="button" className="ghost" disabled={busy === key || disabled} onClick={() => void run(key, () => actions.client!.closePosition(position, 10_000))}>{busy === key ? "Confirming…" : "Close"}</button>

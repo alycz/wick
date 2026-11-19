@@ -33,7 +33,14 @@ export default function LeaderboardPage() {
   const mine = GUEST_LEADERBOARD.find((row) => "mine" in row)!;
   const rows = [...GUEST_LEADERBOARD].sort((a, b) => by === "pnl" ? b.pnl - a.pnl : b.volume - a.volume);
   return <div className="lb-page">
-    <div className="pg-hd rise">
+    <section className="p me rise" aria-label="Your rank">
+      <div><span>Your rank</span><b className="rk">{guestPreview ? `#${rows.findIndex((row) => "mine" in row) + 1}` : "—"}</b></div>
+      <div><span>PnL</span><b className={guestPreview ? "up" : ""}>{guestPreview ? `+${usd(mine.pnl)}` : "—"}</b></div>
+      <div><span>Volume</span><b>{guestPreview ? usd(mine.volume) : "—"}</b></div>
+      <div><span>Win rate</span><b>{guestPreview ? `${mine.winRate}%` : "—"}</b></div>
+      <div><span>{guestPreview ? "Trades" : "Wallet"}</span><b>{guestPreview ? mine.trades : owner ? compactAddress(owner) : "Not connected"}</b></div>
+    </section>
+    <div className="pg-hd rise rise-1">
       <div className="ctl">
         <Seg className="wc-tabs" buttonClass="wc-tab" label="Period" value={period} onChange={setPeriod}
           options={[{ value: "24h", label: "24h" }, { value: "7d", label: "7d" }, { value: "30d", label: "30d" }, { value: "all", label: "All time" }]} />
@@ -41,13 +48,6 @@ export default function LeaderboardPage() {
           options={[{ value: "pnl", label: "PnL" }, { value: "volume", label: "Volume" }]} />
       </div>
     </div>
-    <section className="p me rise rise-1" aria-label="Your rank">
-      <div><span>Your rank</span><b className="rk">{guestPreview ? `#${rows.findIndex((row) => "mine" in row) + 1}` : "—"}</b></div>
-      <div><span>PnL</span><b className={guestPreview ? "up" : ""}>{guestPreview ? `+${usd(mine.pnl)}` : "—"}</b></div>
-      <div><span>Volume</span><b>{guestPreview ? usd(mine.volume) : "—"}</b></div>
-      <div><span>Win rate</span><b>{guestPreview ? `${mine.winRate}%` : "—"}</b></div>
-      <div><span>{guestPreview ? "Trades" : "Wallet"}</span><b>{guestPreview ? mine.trades : owner ? compactAddress(owner) : "Not connected"}</b></div>
-    </section>
     <section className="p rise rise-2" style={{ overflowX: "auto" }}>
       <table className="lbt">
         <thead><tr><th>Rank</th><th>Trader</th><th>{by === "pnl" ? "PnL" : "Volume"}</th><th>ROI</th><th>{by === "pnl" ? "Volume" : "PnL"}</th><th>Win rate</th><th>Trades</th><th>Favourite market</th></tr></thead>

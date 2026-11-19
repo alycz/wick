@@ -81,8 +81,7 @@
 .sx-page .expo .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .sx-page .expo .dot.y { background: var(--yes-hi); } .sx-page .expo .dot.n { background: var(--no-hi); }
 .sx-page .liqs .lr .lm { min-width: 0; }
-/* table rule: the last column's header stays left aligned, its content runs to the right edge */
-:is(.lb-page, .sx-page) .lbt td:last-child { text-align: right; }
+/* table rule: equal columns, every header and cell left aligned */
 
 /* metric cards: headline value over a chart, every card the same height */
 .sx-page .sgrid { gap: 14px; }
@@ -100,10 +99,10 @@
 @keyframes bar-grow { from { transform: scaleX(0); } to { transform: none; } }
 /* a short list sits in the middle of its card instead of floating at the top */
 .sx-page .liqs { align-content: center; }
-.sx-page .liqs .lr { grid-template-columns: 76px minmax(0, 1fr) auto 90px; gap: 14px; padding: 12px 0; }
-.sx-page .liqs .lr > b { text-align: right; font-variant-numeric: tabular-nums; color: var(--wick); }
+.sx-page .liqs .lr { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 12px 0; text-align: left; }
+.sx-page .liqs .lr > b { font-variant-numeric: tabular-nums; color: var(--wick); font-weight: 600; }
 .sx-page .liqs .lm { display: grid; gap: 2px; min-width: 0; }
-.sx-page .liqs .lm b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sx-page .liqs .lm b { font-weight: 600; line-height: 1.3; }
 .sx-page .liqs .lm small { font-size: 12px; }
 .sx-page .liqs .tag { margin-left: 0; }
 .sx-page .nodata { align-self: center; }
@@ -112,7 +111,7 @@
 
 :is(.lb-page, .sx-page) { --yes-bg: #0f2a1b; --no-bg: #2c1216; }
 /* leaderboard */
-.lb-page .pg-hd { justify-content: flex-end; }
+.lb-page .pg-hd { justify-content: flex-start; margin: 4px 0 -4px; }
 .lb-page .lbt tbody tr { animation: rise .5s var(--ease-out) both; }
 .lb-page .lbt tbody tr:hover td { background: rgba(255,255,255,.02); }
 .lb-page .lbt tr.mine td { background: rgba(95,212,204,.07); }

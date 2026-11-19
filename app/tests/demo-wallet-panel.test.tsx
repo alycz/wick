@@ -70,8 +70,9 @@ describe("WalletPanel demo account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "250" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Deposit" }).at(-1)!);
-    expect(await screen.findByText(/Local demo balance increased \$250\.00 · demo-receipt-.* · no network transfer/, {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Deposit" })).toHaveTextContent(/NetworkLocal browser/);
+    expect(await screen.findByText("Deposit complete", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/\+\$250\.00.*New balance\$10,250\.00/);
+    expect(screen.getByRole("dialog", { name: "Deposit" })).not.toHaveTextContent(/simulated|practice|no network transfer|local browser/i);
     expect(screen.getByRole("dialog", { name: "Deposit" })).not.toHaveTextContent(/real USDC/i);
     expect(screen.getByRole("button", { name: "Demo account, $10,250.00" })).toBeInTheDocument();
 
@@ -80,7 +81,9 @@ describe("WalletPanel demo account", () => {
     fireEvent.change(screen.getByLabelText("Send to"), { target: { value: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Withdraw" }).at(-1)!);
     await waitFor(() => expect(screen.getByRole("button", { name: "Demo account, $10,200.00" })).toBeInTheDocument(), { timeout: 3000 });
-    expect(screen.getByRole("status")).toHaveTextContent(/Local demo balance decreased \$50\.00.*no network transfer/);
+    expect(screen.getByRole("status")).toHaveTextContent(/Withdrawal sent.*\$50\.00.*Sent to9xQe/);
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog", { name: "Withdraw" })).not.toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("wick-demo-account-v1")!).usdcE6).toBe("10200000000");
   });
 });

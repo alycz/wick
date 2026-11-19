@@ -243,12 +243,10 @@
 .mk-page td.bidbar { background-image: linear-gradient(to left, rgba(34,197,94,.13) var(--w), transparent var(--w)); }
 .mk-page td.askbar { background-image: linear-gradient(to right, rgba(240,80,93,.13) var(--w), transparent var(--w)); }
 .mk-page td.theo { color: var(--wick); font-weight: 600; }
-/* every table: equal columns, left aligned; last column header left, its data runs to the right edge */
+/* every table: equal columns, every header and cell left aligned, the last column included */
 .mk-page table { table-layout: fixed; }
 .mk-page table th, .mk-page table td { text-align: left !important; overflow: hidden; text-overflow: ellipsis; }
-.mk-page table td:last-child { text-align: right !important; }
 .mk-page table th:not(:last-child), .mk-page table td:not(:last-child) { padding-right: 4px !important; }
-.mk-page table td:last-child > .wr, .mk-page table td:last-child > .who { justify-content: flex-end; }
 .mk-page tr.spot td { background: #0f1317; color: var(--muted); text-align: center !important; padding: 8px; font-size: 12px; }
 .mk-page tr.spot b { color: var(--btc); font-weight: 600; }
 .mk-page .side-col { display: flex; flex-direction: column; min-height: 0; }
@@ -257,8 +255,6 @@
 .mk-page .bk-asks { justify-content: flex-end; }
 .mk-page .bk-row { display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 3px 12px; position: relative; flex: none; }
 .mk-page .bk-row span { position: relative; text-align: left; }
-.mk-page .bk-row span:last-child { text-align: right; }
-.mk-page .bk-row.hd span:last-child { text-align: left; }
 .mk-page .bk-row i { position: absolute; top: 0; bottom: 0; right: 0; }
 .mk-page .bk-asks .bk-row i { background: rgba(240,80,93,.12); }
 .mk-page .bk-bids .bk-row i { background: rgba(34,197,94,.12); }
@@ -473,3 +469,14 @@ body.nosel, body.nosel * { user-select: none !important; -webkit-user-select: no
 .mk-page.pro > :nth-child(3), .mk-page.easy > :nth-child(3) { animation-delay: .12s; }
 .mk-page.easy > :nth-child(4) { animation-delay: .18s; }
 @media (prefers-reduced-motion: reduce) { .mk-page.pro > *, .mk-page.easy > *, .mk-page .mm-row, .mk-page .mm-panel { animation: none; } }
+
+/* switcher trigger: coin, BTC and the market name on one row */
+.mk-page .mm-trigger { padding: 6px 12px 6px 6px; gap: 12px; }
+.mk-page .mm-id { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.mk-page .mm-id b { font-size: 22px; }
+.mk-page .mm-id small { font-size: 15px; font-weight: 500; color: var(--muted-light, var(--muted)); }
+.mk-page .mm.compact .mm-id b { font-size: 19px; }
+.mk-page .mm.compact .mm-id small { font-size: 14px; }
+/* panel header: title left, open count and BTC price right */
+.mk-page .mm-head { gap: 16px; }
+.mk-page .mm-meta { color: var(--muted); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }

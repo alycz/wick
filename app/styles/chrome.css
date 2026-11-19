@@ -350,3 +350,30 @@
 .dw-res { margin: -4px 0 0; font-size: 13px; }
 .dw-res.up { color: var(--yes-hi); }
 .dw-res.down { color: var(--no-hi); }
+
+/* Add funds and Reset demo share a row; a hairline separates the demo account from the wallet options */
+.chrome-wallet-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.chrome-wallet-pair .chrome-wallet-link { text-align: center; background: var(--panel-2); }
+.chrome-wallet-pair .chrome-wallet-link:hover { background: var(--panel-3); }
+.chrome-wallet-sep { display: block; height: 1px; margin: 4px 0; background: var(--line); }
+.chrome-wallet-option { justify-items: center; text-align: center; }
+
+/* transfer success screen */
+.dw-done { display: grid; justify-items: center; gap: 8px; padding: 10px 0 2px; text-align: center; animation: dw-in .3s var(--ease-out) both; }
+.dw-check { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(34, 197, 94, .12); color: var(--yes-hi);
+  box-shadow: 0 0 0 8px rgba(34, 197, 94, .05); animation: dw-pop .42s var(--ease-out) both; }
+.dw-check svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.dw-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: dw-draw .4s .2s var(--ease-out) forwards; }
+@keyframes dw-pop { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes dw-draw { to { stroke-dashoffset: 0; } }
+.dw-done > b { margin-top: 6px; font-size: 17px; font-weight: 600; }
+.dw-amt { font-size: 30px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.dw-done-rows { width: 100%; display: grid; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.dw-done-rows > div { display: flex; justify-content: space-between; padding: 11px 14px; font-size: 14px; }
+.dw-done-rows > div + div { border-top: 1px solid var(--line); }
+.dw-done-rows span { color: var(--muted); }
+.dw-done-rows b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.dw-done-acts { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.dw-again { padding: 14px; border: 0; border-radius: 11px; background: var(--panel-2); color: var(--fg); font-size: 15px !important; font-weight: 600 !important; }
+.dw-again:hover { background: var(--panel-3); }
+@media (prefers-reduced-motion: reduce) { .dw-done, .dw-check, .dw-check path { animation: none; stroke-dashoffset: 0; } }
