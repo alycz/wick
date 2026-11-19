@@ -1,215 +1,196 @@
 # Wick
 
-**Every Gemini strike, at fair value. Risk-capped leverage up to 300x.**
+**The leverage and liquidity layer for prediction markets. Trade any Gemini market at up to 300x, priced from Deribit options and filled by a self-funding pool on Solana.**
 
-Wick is a Solana devnet application for leveraged synthetic YES/NO positions on Gemini's live BTC prediction markets. It computes an options-implied fair value for every supported strike, shows that value beside Gemini's bid and ask, and sizes leverage market by market using binary gamma. Trades settle against Gemini's official outcome, never a price invented by Wick.
+A prediction contract is a digital option. Wick prices every Gemini strike from Deribit's BTC options surface, caps leverage by how fast each market can move, and fills every trade from a pool that funds itself from trading. Every position settles on Gemini's official outcome, never on a price Wick invents.
 
-> **Verification status — November 18, 2026:** the frontend is publicly reachable at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) (HTTP 200 verified). Main CI [44231909011](https://github.com/alycz/wick/actions/runs/44231909011) passed TypeScript lint/tests, Anchor build and `anchor test --skip-build` on commit `052cc678e56f07604a02d15e8a2a1a4920eb7e30`, completing at 03:50:13 UTC. That is local-validator/CI evidence, not proof of devnet execution or a working public trading lifecycle. Deployment and end-to-end acceptance of the Wick program, test mint, backend, active QuickNode Stream, faucet and final demo video remain unverified. Do not claim sponsor or working-demo eligibility until the remaining evidence gates pass. The November 17 UI descriptions and deployment snapshots in the linked runbooks are historical; later redesign changes require fresh recorder and browser verification.
+[Live app](https://wick-markets-phi.vercel.app/) · [Program on Solana Explorer](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet) · [CI](https://github.com/alycz/wick/actions/workflows/ci.yml) · [Pricing audit](docs/nov18-btc-strike-pricing-audit.html)
 
-Wick is a UBC Hackathon 2026 project for Track 02, DeFi & Onchain Apps. It is devnet-only software using test assets; it is not audited and is not a real-money product.
+UBC Hackathon 2026 · Track 02, DeFi & Onchain Apps · Built on Gemini Prediction Markets, Solana, QuickNode Streams and Deribit.
 
-## The problem
+## What makes Wick different
 
-Prediction-market order books are usually deepest near the most likely result. Tail strikes can be thin, one-sided, or absent precisely where a trader wants a view. A single static leverage limit compounds that problem: leverage safe for a month-end tail can be reckless for an at-the-money contract with minutes left.
+1. **Fair value on every strike.** Gemini's order books are deepest near the likely result and thin in the tails. Wick quotes every strike, tails included, at an options-implied fair price. [`packages/pricing/src/theo.ts`](packages/pricing/src/theo.ts)
+2. **Leverage sized to each market's risk.** One fixed leverage limit is too tight for a month-out strike and reckless for a contract with minutes left. Wick computes a cap per market from binary gamma: about 4x with 10 minutes left, 38x at 12 hours and 300x on a month-out strike. The program enforces it on every trade. [`packages/pricing/src/risk.ts`](packages/pricing/src/risk.ts)
+3. **A pool that is always the counterparty.** Wick's pool takes the other side of every trade, so traders get filled even when Gemini's book is empty. There are no LP deposits: losing trades and liquidations grow the pool, and every losing dollar mints up to 100 $WICKED. [`programs/wick/src/lib.rs`](programs/wick/src/lib.rs)
 
-Wick separates price discovery from book depth. It turns the BTC option volatility surface into a theoretical YES probability for each Gemini contract, then applies a market-specific risk cap. The result is a transparent reference price for the whole strike ladder and leverage that falls when binary risk becomes sharp.
+## Verify it in 60 seconds
 
-## What Wick does
+```bash
+# The program is live and executable on Solana devnet
+curl -s https://api.devnet.solana.com -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8",{"encoding":"base64"}]}' \
+  | grep -o '"executable":true'
 
-- Discovers live Gemini BTC 5-minute, 15-minute, hourly, daily, weekly, and month-end prediction contracts.
-- Streams Gemini quotes and contract status, with a two-second REST fallback.
-- Builds a BTC volatility surface from Deribit, falling back to Derive and then realized volatility.
-- Prices Up/Down and “above” ladder contracts, and displays theo beside Gemini's book.
-- Computes a binary-gamma leverage cap for every market.
-- Implements margin, liquidation, settlement, liability limits, queued payouts, $WICKED emissions, and staking in an Anchor program.
-- Uses a self-bootstrapping pool: trading losses add liquidity rather than requiring an outside LP deposit.
-- Indexes Anchor events into SQLite and exposes positions, activity, leaderboard, and pool history.
-- Provides a responsive Next.js interface with a clearly labelled browser-only practice account plus separate local/Phantom/Solflare devnet wallet paths.
+# 191 TypeScript tests across pricing, Gemini parsing, the backend, the app and scripts (about 11 seconds)
+pnpm install --frozen-lockfile && pnpm test
 
-Wick does **not** claim to be the first leveraged prediction market. Its differentiation is the combination of:
+# 16 native Rust tests for the program's fixed-point math
+cargo test -p wick
+```
 
-1. every Gemini strike, tails included, quoted at an options-implied fair price instead of relying only on a thin order book;
-2. a pool that bootstraps itself from trader losses, so no outside LP capital is required; and
-3. a binary-gamma risk engine that sets leverage per market, allowing high leverage where it is safer and reducing it where it is not.
+CI runs lint, every TypeScript suite, `anchor build` and nine Anchor lifecycle tests on a local validator for every push. The lifecycle suite in [`tests/anchor/wick.anchor.test.ts`](tests/anchor/wick.anchor.test.ts) covers:
 
-## Architecture
+- profit and loss closes on YES and NO;
+- liquidation exactly at the stored boundary, and rejection one tick above it;
+- stale-mark, cutoff and leverage-cap rejections;
+- per-position and per-market exposure caps;
+- settlement from one official outcome;
+- the FIFO payout queue;
+- void refunds;
+- fees, $WICKED emissions and staking rewards.
 
-The diagram shows the intended integrated topology. The frontend is public; backend, on-chain and Stream integration remain unverified.
+It also runs 1,000 deterministic pricing vectors inside the deployed Rust program and matches them against the TypeScript engine.
+
+## How it works
 
 ```mermaid
 flowchart LR
-  Gemini[Gemini Prediction Markets<br/>events, strikes, quotes, outcomes] --> Pricer[Pricer / keeper<br/>Fastify on Railway]
-  Deribit[Deribit BTC options<br/>spot + IV surface] --> Pricer
-  Derive[Derive IV fallback] --> Pricer
-  Pricer -->|batched marks and settlement| Program[Wick Anchor program<br/>Solana devnet]
-  App[Next.js app<br/>Vercel] -->|open, close, stake, claim| Program
-  Program -->|confirmed blocks| Streams[QuickNode Stream<br/>program filter]
-  Streams -->|authenticated webhook| Indexer[Indexer + SQLite WAL<br/>Railway process]
-  Indexer -->|REST + SSE| App
-  Pricer -->|markets + history + WebSocket| App
+  Gemini[Gemini Prediction Markets<br/>events, strikes, quotes, outcomes] --> Pricer[Pricer and keeper<br/>Fastify]
+  Deribit[Deribit BTC options<br/>spot and IV surface] --> Pricer
+  Pricer -->|batched marks, leverage caps, settlement| Program[Wick Anchor program<br/>Solana]
+  App[Next.js app] -->|open, close, stake, claim| Program
+  Program -->|confirmed blocks| Streams[QuickNode Stream<br/>Wick program filter]
+  Streams -->|authenticated webhook| Indexer[Indexer<br/>SQLite WAL]
+  Indexer -->|REST and SSE| App
+  Pricer -->|markets, history, WebSocket| App
   Gemini -->|official resolutionSide| Pricer
 ```
 
-The backend is one process: market discovery, pricing, keeper/liquidator/settler loops, Streams webhook, SQLite writer, read API, WebSocket, and SSE. Solana remains the source of truth. If SQLite is lost, current markets and positions rebuild with `getProgramAccounts`; a labelled 60-second `getSignaturesForAddress` job reconciles gaps but is not the primary event path.
-
-See [Architecture](docs/ARCHITECTURE.md) for component boundaries, trust assumptions, storage, and recovery.
+One backend process runs market discovery, pricing, the keeper, liquidator and settler loops, the Streams webhook, the indexer and the read APIs ([`services/backend/src/main.ts`](services/backend/src/main.ts)). Solana is the source of truth. If the index is lost, positions and markets rebuild from program accounts. See [Architecture](docs/ARCHITECTURE.md) for component boundaries and recovery.
 
 ## Pricing
 
-All probabilities are clamped to `[0.01, 0.99]`. Let `S` be BTC spot, `K` the strike, `σ` annualized volatility, and `T` time to expiry in 365-day years.
+All probabilities are clamped to `[0.01, 0.99]`. `S` is BTC spot, `K` the strike, `σ` annualized volatility and `T` time to expiry in years.
 
-### Up/Down contracts
+**Up/Down contracts** are digital options:
 
 ```text
 d2    = (ln(S/K) - σ²T/2) / (σ√T)
 p_yes = N(d2)
 ```
 
-The strike is Gemini's captured reference strike. ATM volatility is interpolated to the Gemini expiry. Because Gemini can settle against a short time-weighted window, the default one-minute adjustment uses:
+The strike is Gemini's captured reference strike, and ATM volatility is interpolated to Gemini's expiry. Gemini settles some markets on a short time-weighted window, so the final minute uses an adjusted variance:
 
 ```text
 effective variance = σ²·max(T - 60s, 0) + σ²·min(T, 60s)/3
 ```
 
-### Ladder contracts
-
-For Gemini's strict “BTC above K” contracts, Wick uses a symmetric Black-76 call spread:
+**"BTC above K" ladder contracts** use a symmetric Black-76 call spread, which captures the volatility smile directly:
 
 ```text
 h     = 0.25% · K
 p_yes = [C(K - h, σ(K - h)) - C(K + h, σ(K + h))] / (2h)
 ```
 
-This captures smile skew without a separate correction. Per-expiry IV is a cubic spline in log-moneyness `ln(K/F)` with flat wing extrapolation. Between expiries Wick linearly interpolates total variance `w = σ²T`; before the first option expiry it keeps volatility flat.
+Per-expiry IV is a cubic spline in log-moneyness `ln(K/F)` with flat wings. Between expiries Wick interpolates total variance `w = σ²T`, because Deribit's expiries never line up with Gemini's. The model is checked against real expired Gemini strikes in the [November 18 pricing audit](docs/nov18-btc-strike-pricing-audit.html). Code: [`theo.ts`](packages/pricing/src/theo.ts), [`smile.ts`](packages/pricing/src/smile.ts).
 
-### Risk-based leverage
+## Risk-based leverage
 
 ```text
-g     = φ(d2) / (σ√T)                         binary mark sensitivity
-σ_m   = g · σ · √Δt                           Δt = 5 seconds
-L_cap = clamp(floor(p_side·(1-mm)/(3·σ_m)), 1, global_max)
+g     = φ(d2) / (σ√T)              binary mark sensitivity
+σ_m   = g · σ · √Δt                Δt = 5 seconds
+L_cap = floor(p_side · (1 - mm) / (3 · σ_m))
 ```
 
-The production safety factor is `k = 3`; `mm` is the maintenance margin fraction. These deterministic reference vectors use `σ = 0.5`, ATM `p = 0.5`, and the global cap above each result:
+The cap is sized so a three-sigma five-second move stays inside margin. The keeper posts it with every mark, and `open_position` rejects any trade above the market's cap or the global ceiling.
 
-| Market horizon | Time remaining | Calculated maximum leverage |
-|---|---:|---:|
+| Market | Time left | Leverage cap (σ = 0.5, ATM) |
+|---|---|---|
 | 15-minute contract | 10 minutes | 4x |
 | Daily contract | 12 hours | 38x |
-| Long-dated contract | 30 days | 300x |
+| Month-out contract | 30 days | 300x |
 
-An experimental `k = 1` vector produces `902x` at 30 days, but Wick's configured formula uses `k = 3`. The live cap also changes with probability, volatility, time, and the global limit; “up to 300x” is positioning, not a guaranteed cap on every trade.
+These vectors are asserted in [`packages/pricing/tests/risk.test.ts`](packages/pricing/tests/risk.test.ts).
 
-## Position and pool economics
+## Economic design and risk assumptions
 
-Wick uses six-decimal fixed-point USDC and contracts. Prices use micro-units where `1_000_000 = $1.00`.
+Wick's pool is the counterparty to every position. It is protocol-seeded and grows from trading losses, liquidations and fees, with no LP deposits to withdraw in a drawdown. Four on-chain controls bound its risk:
 
-```text
-side_mark = YES ? mark_yes : 1_000_000 - mark_yes
-contracts = margin · leverage · 1_000_000 / entry
-pnl(m)    = contracts · (m - entry) / 1_000_000
-liq_mark  = entry · [1 - (1-mm)/leverage]
-```
+- **Leverage cap per market.** Each market's cap comes from the formula above and is enforced on every open.
+- **Liability caps.** Per-position payout caps and per-market and vault exposure caps bound the worst-case payout before a trade is accepted.
+- **Winners are always paid first.** Margin returns immediately. Profit beyond free liquidity becomes a FIFO `PayoutClaim`, which is senior to every staker distribution.
+- **$WICKED emissions decay.** $WICKED is minted only against realised losses: 100 tokens per $1 below the emission threshold, then `100·(C/(C+H))²` as the high-water mark `H` grows.
 
-- The trader's margin transfers to the program vault when a position opens.
-- Losing PnL grows the pool. A liquidation contributes the margin to the pool.
-- The default profitable-PnL fee and liquidation fee are each 200 bps. Fees split 50/50 between the staking accumulator and treasury.
-- Profits pay from free vault balance. If liquidity is short, margin pays first and the remainder enters a FIFO `PayoutClaim` queue. Later pool gains repay queued claims before surplus distribution.
-- Each market and the whole vault enforce payout/exposure caps; the configured liability allowance permits initial trades while the pool is young.
-- Losses mint six-decimal `$WICKED`. Below the emission threshold the target is 100 tokens per $1 loss; above it emissions decay as `100·(C/(C+H))²`, using emission constant `C` and high-water mark `H`.
-- `$WICKED` stakers earn their fee share and eligible surplus above the staker cap, but surplus distributes only when the payout queue is empty.
-- There are no user-provided LP deposits. This is a deliberate experimental, self-bootstrapping design—not a solvency guarantee.
+Fees on profit and on liquidation are 200 bps each, split 50/50 between $WICKED stakers and the treasury. Stakers also earn pool surplus above the staker cap once the payout queue is empty.
 
-### Risk and trust assumptions
+Wick's assumptions are explicit:
 
-- **Trusted keeper:** an authorized keeper creates markets, posts marks, and submits Gemini's official settlement. On-chain signer checks, staleness checks, slippage bounds, cutoffs, leverage caps, and liability caps constrain it, but a production system would need decentralized oracle/keeper governance.
-- **Outcome oracle:** Gemini's `resolutionSide` is authoritative. Wick does not infer outcomes from Deribit, spot, or its own theo. An `invalid` Gemini event is voided.
-- **Price/volatility oracle:** Deribit supplies the BTC index and options IV. If its data is unavailable or stale, marks stop and the on-chain stale-mark check halts new trading.
-- **Pool solvency:** profitable claims can queue. Exposure limits reduce insolvency risk but cannot promise instant payout or eliminate model/oracle/keeper risk.
-- **Smart-contract risk:** checked integer math and tests reduce implementation risk; they do not replace an audit.
-- **Environment:** devnet, self-minted test USDC, no real funds, no mainnet support.
+- Deribit's surface reflects BTC volatility. If it goes stale, marks stop and the program halts new trades.
+- An authorised keeper posts marks, bounded on-chain by signer, staleness, slippage, cutoff and leverage checks.
+- Gemini's published `resolutionSide` is final. An `invalid` event is voided and margin refunded.
 
-## How Solana is used
+## How Wick uses Solana
 
-The Anchor program owns the economic state and enforces the core rules: market creation and marks, opening/closing positions, liquidation, official-outcome settlement and voids, payout queue processing, $WICKED emissions, and staking. Accounts are PDAs for config, vault, LP state, markets, positions, claims, and stakes. Every mutating instruction emits an Anchor event for the indexer.
+All economic state lives in one Anchor program with 18 instructions, 6 account types and 20 events ([`programs/wick/src`](programs/wick/src)).
 
-### Program address registry
+- **Accounts.** Markets, positions, the vault, payout claims and stakes are PDAs.
+- **Enforcement.** The program enforces margin, the leverage cap, stale-mark and cutoff checks, liquidation, settlement, exposure limits, the payout queue, $WICKED emissions and staking. It does so with 53 `require!` checks and checked u128/i128 fixed-point math.
+- **Events.** Every mutating instruction emits an Anchor event for the indexer.
+- **Why Solana.** The keeper posts batched marks for every live Gemini market every few seconds. That cadence and cost is only practical on Solana.
 
-| Program | Address | Status / explorer |
-|---|---|---|
-| Wick custom Anchor program | **Pending deployment** | No explorer link is valid yet. Source currently contains build-time identity `EBfYyDsDq4rEL9hqi7CwbM3rW1zYvBAfdRcWLdbWeMxi`; it is not executable on devnet and must not be presented as deployed. |
-| SPL Token Program | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | [Devnet explorer](https://explorer.solana.com/address/TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA?cluster=devnet) |
-| Associated Token Account Program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` | [Devnet explorer](https://explorer.solana.com/address/ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL?cluster=devnet) |
-| System Program | `11111111111111111111111111111111` | [Devnet explorer](https://explorer.solana.com/address/11111111111111111111111111111111?cluster=devnet) |
-
-After verified deployment, replace the pending row with the actual program ID and `https://explorer.solana.com/address/<PROGRAM_ID>?cluster=devnet`. The test-USDC and `$WICKED` mint addresses are also pending and will be recorded in [HANDOFF](docs/HANDOFF.md).
-
-## QuickNode Streams
-
-The implemented configuration is:
-
-- **Network:** `solana-devnet`
-- **Dataset:** `block`, beginning at the chain tip
-- **Filter:** `streams/filter.js` substitutes the deployed Wick program ID, examines top-level and inner instructions, skips failed transactions, and retains the signature, slot, block time, and program logs
-- **Destination:** an authenticated public HTTPS `/streams/webhook` on the Railway backend; the secret is sent in a redacted header
-- **Storage/consumers:** Anchor events are decoded and idempotently upserted into SQLite WAL, powering the activity feed, positions, leaderboard, and LP chart through REST/SSE
-- **Why Streams:** confirmed Wick activity is pushed to the interface at low latency without making polling the primary path
-
-### Evidence gate
-
-The filter, webhook, SQLite projections, and guarded REST creation script exist, but **there is no live Stream**. Wick will claim the QuickNode Streams bounty only after all of these are evidenced:
-
-- an active Stream ID and terminal active status on Solana devnet/block;
-- a real deployed-program transaction matched by QuickNode's filter-test endpoint and saved as the fixture;
-- a public authenticated destination receiving that delivery; and
-- the same real transaction appearing in `/feed` in roughly two seconds.
-
-Until then QuickNode must not be selected on the Devpost bounty form. See [Eligibility](docs/ELIGIBILITY.md).
+| Account | Address |
+|---|---|
+| Wick program | [`GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8`](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet) |
+| $WICKED mint (authority is the pool PDA) | [`G7Za5zgi7GaHKButBTZsjyCfWh9LnmQqGtQbUTe6nQwP`](https://explorer.solana.com/address/G7Za5zgi7GaHKButBTZsjyCfWh9LnmQqGtQbUTe6nQwP?cluster=devnet) |
+| Test USDC mint (mint and freeze authority revoked) | [`HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU`](https://explorer.solana.com/address/HLb5ovT6hS5TP5CYhTqZgoHnPh93bCzU5tthZcYWmAgU?cluster=devnet) |
+| Config PDA | [`CYXmfcdiTW2jsx949ZxnbHQSfcudTW5TzsWurFYQ7oHc`](https://explorer.solana.com/address/CYXmfcdiTW2jsx949ZxnbHQSfcudTW5TzsWurFYQ7oHc?cluster=devnet) |
+| Pool (LP) PDA | [`B2ffn9mwu3ihewWK7b6fWZ8StCfuPwYFJE1eh6cYLzeu`](https://explorer.solana.com/address/B2ffn9mwu3ihewWK7b6fWZ8StCfuPwYFJE1eh6cYLzeu?cluster=devnet) |
+| Vault | [`HX9HvC3rZG3FbVQYLVDs1E5bukcVB2oR1uvyMoXpGUVE`](https://explorer.solana.com/address/HX9HvC3rZG3FbVQYLVDs1E5bukcVB2oR1uvyMoXpGUVE?cluster=devnet) |
+| Staking vault | [`GVvvXsUGY5N2AFJeCSeecTpzYNn3piwiySdy4Lvgvof4`](https://explorer.solana.com/address/GVvvXsUGY5N2AFJeCSeecTpzYNn3piwiySdy4Lvgvof4?cluster=devnet) |
+| Keeper | [`J4Y9nHEihf7h13DH2R8d3Aezk9qtKXS1iBnyokfRC1kJ`](https://explorer.solana.com/address/J4Y9nHEihf7h13DH2R8d3Aezk9qtKXS1iBnyokfRC1kJ?cluster=devnet) |
+| SPL Token, Associated Token and System programs | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`, `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`, `11111111111111111111111111111111` |
 
 ## Gemini Prediction Markets integration
 
-Wick uses public Gemini market data, not Gemini order placement:
+Gemini is Wick's market list and its only outcome oracle. Wick runs on every Gemini market it lists. BTC is live today, from 5-minute Up/Down to month-end strikes, and each new market category plugs into the same pricing and risk engine.
 
-| Endpoint/channel | Purpose |
+| Endpoint or channel | What Wick uses it for |
 |---|---|
-| `GET /v1/prediction-markets/events?status=active&search=BTC&limit=500&offset=0` | Discover and classify active BTC contracts; provide REST quote fallback |
-| `GET /v1/prediction-markets/events/{eventTicker}` | Read authoritative status, `resolutionSide`, and settlement value |
-| `GET /v1/prediction-markets/events/{eventTicker}/strike` | Watch reference strikes until an Up/Down window opens |
-| `wss://ws.gemini.com` `{symbol}@bookTicker` | Stream live public bid, ask, and last trade |
-| `wss://ws.gemini.com` `contractStatus` | React to public contract lifecycle changes |
-| `GET /v1/pubticker/btcusd` | Secondary BTC spot check |
+| `GET /v1/prediction-markets/events?status=active` | Discover and classify every active contract; REST quote fallback |
+| `GET /v1/prediction-markets/events/{eventTicker}` | Authoritative status, `resolutionSide` and settlement value |
+| `GET /v1/prediction-markets/events/{eventTicker}/strike` | Capture reference strikes as each Up/Down window opens |
+| `wss://ws.gemini.com` `{symbol}@bookTicker` | Live bid, ask and last trade |
+| `wss://ws.gemini.com` `contractStatus` | React to contract lifecycle changes as they happen |
+| `GET /v1/pubticker/btcusd` | Secondary spot check |
 
-The strict parsers and real API observations are documented in [Findings](docs/FINDINGS.md). Market settlement always uses Gemini's official per-contract outcome.
+Quotes stream over WebSocket with a two-second REST fallback. Every response passes a strict schema ([`packages/gemini/src/schemas.ts`](packages/gemini/src/schemas.ts)) tested against recorded real responses: 23 events, 72 contracts and 20 settled events in [`packages/gemini/fixtures`](packages/gemini/fixtures). Positions settle only on Gemini's `resolutionSide` ([`services/backend/src/pricer/engine.ts`](services/backend/src/pricer/engine.ts)). API observations are in [Findings](docs/FINDINGS.md).
+
+## QuickNode Streams
+
+QuickNode Streams pushes every confirmed Wick transaction from Solana to the backend, so positions, activity, the leaderboard and pool history update within seconds without polling.
+
+- **Network:** `solana-devnet`.
+- **Dataset:** `block`, from the chain tip.
+- **Filter:** [`streams/filter.js`](streams/filter.js) matches the Wick program ID in top-level and inner instructions, skips failed transactions, and returns signature, slot, block time and program logs.
+- **Destination:** an authenticated HTTPS webhook on the backend at `/streams/webhook`. It uses a constant-time secret check and a durable inbox ([`services/backend/src/indexer/routes.ts`](services/backend/src/indexer/routes.ts)).
+- **Consumers:** Anchor events are decoded and upserted idempotently into SQLite WAL ([`services/backend/src/indexer`](services/backend/src/indexer)). They feed `/feed`, `/positions`, `/leaderboard`, `/lp/history` and the SSE stream.
+- **Why Streams:** confirmed activity reaches the interface with low latency, and a 60-second RPC reconciler only fills gaps.
+
+The Stream is created idempotently by [`scripts/create-stream.ts`](scripts/create-stream.ts), which tests the filter against a real program transaction before activating it.
+
+## Deribit
+
+Deribit supplies the BTC index and the full options chain over REST and WebSocket ([`packages/vol/src/deribit.ts`](packages/vol/src/deribit.ts)). Wick fits each expiry's smile and interpolates between expiries to price any Gemini strike at any time to expiry.
 
 ## Repository map
 
 ```text
 programs/wick/       Anchor program and checked fixed-point math
-packages/pricing/    theo, smile interpolation, leverage and position math
-packages/gemini/     public REST/WebSocket clients and real response fixtures
-packages/vol/        Deribit, Derive, and realized-volatility sources
-packages/shared/     contracts, schemas, constants, generated-IDL placeholder
-services/backend/    pricer, chain port, Streams indexer, SQLite, Fastify APIs
-app/                 Next.js trading, portfolio, pool, wallet, faucet UI
+packages/pricing/    fair value, smile interpolation, leverage and position math
+packages/gemini/     Gemini REST and WebSocket clients with real response fixtures
+packages/vol/        Deribit volatility surface
+packages/shared/     contracts, schemas, constants and the program IDL
+services/backend/    pricer, keeper, Streams indexer, SQLite and Fastify APIs
+app/                 Next.js trading, portfolio, pool, stats and leaderboard
 streams/filter.js    QuickNode Solana block filter
-scripts/             deployment, bots, verification, and recording gates
-docs/                architecture, findings, deployment, demo, and submission
+scripts/             deployment, Stream creation and verification
+docs/                architecture, Gemini findings and the pricing audit
 ```
 
-## Setup
+## Run it
 
-### Prerequisites
-
-- Node.js `>=22 <25`
-- pnpm `11.25.0`
-- Rust `1.85.1`
-- Solana/Agave CLI `2.2.20`
-- Anchor CLI `0.31.1`
-- SPL Token CLI for mint/deployment work
-
-Versions are pinned in `package.json`, `rust-toolchain.toml`, `Anchor.toml`, and Cargo manifests.
-
-### Install and validate
+Pinned toolchain: Node.js `>=22 <25`, pnpm `11.25.0`, Rust `1.85.1`, Solana CLI `2.2.20`, Anchor `0.31.1`.
 
 ```bash
 corepack enable
@@ -222,11 +203,7 @@ pnpm build
 cargo test -p wick
 ```
 
-Never commit `.env`, keypairs, provider tokens, or generated deployment keys.
-
-### Run the read-only local surfaces
-
-The current backend deliberately uses `UnconfiguredChainPort`, so it can serve real public market data locally but cannot acknowledge an on-chain trade.
+Run the backend and app locally:
 
 ```bash
 # terminal 1
@@ -236,55 +213,12 @@ SQLITE_PATH=.state/wick.db pnpm --filter @wick/backend dev
 NEXT_PUBLIC_BACKEND_URL=http://localhost:3000 pnpm --filter @wick/app dev
 ```
 
-Open the URL printed by the app. Real Gemini/volatility data needs outbound network access. Chain actions and the faucet fail closed until a deployed program, generated IDL, mint, and funded devnet authorities are configured.
+The program ID, test USDC mint and devnet RPC are defaults in [`packages/shared/src/constants.ts`](packages/shared/src/constants.ts). The keeper needs `PROGRAM_ID`, `USDC_TEST_MINT` and `KEEPER_KEYPAIR` to post marks. Never commit `.env` or keypairs.
 
-### Hosted market history
+## What's next
 
-Apply the numbered [market-data migrations](services/backend/sql/) in order to the hosted PostgreSQL project. Set the backend's `DATABASE_URL` to a TLS connection for a login with the `wick_market_writer` privileges. Keep `SQLITE_PATH` on a persistent volume because SQLite stores the indexer state and queues samples until Postgres acknowledges them.
+- **Testnet:** public testnet for all traders, a multi-party keeper network, and invariant and fuzz testing.
+- **Mainnet:** an independent audit and live USDC trading on Solana.
+- **Every Gemini market:** crypto beyond BTC, then sports, weather and commodities on the same engine.
 
-With `DATABASE_URL` set, the backend archives five-second Up/Down prices, the complete Deribit BTC chain as gzip-compressed minute snapshots, and minute-by-minute pricing inputs for each listed contract. Pricing inputs include the actual time to expiry, price reference, model version, volatility, and the two volatility inputs used by the ladder call spread. The options archive also keeps selected calls and puts as queryable rows. Premiums from the inverse BTC options are stored in BTC. Hosted market data retains seven days. The trading page reads live prices, market health, history and the price stream from the same backend. Set `NEXT_PUBLIC_MARKET_DATA_URL` to select a dedicated feed. The production Vercel build defaults to the VPS market-data feed. Account, indexer and funding requests use `NEXT_PUBLIC_BACKEND_URL`.
-
-### Deploy and verify the full devnet system
-
-Follow [Deployment](docs/DEPLOYMENT.md) in order. The non-negotiable gates are:
-
-```bash
-pnpm deploy:check --require-ready
-pnpm deploy:program
-pnpm sync:idl
-pnpm create:mint
-pnpm init:config
-# deploy Railway and Vercel with provider-secret stores
-pnpm create:stream -- --test-only
-pnpm create:stream
-pnpm deploy:verify
-```
-
-Do not infer success from a command submission or provider URL. `deploy:verify` requires an executable program, six-decimal mint, chain-enabled healthy backend, live 15-minute market, recent Stream-backed feed event, and reachable frontend.
-
-## Verification and tests
-
-The repository has strict TypeScript, Vitest suites for pricing, provider parsing/fallbacks, backend/indexer, frontend and scripts, plus native Rust tests. CI also defines Anchor build/test with pinned tooling. Real public API fixtures are kept for Gemini; no fake market data ships in the app.
-
-Public provider verification covers read-only Gemini discovery/quotes and settlement parsing, Deribit, Derive, and a backend pricing run. The CI run linked above also passed the Anchor local-validator tests. New browser practice accounts use live market prices with a simulated local balance, start with no trade/claim history, issue `demo-receipt-*` identifiers, and do not fabricate staking rewards or settle from BTC spot. Version-1 local records are preserved during migration, rewritten with local-only identifiers, and labelled simulated/unverified; the untouched v1 value remains in a local backup key. Legacy synthetic reward accrual is disclosed in migration metadata but is not active or claimable. Those local receipts are never transaction or Stream evidence. This does not verify the deployed devnet lifecycle, Stream latency, faucet, bots, public browser transaction flow or demo recording.
-
-## Known limitations
-
-- The public frontend exists. An integrated public trading lifecycle, executable devnet Wick program, matching deployed IDL, test mint, backend and real Stream delivery remain unverified; a frontend URL alone does not establish those gates.
-- Real backend/frontend transaction adapters exist, but remain fail-closed until a generated matching IDL, executable devnet program, funded authorities and public configuration are verified.
-- Browser-only practice actions update local storage and show explicit local receipts; they do not transfer test USDC, prove pool solvency, create explorer links, or count as devnet/QuickNode evidence. Expired practice positions stay pending unless an official Gemini outcome becomes available through a verified path.
-- Existing version-1 practice data is migrated in place and retained in `wick-demo-account-v1-legacy-backup`; migrated positions, claims and activity remain visible only as simulated/unverified legacy data. Browser-practice staking balances are explicitly simulated, and the practice ledger does not calculate or pay staking rewards.
-- The November 17 WP11 report records historical local checks and findings. The later CI run linked above passed TypeScript and Anchor local-validator checks; public devnet execution and end-to-end acceptance still require separate evidence.
-- Faucet cooldown is best-effort per serverless instance; its global funding bound is finite on-chain inventory. Staking fee shares accrued while payout claims are queued remain reserved without later reward assignment.
-- Source is public at [alycz/wick](https://github.com/alycz/wick); source publication is not evidence of deployed backend or collector operation.
-- The public Solana devnet faucet returned HTTP 410 in this environment; the documented treasury and keeper have zero SOL. The treasury is also the demo-wallet funder; the separate mint-authority key is provisioning-only and is revoked before deployment.
-- Provider access varies by execution environment. The deployed Vercel frontend and public GitHub source are verified; do not infer missing account access from absent local credentials. Final backend/program/mint configuration and real QuickNode Stream evidence still need verification.
-- The self-bootstrapping pool can queue profitable payouts and depends on future losses/liquidity; it is experimental economics.
-- Keeper/oracle trust is not decentralized, the contracts are unaudited, and provider/API availability can interrupt service.
-- Wick supports BTC Up/Down and above-strike ladders only; it does not place Gemini orders, support touch/High-Low contracts, accept external LP deposits, or run on mainnet.
-
-## Submission status
-
-The copy-ready answers are in [Devpost](docs/DEVPOST.md), the 2:45 verified-product storyboard is in [Demo](docs/DEMO.md), and outstanding evidence is in [Handoff](docs/HANDOFF.md). Internal deployment/verification cutoff: **Thursday, November 19, 2026 at 11:59 PM CST**. Official submission close: **Friday, November 20, 2026 at 12:00 PM CST**. Finalists must be present in person in Austin on Saturday, November 21 to qualify for prizes under the official rules.
-
-Official references are linked from [Eligibility](docs/ELIGIBILITY.md).
+Team: Austin Lee and James Gui.
