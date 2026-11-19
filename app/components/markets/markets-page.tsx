@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "skullet/react";
 import type { ArchivedLadderContract, ArchivedUpDownContract, MarketHistoryPoint, PositionSide, PricerMarket } from "@wick/shared";
-import { WickChart, type ChartPoint } from "@/components/wick-chart";
+import { ChartTypeToggle, WickChart, type ChartMode, type ChartPoint } from "@/components/wick-chart";
 import { useHealth, useMarketHistory, useMarkets } from "@/hooks/use-markets";
 import { usePriceTrail as useTrail } from "@/hooks/use-price-trail";
 import { getLadderContracts, getUpDownContracts, type HealthView } from "@/lib/api";
@@ -82,6 +82,7 @@ function DatedMarketArchive() {
   const [selectedDate, setSelectedDate] = useState<number>();
   const [selected, setSelected] = useState<string>();
   const [side, setSide] = useState<PositionSide>("yes");
+  const [chartMode, setChartMode] = useState<ChartMode>("live");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -106,10 +107,13 @@ function DatedMarketArchive() {
         options={dates.map((date) => ({ value: String(date), label: `${dateLabel(date)} · ${timeLabel(date)}`, text: `${dateLabel(date)} ${timeLabel(date)}` }))} />
       <Dropdown label="Strike" prefix="Strike" value={contract.symbol} onChange={setSelected}
         options={strikes.map((item) => ({ value: item.symbol, label: `Above ${usd(item.strike, 0)}` }))} />
-      <Seg className="wc-tabs" buttonClass="wc-tab" label="Historical price side" value={side} onChange={setSide}
-        options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} />
+      <span className="mk-history-end">
+        <ChartTypeToggle mode={chartMode} onMode={setChartMode} />
+        <Seg className="wc-tabs" buttonClass="wc-tab" label="Historical price side" value={side} onChange={setSide}
+          options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} />
+      </span>
     </div>
-    <ArchivedPriceChart key={contract.symbol} symbol={contract.symbol} side={side} />
+    <ArchivedPriceChart key={contract.symbol} symbol={contract.symbol} side={side} mode={chartMode} onMode={setChartMode} />
   </>;
 }
 
@@ -126,6 +130,7 @@ function UpDownArchive() {
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [side, setSide] = useState<PositionSide>("yes");
+  const [chartMode, setChartMode] = useState<ChartMode>("live");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,7 +149,7 @@ function UpDownArchive() {
 
   return <>
     <div className="mk-history-controls">
-      <Dropdown label="Contract" prefix="Window" value={contract.symbol} onChange={setSelected} menuWidth={420}
+      <Dropdown label="Contract" prefix="Window" className="dd-even" value={contract.symbol} onChange={setSelected} menuWidth={420}
         options={contracts.map((item) => ({
           value: item.symbol,
           label: `${timeLabel(item.openTs).replace(/ [A-Z]+$/, "")} – ${timeLabel(item.expiryTs)}`,
@@ -152,14 +157,17 @@ function UpDownArchive() {
           hint: usd(item.strike),
           text: `${item.duration} window ending ${dateLabel(item.expiryTs)} ${timeLabel(item.expiryTs)}`,
         }))} />
-      <Seg className="wc-tabs" buttonClass="wc-tab" label="Historical price side" value={side} onChange={setSide}
-        options={[{ value: "yes", label: "Up" }, { value: "no", label: "Down" }]} />
+      <span className="mk-history-end">
+        <ChartTypeToggle mode={chartMode} onMode={setChartMode} />
+        <Seg className="wc-tabs" buttonClass="wc-tab" label="Historical price side" value={side} onChange={setSide}
+          options={[{ value: "yes", label: "Up" }, { value: "no", label: "Down" }]} />
+      </span>
     </div>
-    <ArchivedPriceChart key={contract.symbol} symbol={contract.symbol} side={side} />
+    <ArchivedPriceChart key={contract.symbol} symbol={contract.symbol} side={side} mode={chartMode} onMode={setChartMode} />
   </>;
 }
 
-function ArchivedPriceChart({ symbol, side }: { symbol: string; side: PositionSide }) {
+function ArchivedPriceChart({ symbol, side, mode, onMode }: { symbol: string; side: PositionSide; mode?: ChartMode; onMode?: (mode: ChartMode) => void }) {
   const { history, loading, error } = useMarketHistory(symbol);
   if (error) return <p role="status">Couldn’t load recorded prices. {error}</p>;
   if (loading) return <p role="status">Loading recorded prices…</p>;
@@ -177,7 +185,7 @@ function ArchivedPriceChart({ symbol, side }: { symbol: string; side: PositionSi
       <span className={last >= first ? "up" : "down"}>{last >= first ? "▲" : "▼"} {(Math.abs(last - first) * 100).toFixed(1)}¢ over the window</span>
       {history.some((point) => point.reconstructed) && <small>Early prices rebuilt from saved Deribit options</small>}
     </div>
-    <WickChart historical format="cents" windows={[]} series={[
+    <WickChart historical format="cents" windows={[]} {...(mode ? { mode } : {})} {...(onMode ? { onMode } : {})} series={[
       { id: "wick", label: "Wick fair price", color: "#5fd4cc", data: Array.from(fair, ([time, value]) => ({ time, value })) },
     ]} />
   </div>;

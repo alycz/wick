@@ -77,3 +77,7 @@
 @keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
 .toast i.bad { background: rgba(240, 80, 93, .14); color: var(--no-hi); }
+
+/* a dropdown whose rows keep label, hint and check evenly spaced across the row */
+.dd-even .dd-opt { justify-content: space-between; }
+.dd-even .dd-txt { flex: none; }

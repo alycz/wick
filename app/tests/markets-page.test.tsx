@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import React from "react";
+import React, { type ReactNode } from "react";
 import type { MarketHistoryPoint, PricerMarket } from "@wick/shared";
 import type { ChartSeries } from "@/components/wick-chart";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,11 +29,12 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   getLadderContracts: state.getLadderContracts,
 }));
 vi.mock("@/components/wick-chart", () => ({
-  WickChart: ({ historical, series, format }: { historical?: boolean; series: ChartSeries[]; format?: string }) => historical
+  ChartTypeToggle: () => null,
+  WickChart: ({ historical, series, format, header }: { historical?: boolean; series: ChartSeries[]; format?: string; header?: (controls: { windows: null; type: null }) => ReactNode }) => historical
     ? <div data-testid="historical-chart">{series.map((item) => item.data[0]?.value.toFixed(2)).join(",")}</div>
-    : <div data-testid="chart" data-format={format}>
+    : <>{header?.({ windows: null, type: null })}<div data-testid="chart" data-format={format}>
       {series.map((item) => <div key={item.id} data-testid={item.id}>{item.data.map((point) => point.value.toFixed(2)).join(",")}</div>)}
-    </div>,
+    </div></>,
 }));
 import { MarketsPage } from "@/components/markets/markets-page";
 

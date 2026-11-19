@@ -120,3 +120,10 @@
 .lb-page .rank.r1 { background: #f2c14e; color: #2a1e00; } .lb-page .rank.r2 { background: #c9d1d9; color: #111; } .lb-page .rank.r3 { background: #d08a4e; color: #241000; }
 .lb-page .lbt .av { width: 24px; height: 24px; }
 .lb-page .lbt td { font-variant-numeric: tabular-nums; }
+
+/* metric card head: headline number left, chart type and range on the same row at the right; the 24h change under the number */
+.sx-page .sc { grid-template-rows: auto 1fr; min-height: 0; }
+.sx-page .sc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.sx-page .sc-val { display: grid; gap: 4px; }
+.sx-page .sc-val span { font-size: 13px; font-weight: 600; }
+.sx-page .sc-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

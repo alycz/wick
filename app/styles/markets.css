@@ -480,3 +480,22 @@ body.nosel, body.nosel * { user-select: none !important; -webkit-user-select: no
 /* panel header: title left, open count and BTC price right */
 .mk-page .mm-head { gap: 16px; }
 .mk-page .mm-meta { color: var(--muted); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* market menu rows: four equal columns, left aligned, the time left sits at the right edge; no side bar on the current row */
+.mk-page .mm-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.mk-page .mm-row.on::before { content: none; }
+.mk-page .mm-spark svg { max-width: 128px; }
+.mk-page .mm-val { justify-items: start; text-align: left; }
+@media (max-width: 640px) { .mk-page .mm-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* contract chart head: a larger title beside the strike picker, then one row of controls, then the time note and live price */
+.mk-page .ud-chart-heading h2 { font-size: 20px; font-weight: 600; letter-spacing: -.015em; }
+.mk-page .ud-chart-header { padding-bottom: 8px; gap: 8px 12px; }
+.mk-page .ud-chart-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.mk-page .ud-chart-prices { justify-content: space-between; padding-bottom: 6px; }
+.mk-page .ud-chart-utc { color: var(--muted); font-size: 12px; }
+
+/* past markets: chart type sits left of the side toggle, both at the right edge */
+.mk-page .mk-history-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.mk-page .mk-history-controls .mk-history-end .wc-tabs { margin-left: 0; }
+.mk-page .mm-panel { width: min(820px, calc(100vw - 32px)); }
