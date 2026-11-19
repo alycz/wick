@@ -76,6 +76,11 @@ const cutoffByBucket: Record<SupportedBucket, number> = {
   month_end: 600,
 };
 
+// A Solana transaction is limited to 1,232 bytes. Each mark adds a writable
+// market account plus its encoded update, so stay below the observed
+// 18-update ceiling and leave room for a priority-fee instruction on retries.
+const MAX_MARKS_PER_TRANSACTION = 16;
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -140,7 +145,7 @@ export class PricerEngine {
     this.discoveryIntervalMs = options.discoveryIntervalMs ?? 10_000;
     this.markIntervalMs = options.markIntervalMs ?? 1_000;
     this.settlementIntervalMs = options.settlementIntervalMs ?? 3_000;
-    this.heartbeatMs = options.heartbeatMs ?? 4_000;
+    this.heartbeatMs = options.heartbeatMs ?? 2_000;
     this.markMoveE6 = options.markMoveE6 ?? 1_000;
     this.halfSpreadE6 = options.halfSpreadE6 ?? 5_000;
     this.timers = options.timers ?? true;
@@ -449,34 +454,49 @@ export class PricerEngine {
   private async postAdaptiveMarks(markets: readonly PricerMarket[], now: number): Promise<void> {
     const open = markets.filter((market) => market.status === "open" && this.ensuredMarkets.has(market.symbol));
     if (open.length === 0) return;
-    const heartbeat = now - this.lastBatchAt >= this.heartbeatMs;
-    const changed = open.some((market) => {
+    // Every open market must carry a mark younger than the program's
+    // `stale_after_secs` (6s on devnet), or traders hit StaleMark. A market is
+    // re-posted when its price or cap moved, or when its own last mark is older
+    // than the heartbeat, so quiet strikes never age out while busy ones move.
+    const due = open.filter((market) => {
       const previous = this.lastPosted.get(market.symbol);
-      return !previous || Math.abs(priceToE6(market.theo) - previous.markE6) >= this.markMoveE6 || previous.cap !== market.maxLeverage;
+      return !previous
+        || now - previous.at >= this.heartbeatMs
+        || Math.abs(priceToE6(market.theo) - previous.markE6) >= this.markMoveE6
+        || previous.cap !== market.maxLeverage;
     });
-    if (!changed && !heartbeat) return;
-    const requests: MarkUpdateRequest[] = open.map((market) => ({
+    if (due.length === 0) return;
+    const requests: MarkUpdateRequest[] = due.map((market) => ({
       symbol: market.symbol,
       markE6: priceToE6(market.theo),
       maxLeverage: market.maxLeverage,
     }));
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(new Error("mark transaction did not land within 3 seconds")), 3_000);
-    try {
-      const signature = await this.chain.updateMarks(requests, {
-        priorityFeeMicroLamports: this.priorityFeeMicroLamports,
-        signal: controller.signal,
-      });
+    const batches: MarkUpdateRequest[][] = [];
+    for (let offset = 0; offset < requests.length; offset += MAX_MARKS_PER_TRANSACTION) batches.push(requests.slice(offset, offset + MAX_MARKS_PER_TRANSACTION));
+    // Batches go out together so the last one is not delayed behind the first.
+    const results = await Promise.allSettled(batches.map(async (batch) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(new Error("mark transaction did not land within 3 seconds")), 3_000);
+      try {
+        await this.chain.updateMarks(batch, { priorityFeeMicroLamports: this.priorityFeeMicroLamports, signal: controller.signal });
+        for (const request of batch) this.lastPosted.set(request.symbol, { markE6: request.markE6, cap: request.maxLeverage, at: now });
+        return batch.length;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }));
+    const confirmed = results.reduce((sum, result) => sum + (result.status === "fulfilled" ? result.value : 0), 0);
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (confirmed > 0) {
       this.lastBatchAt = now;
       this.lastMarkAt = now;
-      for (const request of requests) this.lastPosted.set(request.symbol, { markE6: request.markE6, cap: request.maxLeverage, at: now });
+    }
+    if (failures.length === 0) {
       this.priorityFeeMicroLamports = 0;
-      this.logger.info({ count: requests.length, signature }, "Adaptive mark batch confirmed");
-    } catch (error) {
+      this.logger.info({ count: requests.length, transactions: batches.length }, "Adaptive mark batches confirmed");
+    } else {
       this.priorityFeeMicroLamports = 1_000;
-      this.logger.warn({ count: requests.length, error: errorMessage(error) }, "Mark batch failed; next attempt will add a small priority fee");
-    } finally {
-      clearTimeout(timeout);
+      this.logger.warn({ count: requests.length, confirmed, failedTransactions: failures.length, error: errorMessage(failures[0]!.reason) }, "Mark batch failed; next attempt will add a small priority fee");
     }
   }
 

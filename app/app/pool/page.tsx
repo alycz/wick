@@ -13,6 +13,7 @@ import { latestIndexerEventKey } from "@/lib/feed";
 import { compactAddress, e6 } from "@/lib/format";
 import { timeLabel, usd } from "@/lib/markets";
 import "@/styles/portfolio.css";
+import { friendlyError } from "@/lib/errors";
 
 type Tab = "stake" | "unstake" | "claim";
 const POOL_EVENTS = new Set(["LpUpdated", "Staked", "Unstaked", "RewardsClaimed", "ClaimPaid"]);
@@ -51,7 +52,7 @@ export default function PoolPage() {
     }
     void getLpHistory(controller.signal)
       .then((nextHistory) => { setHistory(nextHistory); setError(undefined); })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
+      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(friendlyError(reason)); });
     return () => controller.abort();
   }, [demoMode, backendReady, refreshKey, refreshNonce]);
 
@@ -71,7 +72,7 @@ export default function PoolPage() {
     if (!actions.client) { setError(actions.error ?? "Staking is not configured."); return; }
     setBusy(name); setError(undefined); setSignature(undefined);
     try { setSignature(await operation()); setRefreshNonce((value) => value + 1); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    catch (reason) { setError(friendlyError(reason)); }
     finally { setBusy(undefined); }
   };
   /* the demo account stakes against its own ledger, so it doesn't wait on pool history */

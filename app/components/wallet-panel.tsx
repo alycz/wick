@@ -12,6 +12,7 @@ import { Seg } from "@/components/markets/controls";
 import { usdcE6 } from "@/lib/demo/ledger";
 import { compactAddress } from "@/lib/format";
 import { usd } from "@/lib/markets";
+import { friendlyError } from "@/lib/errors";
 
 const WalletMultiButton = dynamic(
   async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
@@ -122,7 +123,7 @@ export function WalletPanel() {
       const result = await response.json() as { message?: string; signature?: string };
       if (!response.ok) throw new Error(result.message ?? `Faucet failed (${response.status})`);
       setMessage(`Funds added · ${result.signature ? compactAddress(result.signature) : "confirmed"}`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setMessage(friendlyError(error)); }
     finally { setFunding(false); }
   };
 
@@ -134,10 +135,10 @@ export function WalletPanel() {
     if (!demo) return;
     setFunding(true); setMessage(undefined);
     try { await demo.client.deposit(usdcE6(1_000), "faucet"); setMessage("Added $1,000.00 to your balance"); }
-    catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setMessage(friendlyError(error)); }
     finally { setFunding(false); }
   };
-  const source = wallet.publicKey ? "Local wallet · this browser" : connected.wallet ? `${connected.wallet.adapter.name} · Solana devnet` : "";
+  const source = wallet.publicKey ? "Local wallet · this browser" : connected.wallet ? connected.wallet.adapter.name : "";
 
   return (
     <div className="chrome-wallet" ref={walletPanelRef} onKeyDown={(event) => {
@@ -218,9 +219,9 @@ function Toast({ text, onDone }: { text: string; onDone: () => void }) {
    Withdrawals have no backend support yet, so that side is a placeholder. */
 interface DemoTransfer { balance: number; deposit: (amount: number) => Promise<string>; withdraw: (amount: number, to: string) => Promise<string> }
 
-function TransferDialog({ mode, onMode, onClose, address, source, funding, onFund, demo }: {
+function TransferDialog({ mode, onMode, onClose, address, funding, onFund, demo }: {
   mode: "deposit" | "withdraw"; onMode: (mode: "deposit" | "withdraw") => void; onClose: () => void;
-  address: string; source: string; funding: boolean; onFund?: () => void; demo?: DemoTransfer;
+  address: string; source?: string; funding: boolean; onFund?: () => void; demo?: DemoTransfer;
 }) {
   const [copied, setCopied] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
@@ -245,7 +246,6 @@ function TransferDialog({ mode, onMode, onClose, address, source, funding, onFun
         <p className="dw-txt">Send test USDC on Solana devnet to this address. Wick takes margin straight from this wallet when you open a position, so there&apos;s nothing else to move.</p>
         <div className="dw-addr"><code>{address}</code><button type="button" className="dw-copy" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button></div>
         {onFund && <button type="button" className="dw-go" disabled={funding} onClick={onFund}>{funding ? "Adding funds…" : "Add funds"}</button>}
-        <small className="dw-foot">{source}</small>
       </> : <>
         <div className="dw-fld"><label htmlFor="dw-amt">Amount</label><input id="dw-amt" inputMode="decimal" placeholder="0.00 USDC" disabled /></div>
         <div className="dw-fld"><label htmlFor="dw-to">Send to</label><input id="dw-to" placeholder="Solana address" disabled /></div>
@@ -272,7 +272,7 @@ function DemoTransferBody({ mode, demo, onClose }: { mode: "deposit" | "withdraw
       if (mode === "deposit") await demo.deposit(value); else await demo.withdraw(value, to);
       setDone({ mode, amount: value, ...(mode === "withdraw" ? { to: to.trim() } : {}) });
       setAmount("");
-    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
+    } catch (failure) { setError(friendlyError(failure)); }
     finally { setBusy(false); }
   };
   if (done) return <div className="dw-done" role="status">

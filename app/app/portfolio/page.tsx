@@ -17,6 +17,7 @@ import { dateLabel, timeLabel, usd } from "@/lib/markets";
 import { GUEST_PORTFOLIO_CLAIMS, GUEST_PORTFOLIO_POSITIONS } from "@/lib/demo/preview";
 import { calculateLivePositionPnls, livePositionPnlE6, marketAddressForSymbol } from "@/lib/portfolio";
 import "@/styles/portfolio.css";
+import { friendlyError } from "@/lib/errors";
 
 type PositionRow = PositionView & { legacyUnverified?: boolean; previewOnly?: boolean; previewLabel?: string; previewSub?: string; previewPnlE6?: string; previewMark?: number } & Record<string, unknown>;
 type ClaimRow = ClaimView & { legacyUnverified?: boolean; previewOnly?: boolean };
@@ -85,7 +86,7 @@ export default function PortfolioPage() {
     if (!owner || !backendReady || demoMode) return () => controller.abort();
     void Promise.all([getPositions(owner, controller.signal), getClaims(owner, controller.signal)])
       .then(([nextPositions, nextClaims]) => { setPositions(nextPositions); setClaims(nextClaims); setError(undefined); })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); });
+      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(friendlyError(reason)); });
     return () => controller.abort();
   }, [owner, backendReady, demoMode, refreshKey, refreshNonce]);
 
@@ -109,7 +110,7 @@ export default function PortfolioPage() {
     if (!actions.client) { setError(actions.error ?? "Trading is not configured."); return; }
     setBusy(key); setError(undefined); setSignature(undefined);
     try { setSignature(await operation()); setRefreshNonce((value) => value + 1); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    catch (reason) { setError(friendlyError(reason)); }
     finally { setBusy(undefined); }
   };
 
