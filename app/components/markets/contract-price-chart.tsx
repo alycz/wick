@@ -7,6 +7,7 @@ import { usePriceTrail } from "@/hooks/use-price-trail";
 import { cents } from "@/lib/format";
 import { usd } from "@/lib/markets";
 import { Seg } from "./controls";
+import { Dropdown } from "@/components/ui/dropdown";
 
 const seconds = (ms: number) => Math.floor(ms / 1_000);
 const WICK = "#5fd4cc";
@@ -59,11 +60,8 @@ export function ContractPriceChart({ market, strikes, onStrikeChange, history, s
   return <section className={className} aria-label={upDown ? "Up/Down chart" : "Strike price chart"}>
     {!upDown && <div className="ud-chart-heading">
       <h2>BTC above {usd(market.strike, 0)}</h2>
-      <label>Strike
-        <select value={symbol} onChange={(event) => onStrikeChange(event.target.value)}>
-          {strikes.map((strike) => <option key={strike.symbol} value={strike.symbol}>{usd(strike.strike, 0)}</option>)}
-        </select>
-      </label>
+      <Dropdown label="Strike" prefix="Strike" align="right" value={symbol} onChange={onStrikeChange}
+        options={strikes.map((strike) => ({ value: strike.symbol, label: usd(strike.strike, 0), hint: `${Math.round(strike.theo * 100)}%` }))} />
     </div>}
     <div className="ud-chart-header">
       <Seg className="wc-tabs" buttonClass="wc-tab" label="Price chart view" value={view} onChange={setView}
