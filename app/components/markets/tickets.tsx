@@ -6,6 +6,7 @@ import { useWickActions } from "@/hooks/use-wick-actions";
 import { cents, compactAddress, dollars } from "@/lib/format";
 import { tradePreview } from "@/lib/preview";
 import { FitInput, LevSlider } from "./controls";
+import { friendlyError } from "@/lib/errors";
 
 export interface TicketState {
   side: PositionSide;
@@ -37,7 +38,7 @@ function useOpen(market: PricerMarket, state: TicketState, history: MarketHistor
         maxEntryE6: Math.min(990_000, Math.ceil(entry.entry * 1_000_000) + 1_000),
       }));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(friendlyError(reason));
     } finally {
       setSubmitting(false);
     }

@@ -113,14 +113,21 @@ describe("PricerEngine", () => {
     expect(markets.some((market) => market.kind === "ladder")).toBe(true);
     expect(markets.every((market) => market.volSource === "deribit" && market.spot === 65_500)).toBe(true);
     expect(chain.created.length).toBe(markets.length);
-    expect(chain.marks).toHaveLength(1);
-    expect(chain.marks[0]!.requests).toHaveLength(markets.length);
+    // Marks are split so each transaction stays under Solana's size limit.
+    const firstRound = chain.marks.length;
+    expect(firstRound).toBe(Math.ceil(markets.length / 16));
+    expect(chain.marks.every((mark) => mark.requests.length <= 16)).toBe(true);
+    expect(new Set(chain.marks.flatMap((mark) => mark.requests.map((request) => request.symbol))).size).toBe(markets.length);
 
+    // Nothing moved and the heartbeat has not elapsed: no new transactions.
     await engine.markOnce();
-    expect(chain.marks).toHaveLength(1);
-    now += 4_001;
+    expect(chain.marks).toHaveLength(firstRound);
+    // Past the heartbeat every open market is re-posted, so none ages past
+    // the program's staleness window even when its price is flat.
+    now += 2_001;
     await engine.markOnce();
-    expect(chain.marks).toHaveLength(2);
+    expect(chain.marks).toHaveLength(firstRound * 2);
+    expect(new Set(chain.marks.slice(firstRound).flatMap((mark) => mark.requests.map((request) => request.symbol))).size).toBe(markets.length);
     await engine.stop();
   });
 
