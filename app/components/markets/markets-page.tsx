@@ -14,6 +14,8 @@ import { Clock, ModeSwitch, Seg } from "./controls";
 import { PricePicker } from "./price-picker";
 import { EasyTicket, ProTicket, type TicketState } from "./tickets";
 import { ContractPriceChart } from "./contract-price-chart";
+import { groupTitle, MarketMenu } from "./market-menu";
+import { Dropdown } from "@/components/ui/dropdown";
 
 type Mode = "easy" | "pro";
 const MODE_KEY = "wick:markets-mode";
@@ -49,15 +51,28 @@ export function MarketsPage({ symbol }: { symbol?: string }) {
         <a href={`/m/${encodeURIComponent(market.symbol)}`}>{market.symbol}</a> · {settlementUtc(market.expiryTs)}
       </li>)}</ul>
     </details>}
-    <div className="mk-page mk-history-wrap"><PastDatedPrices /><PastUpDownPrices /></div>
+    <div className="mk-page mk-history-wrap rise rise-4"><PastDatedPrices /><PastUpDownPrices /></div>
   </>;
+}
+
+const ICONS = {
+  calendar: <path d="M3 5.5h12M5.5 2.5v2M12.5 2.5v2M4 4h10a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />,
+  clock: <><circle cx="9" cy="9" r="6.5" /><path d="M9 5.5V9l2.5 1.5" /></>,
+};
+
+function Summary({ title, sub, icon }: { title: string; sub: string; icon: keyof typeof ICONS }) {
+  return <summary>
+    <span className="fold-ico" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{ICONS[icon]}</svg></span>
+    <span><b>{title}</b><br /><small>{sub}</small></span>
+    <span className="fold-chev" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+  </summary>;
 }
 
 function PastDatedPrices() {
   const [expanded, setExpanded] = useState(false);
-  return <details className="p mk-history" onToggle={(event) => setExpanded(event.currentTarget.open)}>
-    <summary>Past dated BTC markets</summary>
-    {expanded && <DatedMarketArchive />}
+  return <details className="fold mk-history" onToggle={(event) => setExpanded(event.currentTarget.open)}>
+    <Summary title="Past dated BTC markets" sub="Recorded Wick fair prices for settled strikes" icon="calendar" />
+    {expanded && <div className="fold-body"><DatedMarketArchive /></div>}
   </details>;
 }
 
@@ -87,16 +102,10 @@ function DatedMarketArchive() {
   const contract = strikes.find((item) => item.symbol === selected) ?? strikes[Math.floor(strikes.length / 2)]!;
   return <>
     <div className="mk-history-controls">
-      <label>Settlement date
-        <select value={expiry} onChange={(event) => { setSelectedDate(Number(event.target.value)); setSelected(undefined); }}>
-          {dates.map((date) => <option key={date} value={date}>{dateLabel(date)} · {timeLabel(date)}</option>)}
-        </select>
-      </label>
-      <label>Strike
-        <select value={contract.symbol} onChange={(event) => setSelected(event.target.value)}>
-          {strikes.map((item) => <option key={item.symbol} value={item.symbol}>Above {usd(item.strike, 0)}</option>)}
-        </select>
-      </label>
+      <Dropdown label="Settlement date" prefix="Settled" value={String(expiry)} onChange={(next) => { setSelectedDate(Number(next)); setSelected(undefined); }}
+        options={dates.map((date) => ({ value: String(date), label: `${dateLabel(date)} · ${timeLabel(date)}`, text: `${dateLabel(date)} ${timeLabel(date)}` }))} />
+      <Dropdown label="Strike" prefix="Strike" value={contract.symbol} onChange={setSelected}
+        options={strikes.map((item) => ({ value: item.symbol, label: `Above ${usd(item.strike, 0)}` }))} />
       <Seg className="wc-tabs" buttonClass="wc-tab" label="Historical price side" value={side} onChange={setSide}
         options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} />
     </div>
@@ -106,9 +115,9 @@ function DatedMarketArchive() {
 
 function PastUpDownPrices() {
   const [expanded, setExpanded] = useState(false);
-  return <details className="p mk-history" onToggle={(event) => setExpanded(event.currentTarget.open)}>
-    <summary>Past BTC Up/Down prices</summary>
-    {expanded && <UpDownArchive />}
+  return <details className="fold mk-history" onToggle={(event) => setExpanded(event.currentTarget.open)}>
+    <Summary title="Past BTC Up/Down prices" sub="Every finished 5 and 15 minute window" icon="clock" />
+    {expanded && <div className="fold-body"><UpDownArchive /></div>}
   </details>;
 }
 
@@ -135,13 +144,14 @@ function UpDownArchive() {
 
   return <>
     <div className="mk-history-controls">
-      <label>Contract
-        <select value={contract.symbol} onChange={(event) => setSelected(event.target.value)}>
-          {contracts.map((item) => <option key={item.symbol} value={item.symbol}>
-            {item.duration} · {dateLabel(item.expiryTs)} · {timeLabel(item.openTs)} to {timeLabel(item.expiryTs)} · {usd(item.strike)}
-          </option>)}
-        </select>
-      </label>
+      <Dropdown label="Contract" prefix="Window" value={contract.symbol} onChange={setSelected} menuWidth={420}
+        options={contracts.map((item) => ({
+          value: item.symbol,
+          label: `${timeLabel(item.openTs).replace(/ [A-Z]+$/, "")} – ${timeLabel(item.expiryTs)}`,
+          sub: `${dateLabel(item.expiryTs)} · ${item.duration === "5m" ? "5 min" : item.duration === "15m" ? "15 min" : item.duration}`,
+          hint: usd(item.strike),
+          text: `${item.duration} window ending ${dateLabel(item.expiryTs)} ${timeLabel(item.expiryTs)}`,
+        }))} />
       <Seg className="wc-tabs" buttonClass="wc-tab" label="Historical price side" value={side} onChange={setSide}
         options={[{ value: "yes", label: "Up" }, { value: "no", label: "Down" }]} />
     </div>
@@ -159,13 +169,18 @@ function ArchivedPriceChart({ symbol, side }: { symbol: string; side: PositionSi
   for (const point of history) {
     fair.set(seconds(point.ts), side === "yes" ? point.theo : 1 - point.theo);
   }
-  return <>
-    <p>Recorded Wick fair prices</p>
-    {history.some((point) => point.reconstructed) && <p>Early Wick prices reconstructed from saved Deribit options.</p>}
+  const values = Array.from(fair.values());
+  const first = values[0]!; const last = values[values.length - 1]!;
+  return <div className="arch">
+    <div className="arch-head">
+      <span>Wick fair price <b>{cents(last)}</b></span>
+      <span className={last >= first ? "up" : "down"}>{last >= first ? "▲" : "▼"} {(Math.abs(last - first) * 100).toFixed(1)}¢ over the window</span>
+      {history.some((point) => point.reconstructed) && <small>Early prices rebuilt from saved Deribit options</small>}
+    </div>
     <WickChart historical format="cents" windows={[]} series={[
       { id: "wick", label: "Wick fair price", color: "#5fd4cc", data: Array.from(fair, ([time, value]) => ({ time, value })) },
     ]} />
-  </>;
+  </div>;
 }
 
 function Markets({ markets, health, symbol, error, sample, observedAt }: { markets: PricerMarket[]; health?: HealthView | undefined; symbol?: string | undefined; error?: string | undefined; sample: boolean; observedAt?: number | undefined }) {
@@ -217,18 +232,14 @@ function Markets({ markets, health, symbol, error, sample, observedAt }: { marke
   const spotTrail = useTrail(selected?.symbol ?? "", spotSeed, spot && observedAt !== undefined && !error
     ? { time: seconds(observedAt), value: spot } : undefined);
 
-  const board = groups.length > 0 && <section className="mk-page market-board" aria-label="BTC markets">
-    <h2>BTC markets</h2>
+  const pickGroup = (item: ExpiryGroup) => {
+    const strike = defaultStrike(item.markets);
+    if (strike) setSelection(item.upDown ? { duration: item.duration } : { symbol: strike.symbol });
+  };
+  const board = groups.length > 0 && !group && <section className="mk-page market-board" aria-label="BTC markets">
     <div className="market-board-grid">
-      {groups.map((item) => <button type="button" key={item.id} aria-pressed={item.id === group?.id}
-        aria-label={item.upDown ? `${item.duration} up/down` : undefined}
-        onClick={() => {
-          const strike = defaultStrike(item.markets);
-          if (strike) setSelection(item.upDown ? { duration: item.duration } : { symbol: strike.symbol });
-        }}>
-        <b>{item.upDown ? `${item.label} Up/Down` : item.duration === "1h" ? `Hourly · ${item.label}` : item.label}</b>
-        <small>{item.upDown ? `Ends ${timeLabel(item.expiryTs)}` : `${item.name} · ${item.markets.length} ${item.markets.length === 1 ? "strike" : "strikes"}`}</small>
-        {!item.upDown && <small>{settlementUtc(item.expiryTs)}</small>}
+      {groups.map((item) => <button type="button" key={item.id} onClick={() => pickGroup(item)}>
+        <b>{groupTitle(item)}</b><small>Ends {timeLabel(item.expiryTs)}</small>
       </button>)}
     </div>
   </section>;
@@ -256,14 +267,13 @@ function Markets({ markets, health, symbol, error, sample, observedAt }: { marke
     && pricingAge !== undefined && pricingAge <= LIVE_MARK_MAX_AGE_MS
     && (elapsed === undefined || (elapsed >= -5_000 && elapsed <= LIVE_MARK_MAX_AGE_MS));
   const liveChartAt = live ? observedAt : undefined;
-  const shared = { group, rows, selected, spot, sigma, now, health, live, error, history, historyError, liveChartAt, ticket, choose, mode, setMode, spotTrail };
-  return <>
-    {board}
-    {mode === "pro" ? <Pro {...shared} /> : <Easy {...shared} />}
-  </>;
+  const shared = { groups, pickGroup, group, rows, selected, spot, sigma, now, health, live, error, history, historyError, liveChartAt, ticket, choose, mode, setMode, spotTrail };
+  return mode === "pro" ? <Pro {...shared} /> : <Easy {...shared} />;
 }
 
 interface ViewProps {
+  groups: ExpiryGroup[];
+  pickGroup: (group: ExpiryGroup) => void;
   group: ExpiryGroup;
   rows: PricerMarket[];
   selected: PricerMarket;
@@ -302,7 +312,7 @@ function Pro(props: ViewProps) {
   let spotRowDone = false;
   return <div className="mk-page pro">
     <div className="p stats">
-      <div className="mk"><div className="coin sm" aria-hidden="true">₿</div><b>BTC</b></div>
+      <MarketMenu groups={props.groups} group={group} now={now} spot={spot} onPick={props.pickGroup} />
       <div className="st"><span>Spot</span><b>{usd(spot)}</b></div>
       <div className="st"><span>Implied vol</span><b>{(sigma * 100).toFixed(1)}% · {cap(selected.volSource)}</b></div>
       <div className="st"><span>Price age</span><b>{pricingAge === undefined ? "—" : `${(pricingAge / 1000).toFixed(1)}s`}</b></div>
@@ -381,6 +391,8 @@ function Easy(props: ViewProps) {
   return <div className="mk-page easy">
     <div className="pagebar">
       <div className="pb-e">
+        <MarketMenu groups={props.groups} group={group} now={now} spot={spot} onPick={props.pickGroup} compact />
+        <i className="pb-div" aria-hidden="true" />
         <div className="pb-clock"><span>{up ? "Window ends in" : "Settles in"}</span><Clock msLeft={group.expiryTs - now} /></div>
         <i className="pb-div" aria-hidden="true" />
         <div className="pb-stats">

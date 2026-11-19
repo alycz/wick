@@ -96,6 +96,7 @@ export function WalletPanel() {
   const [open, setOpen] = useState(false);
   const [funding, setFunding] = useState(false);
   const [message, setMessage] = useState<string>();
+  const clearMessage = useCallback(() => setMessage(undefined), []);
   const [transfer, setTransfer] = useState<"deposit" | "withdraw">();
   const walletPanelRef = useRef<HTMLDivElement>(null);
   const walletEntryRef = useRef<HTMLButtonElement>(null);
@@ -132,7 +133,7 @@ export function WalletPanel() {
   const demoFund = async () => {
     if (!demo) return;
     setFunding(true); setMessage(undefined);
-    try { await demo.client.deposit(usdcE6(1_000), "faucet"); setMessage("Added $1,000.00 to the local demo balance · no network transfer"); }
+    try { await demo.client.deposit(usdcE6(1_000), "faucet"); setMessage("Added $1,000.00 to your balance"); }
     catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setFunding(false); }
   };
@@ -191,7 +192,7 @@ export function WalletPanel() {
         </div>}
         {wallet.publicKey && <button data-wallet-option className="chrome-wallet-link chrome-wallet-link--danger" type="button" onClick={wallet.reset}>Remove local wallet</button>}
       </div>}
-      {message && <p className="chrome-wallet-message" aria-live="polite">{message}</p>}
+      {message && <Toast key={message} text={message} onDone={clearMessage} />}
       {transfer && demo && <TransferDialog mode={transfer} onMode={setTransfer} onClose={() => { setTransfer(undefined); walletEntryRef.current?.focus(); }}
         address={demo.ledger.owner} source="Demo account" funding={funding}
         demo={{ balance: demoBalance, deposit: (amount) => demo.client.deposit(usdcE6(amount)), withdraw: (amount, to) => demo.client.withdraw(usdcE6(amount), to) }} />}
@@ -199,6 +200,18 @@ export function WalletPanel() {
         address={address} source={source} funding={funding} {...(fundingAvailable ? { onFund: () => void fund() } : {})} />}
     </div>
   );
+}
+
+/* Fixed above every menu and dialog so it is never hidden behind the wallet menu; fades out on its own. */
+function Toast({ text, onDone }: { text: string; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const ok = /^(Added|Funds added|Demo account reset)/.test(text);
+  useEffect(() => {
+    const leave = window.setTimeout(() => setLeaving(true), 3_600);
+    const done = window.setTimeout(onDone, 3_850);
+    return () => { window.clearTimeout(leave); window.clearTimeout(done); };
+  }, [onDone]);
+  return <p className={`toast${leaving ? " out" : ""}`} role="status" aria-live="polite"><i aria-hidden="true" className={ok ? "" : "bad"}>{ok ? "✓" : "!"}</i>{text}</p>;
 }
 
 /* Deposit and withdraw. Positions draw margin straight from the wallet's USDC, so a deposit is USDC sent to this address.

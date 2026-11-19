@@ -47,49 +47,50 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-describe("signed-out Wick example preview", () => {
-  it("shows clearly labelled simulated Portfolio examples without loading chain records", () => {
+describe("signed-out preview", () => {
+  it("shows preview Portfolio positions without loading chain records", () => {
     render(<PortfolioPage />);
-    expect(screen.getByRole("status")).toHaveTextContent(/Example demo · simulated locally/i);
-    expect(screen.getByText("BTC above example strike")).toBeInTheDocument();
-    expect(screen.getByText(/Example preview/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Example" })).toBeDisabled();
+    expect(screen.getByText("BTC > $64k")).toBeInTheDocument();
+    expect(screen.queryByText(/Example|simulated/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Trade" })).toBeEnabled();
     expect(mocks.getPositions).not.toHaveBeenCalled();
   });
 
-  it("shows simulated Pool history and local receipt identifiers", () => {
+  it("shows preview Pool history and activity without loading pool events", () => {
     render(<PoolPage />);
-    expect(screen.getByRole("status")).toHaveTextContent(/not Solana state, QuickNode events/i);
     expect(screen.getByText("$43,820.00")).toBeInTheDocument();
-    expect(screen.getByText("demo-receipt-pool-1")).toBeInTheDocument();
+    expect(screen.getByText("4xQm7Rk2…9Kd2Lp")).toBeInTheDocument();
     expect(screen.getByTestId("demo-chart")).toBeInTheDocument();
+    expect(screen.queryByText(/Example|simulated/i)).not.toBeInTheDocument();
     expect(mocks.getLpHistory).not.toHaveBeenCalled();
   });
 
-  it("shows simulated Leaderboard and Stats examples with explicit provenance", () => {
+  it("shows preview Leaderboard and Stats with charts for every metric", () => {
     const leaderboard = render(<LeaderboardPage />);
-    expect(screen.getByRole("status")).toHaveTextContent(/Every trader, rank, return, and volume.*illustrative/i);
-    expect(screen.getByText("Example trader A")).toBeInTheDocument();
+    expect(screen.getByText("kairos.sol")).toBeInTheDocument();
+    expect(screen.getByText("#8")).toBeInTheDocument();
+    expect(screen.queryByText(/Example|simulated/i)).not.toBeInTheDocument();
     leaderboard.unmount();
 
     render(<StatsPage />);
-    expect(screen.getByRole("status")).toHaveTextContent(/not Solana state, a QuickNode Stream/i);
     expect(screen.getAllByText("$184,320.00").length).toBeGreaterThan(0);
-    expect(screen.getByText("demo-receipt-liquidation-1 · $420.00")).toBeInTheDocument();
+    expect(screen.getAllByTestId("demo-chart")).toHaveLength(4);
+    expect(screen.getByText("BTC > $63.75k · Hourly")).toBeInTheDocument();
+    expect(screen.queryByText(/Example|simulated|illustrative/i)).not.toBeInTheDocument();
   });
 
-  it("never falls back to examples for a connected wallet", () => {
+  it("never falls back to preview data for a connected wallet", () => {
     mocks.account.active = false;
     mocks.actions = { error: "Backend unavailable" };
     mocks.wallet = { publicKey: { toBase58: () => "ConnectedWallet11111111111111111111111111111" } };
 
     const leaderboard = render(<LeaderboardPage />);
-    expect(screen.queryByText("Example trader A")).not.toBeInTheDocument();
+    expect(screen.queryByText("kairos.sol")).not.toBeInTheDocument();
     expect(screen.getByText(/No data yet/)).toBeInTheDocument();
     leaderboard.unmount();
 
     render(<StatsPage />);
-    expect(screen.queryByText(/Example demo/)).not.toBeInTheDocument();
+    expect(screen.queryByText("$184,320.00")).not.toBeInTheDocument();
     expect(screen.getAllByText(/No data yet/).length).toBeGreaterThanOrEqual(6);
   });
 });

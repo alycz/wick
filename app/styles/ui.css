@@ -1,0 +1,79 @@
+/* Shared platform controls: dropdown, collapsible panel, sparkline, entrance motion. */
+
+/* ---------- dropdown ---------- */
+.dd { position: relative; display: inline-flex; min-width: 0; }
+.dd-trigger { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; height: 38px; padding: 0 12px 0 14px; border-radius: 10px;
+  border: 1px solid var(--line-strong); background: linear-gradient(180deg, var(--panel-2), color-mix(in srgb, var(--panel-2) 80%, var(--panel)));
+  color: var(--fg); font: 500 14px var(--font); cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
+  transition: border-color .18s, background .18s, box-shadow .18s, transform .12s var(--ease-out); }
+.dd-trigger:hover { border-color: #3a444c; background: var(--panel-3); }
+.dd-trigger:active { transform: scale(.985); }
+.dd-trigger:focus-visible { outline: none; border-color: var(--wick); box-shadow: 0 0 0 3px rgba(95, 212, 204, .16); }
+.dd.open .dd-trigger { border-color: #3a444c; background: var(--panel-3); }
+.dd-pre { color: var(--muted); font-weight: 500; font-size: 13px; padding-right: 10px; border-right: 1px solid var(--line-strong); }
+.dd-val { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.dd-chev { width: 12px; height: 12px; flex: none; margin-left: 2px; color: var(--muted); transition: transform .26s var(--ease-out), color .18s; }
+.dd.open .dd-chev { transform: rotate(180deg); color: var(--fg); }
+
+.dd-menu { position: absolute; z-index: 45; top: calc(100% + 6px); left: 0; min-width: 100%; max-width: min(92vw, 460px); max-height: 320px; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px; border-radius: 12px; border: 1px solid var(--line-strong); background: #12161a;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 20px 48px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
+  transform-origin: top left; animation: dd-in .2s var(--ease-out) both; scrollbar-width: thin; scrollbar-color: var(--panel-3) transparent; outline: none; }
+.dd-menu.dd-right { left: auto; right: 0; transform-origin: top right; }
+.dd-menu.out { animation: dd-out .14s ease-in both; }
+@keyframes dd-in { from { opacity: 0; transform: translateY(-6px) scale(.96); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes dd-out { to { opacity: 0; transform: translateY(-4px) scale(.98); } }
+.dd-opt { display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 12px; border-radius: 8px; cursor: pointer; color: var(--muted-light);
+  font-size: 14px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; animation: dd-row .22s var(--ease-out) both; transition: background .12s, color .12s; }
+@keyframes dd-row { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.dd-opt.act { background: var(--panel-3); color: var(--fg); }
+.dd-opt[aria-selected="true"] { color: var(--fg); }
+.dd-txt { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.dd-l { overflow: hidden; text-overflow: ellipsis; }
+.dd-txt small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.dd-hint { color: var(--muted); font-size: 13px; }
+.dd-check { width: 13px; height: 13px; flex: none; color: var(--wick); opacity: 0; transform: scale(.6); transition: opacity .16s, transform .2s var(--ease-out); }
+.dd-opt[aria-selected="true"] .dd-check { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .dd-menu, .dd-opt, .dd-menu.out { animation: none; } }
+
+/* ---------- collapsible panel ---------- */
+.fold { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; transition: border-color .2s; }
+.fold:hover { border-color: var(--line-strong); }
+.fold > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 16px 18px; cursor: pointer; user-select: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary b { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.fold > summary small { color: var(--muted); font-size: 13px; }
+.fold-chev { margin-left: auto; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--panel-2); color: var(--muted); flex: none;
+  transition: transform .3s var(--ease-out), background .18s, color .18s; }
+.fold-chev svg { width: 12px; height: 12px; }
+.fold > summary:hover .fold-chev { background: var(--panel-3); color: var(--fg); }
+.fold[open] > summary .fold-chev { transform: rotate(180deg); color: var(--fg); }
+.fold-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: rgba(95, 212, 204, .1); color: var(--wick); flex: none; }
+.fold-ico svg { width: 15px; height: 15px; }
+.fold-body { padding: 4px 18px 18px; display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 16px; animation: fold-in .32s var(--ease-out) both; min-width: 0; }
+@keyframes fold-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- sparkline ---------- */
+.spark { display: block; width: 100%; height: auto; overflow: visible; }
+.spark-line { fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; animation: spark-draw .9s var(--ease-out) both; }
+.spark-dot { animation: spark-pop .3s .7s var(--ease-out) both; transform-box: fill-box; transform-origin: center; }
+.spark-area { animation: spark-fade .6s .25s ease both; }
+@keyframes spark-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes spark-pop { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes spark-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- entrance motion: blur-up with a short stagger ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.rise { animation: rise .55s var(--ease-out) both; }
+.rise-1 { animation-delay: .04s; } .rise-2 { animation-delay: .09s; } .rise-3 { animation-delay: .14s; } .rise-4 { animation-delay: .19s; } .rise-5 { animation-delay: .24s; } .rise-6 { animation-delay: .29s; }
+@media (prefers-reduced-motion: reduce) { .rise, .fold-body, .spark-line, .spark-dot, .spark-area { animation: none; } }
+
+/* a toast that sits above every menu and fades itself out */
+.toast { position: fixed; z-index: 120; right: 20px; bottom: 20px; max-width: min(360px, calc(100vw - 32px)); margin: 0; padding: 12px 14px 12px 12px; display: flex; gap: 10px; align-items: center;
+  border: 1px solid var(--line-strong); border-radius: 12px; background: color-mix(in srgb, var(--panel-2) 94%, transparent); backdrop-filter: blur(12px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55); color: var(--fg); font-size: 13px; line-height: 1.4; animation: toast-in .38s var(--ease-out) both; }
+.toast i { width: 22px; height: 22px; border-radius: 50%; flex: none; display: grid; place-items: center; background: rgba(34, 197, 94, .14); color: var(--yes-hi); font-style: normal; font-size: 12px; font-weight: 700; }
+.toast.out { animation: toast-out .24s ease-in both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+.toast i.bad { background: rgba(240, 80, 93, .14); color: var(--no-hi); }

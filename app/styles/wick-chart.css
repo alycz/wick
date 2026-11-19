@@ -30,3 +30,7 @@
 .wc-tip-r b { font-size: 15px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
 .wc-tip-r:only-of-type b { font-size: 17px; }
 @keyframes wc-tip-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+/* lightweight-charts lays its panes out in a <table>; page table rules (fixed layout, cell padding) must not reach it,
+   or the price axis gets squeezed and its labels are cut off on the right */
+.wc-tv table { table-layout: auto !important; width: auto !important; min-width: 0 !important; border-collapse: separate !important; font-size: inherit; }
+.wc-tv th, .wc-tv td { padding: 0 !important; border: 0 !important; overflow: visible !important; text-align: initial !important; text-overflow: clip !important; background: none !important; white-space: normal !important; position: static; }

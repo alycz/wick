@@ -37,6 +37,21 @@ vi.mock("@/components/wick-chart", () => ({
 }));
 import { MarketsPage } from "@/components/markets/markets-page";
 
+/* the platform dropdown: open it, then choose the option carrying this value */
+function pick(combobox: HTMLElement, value: string) {
+  fireEvent.click(combobox);
+  const option = document.querySelector<HTMLElement>(`[role="option"][data-value="${value}"]`);
+  if (!option) throw new Error(`No option ${value}`);
+  fireEvent.click(option);
+}
+
+/* the BTC market switcher in the stats row */
+function openMarket(name: string | RegExp) {
+  fireEvent.click(screen.getByRole("button", { name: /BTC market/ }));
+  fireEvent.click(screen.getByRole("menuitemradio", { name }));
+}
+
+
 const now = Date.now();
 const base = {
   eventTicker: "BTC1D", openTs: now - 60_000, spot: 65_125, status: "open" as const, volSource: "deribit" as const,
@@ -83,7 +98,7 @@ describe("MarketsPage", () => {
     expect(await screen.findByTestId("historical-chart")).toHaveTextContent(/^0\.75$/);
     fireEvent.click(screen.getByRole("button", { name: "Down" }));
     expect(screen.getByTestId("historical-chart")).toHaveTextContent(/^0\.25$/);
-    fireEvent.change(screen.getByRole("combobox", { name: "Contract" }), { target: { value: earlier.symbol } });
+    pick(screen.getByRole("combobox", { name: "Contract" }), earlier.symbol);
     expect(screen.getByTestId("historical-chart")).toHaveTextContent(/^0\.45$/);
   });
 
@@ -97,12 +112,13 @@ describe("MarketsPage", () => {
       [later[1]!.symbol]: [{ ts: now - 3_600_000, spot: 65_000, theo: .32 }],
     };
     render(<MarketsPage />);
-    const board = within(screen.getByRole("region", { name: "BTC markets" }));
-    fireEvent.click(board.getByRole("button", { name: /Daily · 2 strikes/ }));
+    openMarket(/Daily · 2 strikes/);
     const chart = within(screen.getByRole("region", { name: "Strike price chart" }));
+    fireEvent.click(chart.getByRole("combobox", { name: "Strike" }));
     expect(chart.getAllByRole("option")).toHaveLength(2);
+    fireEvent.keyDown(chart.getByRole("combobox", { name: "Strike" }), { key: "Escape" });
     expect(chart.getByTestId("theo")).toHaveTextContent("0.32");
-    fireEvent.change(chart.getByRole("combobox", { name: "Strike" }), { target: { value: later[0]!.symbol } });
+    pick(chart.getByRole("combobox", { name: "Strike" }), later[0]!.symbol);
     expect(chart.getByTestId("theo")).toHaveTextContent("0.76");
     expect(chart.getByText(/reconstructed from saved Deribit options/)).toBeInTheDocument();
     fireEvent.click(within(chart.getByRole("group", { name: "Chart side" })).getByRole("button", { name: "No" }));
@@ -112,15 +128,15 @@ describe("MarketsPage", () => {
   it("pins the default strike and a manually selected strike as fair prices cross 50¢", () => {
     const page = render(<MarketsPage />);
     const strike = () => screen.getByRole("combobox", { name: "Strike" });
-    const pinned = (strike() as HTMLSelectElement).value;
+    const pinned = strike().getAttribute("data-value")!;
     const other = ladder.find((item) => item.symbol !== pinned)!;
     state.markets.markets = state.markets.markets.map((item) => ({ ...item, theo: item.symbol === other.symbol ? .50 : .80 }));
     page.rerender(<MarketsPage />);
-    expect(strike()).toHaveValue(pinned);
-    fireEvent.change(strike(), { target: { value: other.symbol } });
+    expect(strike()).toHaveAttribute("data-value", pinned);
+    pick(strike(), other.symbol);
     state.markets.markets = [upDown, ...ladder];
     page.rerender(<MarketsPage />);
-    expect(strike()).toHaveValue(other.symbol);
+    expect(strike()).toHaveAttribute("data-value", other.symbol);
   });
 
   it("opens the exact linked history when pricing disappears and recovers when it returns", () => {
@@ -134,7 +150,7 @@ describe("MarketsPage", () => {
     expect(screen.queryByRole("region", { name: "Trade" })).toBeNull();
     state.markets.markets = [upDown, ...ladder];
     page.rerender(<MarketsPage symbol={linked} />);
-    expect(screen.getByRole("combobox", { name: "Strike" })).toHaveValue(linked);
+    expect(screen.getByRole("combobox", { name: "Strike" })).toHaveAttribute("data-value", linked);
     page.rerender(<MarketsPage symbol="unknown-symbol" />);
     expect(screen.getByText("unknown-symbol")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Trade" })).toBeNull();
@@ -143,7 +159,7 @@ describe("MarketsPage", () => {
   it("follows a rolling duration tab while an expired direct link stays on that contract", () => {
     const next = { ...upDown, symbol: "BTC-15M-NEXT", theo: .76 };
     const page = render(<MarketsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "15m up/down" }));
+    openMarket("15m up/down");
     state.markets.markets = [next, ...ladder];
     page.rerender(<MarketsPage />);
     expect(within(screen.getByRole("region", { name: "Up/Down chart" })).getByText("76.0¢")).toBeInTheDocument();
@@ -184,8 +200,8 @@ describe("MarketsPage", () => {
     fireEvent(details, new Event("toggle"));
     const archive = within(details);
     expect(await archive.findByTestId("historical-chart")).toHaveTextContent("0.70");
-    fireEvent.change(archive.getByRole("combobox", { name: "Settlement date" }), { target: { value: String(earlier.expiryTs) } });
-    expect(archive.getByRole("combobox", { name: "Strike" })).toHaveValue(earlier.symbol);
+    pick(archive.getByRole("combobox", { name: "Settlement date" }), String(earlier.expiryTs));
+    expect(archive.getByRole("combobox", { name: "Strike" })).toHaveAttribute("data-value", earlier.symbol);
     expect(archive.getByTestId("historical-chart")).toHaveTextContent("0.54");
   });
 
@@ -224,8 +240,10 @@ describe("MarketsPage", () => {
   it("labels the live 5-minute and 15-minute contracts separately", () => {
     state.markets.markets.push({ ...upDown, symbol: "BTC-5M-UP", duration: "5m", expiryTs: now + 240_000 });
     render(<MarketsPage />);
-    expect(screen.getByRole("button", { name: "15m up/down" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "5m up/down" }));
+    fireEvent.click(screen.getByRole("button", { name: /BTC market/ }));
+    expect(screen.getByRole("menuitemradio", { name: "15m up/down" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /BTC market/ }));
+    openMarket("5m up/down");
     expect(within(screen.getByRole("region", { name: "Strike chain" })).getByRole("heading", { name: "5 min Up/Down" })).toBeInTheDocument();
   });
 
@@ -241,7 +259,7 @@ describe("MarketsPage", () => {
       [short.symbol]: [{ ts: now - 5_000, spot: 65_125, theo: .30 }],
     };
     render(<MarketsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "15m up/down" }));
+    openMarket("15m up/down");
     const chart = within(screen.getByRole("region", { name: "Up/Down chart" }));
     expect(chart.getByTestId("theo")).toHaveTextContent("0.62,0.63,0.55");
     expect(chart.queryByTestId("bid")).toBeNull();
@@ -255,7 +273,7 @@ describe("MarketsPage", () => {
     fireEvent.click(chart.getByRole("button", { name: "BTC spot" }));
     expect(chart.getByTestId("chart")).toHaveAttribute("data-format", "usd");
     fireEvent.click(chart.getByRole("button", { name: "Contract price" }));
-    fireEvent.click(screen.getByRole("button", { name: "5m up/down" }));
+    openMarket("5m up/down");
     expect(chart.getByTestId("theo")).toHaveTextContent("0.70,0.67");
   });
 

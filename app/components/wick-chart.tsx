@@ -54,6 +54,8 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
       });
     });
     earliestFitted.current = undefined;
+    /* the axis is measured with the fallback font if Inter is still loading; measure again once it is ready */
+    void document.fonts?.ready.then(() => { if (chart.current === instance) { instance.applyOptions({}); instance.priceScale("right").applyOptions({}); } }).catch(() => undefined);
     return () => { instance.remove(); chart.current = undefined; ref.current = undefined; };
     // the series list (not its data) decides the chart's structure
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,6 +76,12 @@ function TradingView({ series, format, refLine }: { series: ChartSeries[]; forma
   });
 
   return <div ref={box} className="wc-tv" />;
+}
+
+/* Liveline reserves a fixed 80px for its value badge; wide dollar values need more or the badge is cut off */
+function badgeRoom(data: ChartPoint[], fmt: (value: number) => string) {
+  const widest = Math.max(...data.slice(-200).map((point) => fmt(point.value).length));
+  return Math.max(80, Math.ceil(widest * 7.4 + 30));
 }
 
 /* value of a series at a time: the last point at or before it */
@@ -157,7 +165,7 @@ export function WickChart({ series, format, windows, height = 220, refLine, lege
     <div className="wc-area" style={{ height }} ref={area} onMouseLeave={() => setHover(undefined)}>
       {empty ? <div className="wc-empty">{historical ? "Too few recorded prices to draw a chart." : "Waiting for live prices."}</div> : animated
         ? single
-          ? <Liveline data={single.data} value={single.data[single.data.length - 1]!.value} color={color ?? single.color} theme="dark" formatValue={fmt} window={win} {...(formatTime ? { formatTime } : {})}
+          ? <Liveline data={single.data} value={single.data[single.data.length - 1]!.value} color={color ?? single.color} theme="dark" formatValue={fmt} window={win} padding={{ right: badgeRoom(single.data, fmt) }} {...(formatTime ? { formatTime } : {})}
             {...(ref ? { referenceLine: ref } : {})} badgeVariant="default" {...hoverProps} />
           : <Liveline data={series[0]!.data} value={series[0]!.data[series[0]!.data.length - 1]?.value ?? 0} theme="dark" formatValue={fmt} window={win} grid {...(formatTime ? { formatTime } : {})}
             series={series.map((item) => ({ id: item.id, label: item.label, color: item.color, data: item.data, value: item.data[item.data.length - 1]?.value ?? 0 }))} {...hoverProps} />

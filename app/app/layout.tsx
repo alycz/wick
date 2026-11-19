@@ -6,6 +6,7 @@ import "../styles/chrome.css";
 import "../styles/landing.css";
 import "../styles/markets.css";
 import "../styles/wick-chart.css";
+import "../styles/ui.css";
 import "skullet/styles.css";
 import { BRAND } from "@wick/shared";
 import { Providers } from "@/components/providers";
