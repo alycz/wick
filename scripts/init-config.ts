@@ -51,7 +51,9 @@ export async function initConfig(options: { verifyOnly?: boolean } = {}): Promis
     maxPayoutBpsOfVault: 2_000,
     maxMarketExposureBps: 5_000,
     liabilityAllowance: new BN(500_000_000),
-    staleAfterSecs: 6,
+    // The keeper can pause for a minute or more between mark batches on busy
+    // devnet, and a 6s window rejected every trade during those pauses.
+    staleAfterSecs: 300,
     emissionThreshold: new BN(10_000_000_000),
     emissionC: new BN(10_000_000_000),
     stakerCap: new BN(100_000_000_000),

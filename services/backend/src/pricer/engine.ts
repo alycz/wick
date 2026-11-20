@@ -455,7 +455,7 @@ export class PricerEngine {
     const open = markets.filter((market) => market.status === "open" && this.ensuredMarkets.has(market.symbol));
     if (open.length === 0) return;
     // Every open market must carry a mark younger than the program's
-    // `stale_after_secs` (6s on devnet), or traders hit StaleMark. A market is
+    // `stale_after_secs` (300s on devnet since Nov 20), or traders hit StaleMark. A market is
     // re-posted when its price or cap moved, or when its own last mark is older
     // than the heartbeat, so quiet strikes never age out while busy ones move.
     const due = open.filter((market) => {
