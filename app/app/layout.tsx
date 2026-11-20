@@ -16,7 +16,7 @@ import { FeedProvider } from "@/hooks/use-feed";
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
-  title: `${BRAND.name} — ${BRAND.tagline}`,
+  title: `${BRAND.name} | ${BRAND.tagline}`,
   description: BRAND.marketingLine,
 };
 
