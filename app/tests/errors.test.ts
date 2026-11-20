@@ -4,7 +4,7 @@ import { friendlyError } from "@/lib/errors";
 describe("friendlyError", () => {
   it("replaces Anchor program errors with a plain sentence", () => {
     const stale = new Error("AnchorError thrown in programs/wick/src/lib.rs:243. Error Code: StaleMark. Error Number: 6006. Error Message: Market mark is stale.");
-    expect(friendlyError(stale)).toBe("The price moved while you were confirming. Try again.");
+    expect(friendlyError(stale)).toBe("This price is refreshing. Try again in a few seconds.");
     expect(friendlyError(new Error("failed to send transaction: custom program error: 0x1778"))).toBe("That leverage is above this market's cap. Lower it and try again.");
   });
 

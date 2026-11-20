@@ -9,7 +9,7 @@ const PROGRAM_ERRORS: Record<string, string> = {
   InvalidSymbol: "This market isn't available right now.",
   MarketNotOpen: "This market isn't open for trading.",
   MarketCutoff: "This market has closed for new trades.",
-  StaleMark: "The price moved while you were confirming. Try again.",
+  StaleMark: "This price is refreshing. Try again in a few seconds.",
   InvalidPrice: "This price is outside the tradable range.",
   LeverageTooHigh: "That leverage is above this market's cap. Lower it and try again.",
   SlippageExceeded: "The price moved past your limit. Try again.",
