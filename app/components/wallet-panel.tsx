@@ -277,11 +277,12 @@ function DemoTransferBody({ mode, demo, onClose }: { mode: "deposit" | "withdraw
   };
   if (done) return <div className="dw-done" role="status">
     <span className="dw-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5 10.2 16.5 18 8" /></svg></span>
-    <b>{done.mode === "deposit" ? "Deposit complete" : "Withdrawal sent"}</b>
+    <b>{done.mode === "deposit" ? "Demo deposit complete" : "Demo withdrawal complete"}</b>
     <span className="dw-amt">{done.mode === "deposit" ? "+" : "−"}{usd(done.amount)}</span>
+    <p className="dw-txt">Simulated amount. No funds moved onchain.</p>
     <div className="dw-done-rows">
-      {done.to && <div><span>Sent to</span><b>{compactAddress(done.to)}</b></div>}
-      <div><span>New balance</span><b>{usd(demo.balance)}</b></div>
+      {done.to && <div><span>Simulated destination</span><b>{compactAddress(done.to)}</b></div>}
+      <div><span>New simulated balance</span><b>{usd(demo.balance)}</b></div>
     </div>
     <div className="dw-done-acts">
       <button type="button" className="dw-again" onClick={() => setDone(undefined)}>{done.mode === "deposit" ? "Deposit more" : "Withdraw more"}</button>
@@ -290,8 +291,9 @@ function DemoTransferBody({ mode, demo, onClose }: { mode: "deposit" | "withdraw
   </div>;
   const chips = mode === "deposit" ? [100, 500, 1_000] : [25, 50, 100];
   return <>
-    <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Balance</small><b>{usd(demo.balance)}</b></div><div className="r"><small>Asset</small><b>USDC</b></div></div>
-    <div className="dw-fld"><label htmlFor="dw-amt">Amount</label>
+    <div className="dw-src"><span className="dw-ico" aria-hidden="true" /><div><small>Simulated balance</small><b>{usd(demo.balance)}</b></div><div className="r"><small>Demo asset</small><b>USDC</b></div></div>
+    <p className="dw-txt">Browser-only demo. Amounts are simulated; no funds move onchain.</p>
+    <div className="dw-fld"><label htmlFor="dw-amt">Simulated amount</label>
       <input id="dw-amt" inputMode="decimal" placeholder="0.00 USDC" value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))} /></div>
     <div className="dw-chips">{chips.map((option) => {
       const next = mode === "deposit" ? option : Math.floor(demo.balance * option) / 100;

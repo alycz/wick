@@ -2,13 +2,13 @@
 
 ## Current status
 
-As of November 18, the frontend is deployed at [wick-markets-phi.vercel.app](https://wick-markets-phi.vercel.app/) and returned HTTP 200. No verified final demo MP4 or end-to-end public devnet trading lifecycle is recorded here. Frontend availability must not be represented as verified program/backend/faucet/QuickNode execution. `scripts/record-demo.ts` is deliberately fail-closed: it runs real devnet bots and `demo-check`, records a configured deployment only, waits for real open/liquidation/settlement events, and emits `demo/wick-demo.mp4` only after Playwright and ffmpeg succeed.
+As of November 20, the frontend and backend are public, the Wick program is executable on Solana devnet, and finalized [transaction `2dyg…FvT`](https://explorer.solana.com/tx/2dygCmL5yYEdDuwVrCgreeMrHc3Jzfnz778rbqEGjYejYzpecarKVkWoXsxR1CquSA4omzNZVWWW4GHPVqkxdFvT?cluster=devnet) matches Gemini's official outcome and settlement value. The public faucet/open-position browser lifecycle is not verified. The deployed feed currently uses `rpc_reconcile`; QuickNode Streams is not configured and must not be narrated as live.
 
 Target runtime is **2–3 minutes**. Every shot below must use the final public deployment and real devnet/test assets. Do not splice in fixture data, edit browser state, seed fake feed entries, or alter playback speed.
 
 ## Recording gate and command
 
-Required environment includes the final `PROGRAM_ID`, `USDC_TEST_MINT`, public backend/frontend URLs, funded devnet authorities, generated IDL, chain-enabled backend, webhook secret, RPC configuration, and active verified Stream.
+The automated full-lifecycle recorder requires the final `PROGRAM_ID`, `USDC_TEST_MINT`, public backend/frontend URLs, funded devnet authorities, generated IDL, chain-enabled backend, webhook secret, RPC configuration, and active verified Stream. It therefore remains intentionally blocked while Streams is unconfigured; do not weaken it or present an independently edited product tour as Stream evidence.
 
 Run these gates in the same environment that will record:
 
@@ -20,11 +20,11 @@ DEMO_URL="$FRONTEND_URL" DEMO_BOT_MINUTES=2 pnpm demo:record
 ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 demo/wick-demo.mp4
 ```
 
-Expected final duration is between `150` and `180` seconds. The recorder itself runs the real bots and `demo-check` again before opening Chromium. It captures the browser's exact `sendTransaction` signature, reads that transaction's market and position accounts back from devnet RPC, and accepts only Stream events correlated to that evidence. If any prerequisite, transaction, alert, live cap, correlation, liquidation, settlement, timeline, video, caption or encoding step fails, stop and fix the system; do not make an alternate simulated video.
+Expected final duration is between `150` and `180` seconds. The recorder itself runs the real bots and `demo-check` again before opening Chromium. It captures the browser's exact `sendTransaction` signature, reads that transaction's market and position accounts back from devnet RPC, and accepts only Stream events correlated to that evidence. That automated path is not current deployment evidence. If any prerequisite fails, stop; do not substitute an RPC-reconciled event while claiming QuickNode delivery.
 
 ## Historical UI labels and current acceptance boundary
 
-The storyboard below was written before the November 18 redesign. Labels such as **Try it now**, the right activity rail and the devnet footer describe that earlier UI, not verified current controls. Before recording, reconcile `scripts/record-demo.ts` with the current routes, accessible names and evidence surfaces, and verify the real browser flow. Do not remove transaction correlation, real Stream events, settlement, funding or timing gates merely because the redesigned layout changed. A CI or frontend deployment success does not satisfy these recording gates.
+The storyboard below was written before the November 18 redesign. Labels such as **Try it now**, the right activity rail and the devnet footer describe that earlier UI, not verified current controls. Before recording, reconcile `scripts/record-demo.ts` with the current routes, accessible names and evidence surfaces, and verify the real browser flow. Do not remove transaction correlation, settlement, funding or timing gates, and never label `rpc_reconcile` events as QuickNode deliveries. A CI or frontend deployment success does not satisfy these recording gates.
 
 The browser-only practice account is not the devnet demo path for this recording. Its `demo-receipt-*` values, local balance changes, positions and simulated staking balances must never be used as transaction, explorer, settlement, reward, pool-solvency or QuickNode Stream evidence. Migrated version-1 records are explicitly simulated/unverified and are unsuitable as demo evidence. The recorder must use a connected/local devnet wallet and retain the existing chain/RPC/Stream correlation gates.
 
@@ -36,12 +36,12 @@ The browser-only practice account is not the devnet demo path for this recording
 | 0:18–0:38 | Switch Tail ladder to Weekly and scan strikes from near money into a thin tail. Pause on missing/one-sided Gemini liquidity beside Wick theo. | Multiple real Gemini strikes, tails, vol-source badge and per-row cap. |
 | 0:38–1:00 | Click **Try it now**, show the “Demo wallet, devnet only” banner, then request the faucet grant. | Fresh browser-local address and one confirmed grant of 0.05 devnet SOL + 1,000 test USDC. Never expose authority keys. |
 | 1:00–1:24 | Enter the live 15-minute trade screen. Request exactly 1000x and show both the slider's capped value and visible live-cap text; review entry, contracts, max payout and liquidation distance; open YES at the cap. | An asserted clamp in the real UI and a confirmed Wick transaction whose full signature is captured from browser RPC. |
-| 1:24–1:48 | Keep the right activity rail visible until **Position opened** appears. Show the transaction link/feed item. | A `PositionOpened` Stream event whose signature, market and position exactly match the submitted transaction. |
-| 1:48–2:12 | Let bot/live activity continue until **Liquidation** appears; briefly show current mark/cap and portfolio status. | A `PositionLiquidated` Stream event for that exact position, not a similarly named unrelated feed item. |
-| 2:12–2:32 | Wait for the 15-minute window to resolve and **Market settled** to appear. Open the settled position/result. | A `MarketSettled` Stream event for that exact market and Gemini official outcome. |
-| 2:32–2:45 | Navigate to Pool. Frame LP balance, queue owed, fees and $WICKED staking/emissions. End on the devnet safety footer. | Stream-backed pool projection and “Devnet demo. Test USDC only. Not a real-money product.” |
+| 1:24–1:48 | Keep the right activity rail visible until **Position opened** appears. Show the transaction link/feed item. | The full signature must match the submitted transaction; label its actual feed provenance. Current deployment evidence is `rpc_reconcile`, not Stream delivery. |
+| 1:48–2:12 | Let bot/live activity continue until **Liquidation** appears; briefly show current mark/cap and portfolio status. | A correlated on-chain liquidation for that exact position, with actual feed provenance disclosed. |
+| 2:12–2:32 | Wait for the 15-minute window to resolve and **Market settled** to appear. Open the settled position/result. | A finalized `MarketSettled` transaction for that exact market matching Gemini's official outcome. |
+| 2:32–2:45 | Navigate to Pool. Frame LP balance, queue owed, fees and $WICKED staking/emissions. End on the devnet safety footer. | Do not present RPC projections, guest examples or simulated balances as Stream-backed state or claimable funds. |
 
-The automated recorder performs the same sequence: weekly ladder → demo wallet → faucet → trade → 1000x clamp → open at cap → real Stream event → liquidation → settlement → pool. The bot seeding window may run before capture; it must not be presented as organic user volume.
+The automated recorder performs the same sequence only after its Stream gate is satisfied. Current RPC-reconciled feed events do not satisfy that gate and must not be presented as QuickNode evidence.
 
 ## Burn-in captions
 
@@ -66,11 +66,11 @@ A 1000x request is clamped to the binary-gamma risk cap before the YES position 
 
 5
 00:01:24,000 --> 00:01:48,000
-QuickNode Streams pushes the confirmed on-chain position into Wick's live activity feed.
+Confirmed Wick events are currently reconstructed by labelled Solana RPC reconciliation, not QuickNode Streams.
 
 6
 00:01:48,000 --> 00:02:12,000
-The keeper posts fresh theo marks; unsafe positions liquidate transparently on Solana.
+The program rejects new trades when keeper marks are stale and liquidates positions by its on-chain rules.
 
 7
 00:02:12,000 --> 00:02:32,000
@@ -88,5 +88,5 @@ Before upload:
 1. Play the MP4 from beginning to end with audio muted and confirm captions are legible at 1080p-equivalent resolution.
 2. Confirm the duration is between 150 and 180 seconds and the file is `demo/wick-demo.mp4`.
 3. Confirm no seed phrases, keypair material, provider tokens, webhook secrets, browser devtools, or personal notifications are visible.
-4. Check each transaction/explorer link is devnet, each feed event is real, and the displayed program ID matches the verified README row.
+4. Check each transaction/explorer link is devnet, each feed event is real, its displayed provenance is accurate, and the program ID matches the verified README row.
 5. Upload to an accessible host, test the link in a signed-out browser, then add it to `docs/HANDOFF.md` and Devpost.
