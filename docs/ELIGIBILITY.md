@@ -1,6 +1,6 @@
 # UBC 2026 eligibility checklist
 
-This checklist is conditional deployment evidence, not an eligibility claim. As of November 17, Wick has no public deployment, executable devnet program, QuickNode Stream, or public demo URL, so the live-data and working-demo items are incomplete.
+This checklist is evidence, not an eligibility or prize claim. Verified November 20: the public frontend and backend are reachable; program [`GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8`](https://explorer.solana.com/address/GY2WTMTTpSh3xBaf1HYGP5PDic5vjA5wucJdTci92GL8?cluster=devnet) is executable on Solana devnet; and finalized [transaction `2dyg…FvT`](https://explorer.solana.com/tx/2dygCmL5yYEdDuwVrCgreeMrHc3Jzfnz778rbqEGjYejYzpecarKVkWoXsxR1CquSA4omzNZVWWW4GHPVqkxdFvT?cluster=devnet) settled Gemini event `BTC05M2611201520` as **No** at its official value `60258.3`. The public browser faucet/open-position path remains unverified.
 
 Official references:
 
@@ -16,14 +16,14 @@ Official references:
 - [ ] **Destination:** an authenticated public HTTPS Railway endpoint receives the Stream and a real trade appears in `/feed` in roughly two seconds.
 - [x] **Repository documentation:** the README explains the intended network, dataset, filter, destination, and role. Its live wording must remain conditional until the preceding four checks pass.
 
-Wick must not claim the QuickNode bounty until every box is checked with a Stream ID, public destination, real transaction signature/block, and observed feed event.
+The deployed backend currently reports `indexerConfigured: false` and `streamEvidencePresent: false`. Public feed entries carry `provenance: "rpc_reconcile"`. Wick must not claim the QuickNode bounty unless every box is checked with a Stream ID, public destination, real transaction signature/block, and observed Stream-provenance event.
 
 ## Track and sponsor requirements
 
-- [ ] Track 02 DeFi & Onchain Apps: public deployed demo interacts with Wick's smart contract; README documents the economic design and risk assumptions.
-- [ ] Solana award: core logic is deployed via Anchor on Solana devnet; README records every program address and explorer link.
-- [x] Gemini Prediction Markets: code uses Gemini's public prediction-market events, strike, settlement, and quote APIs; a deployed working integration remains pending.
-- [ ] Public source repository with setup instructions, technical documentation, and architecture overview.
+- [x] Track 02 DeFi & Onchain Apps: Wick's custom program is deployed and finalized market-settlement evidence is linked; do not claim the unverified browser transaction path.
+- [x] Solana award: core logic is deployed via Anchor on Solana devnet; README records the program and deployed account addresses.
+- [x] Gemini Prediction Markets: a finalized Wick market settlement matches Gemini's official `resolutionSide` and settlement value; the evidence does not attribute submission to the automated keeper process.
+- [x] Public source repository with setup instructions, technical documentation, and architecture overview.
 - [ ] Working public deployed demo.
 - [ ] Accessible 2–3 minute demo video.
 - [x] Submission answers cover what was built, the problem, how it works, differentiation, and next steps; final deployment evidence and account-holder review remain pending.
